@@ -778,6 +778,8 @@ FeedPeek.PluginWorker.exe
 
 ### Phase 4：站点插件迁移
 
+详细的检查点、兼容矩阵和停止规则见 [`rss-plugin-phase4-plan.md`](rss-plugin-phase4-plan.md)。
+
 - 将 `BiliWebDataProvider` 的读取逻辑迁移到插件。
 - 实现更新、直播、历史和稍后再看。
 - 实现关注关系和稍后再看动作。
