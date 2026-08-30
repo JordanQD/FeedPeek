@@ -23,6 +23,8 @@ public sealed class VideoSitePluginTests
         var package = await new PluginManifestLoader().LoadAsync(FixturePluginRoot);
         Assert.Equal(PluginId, package.Manifest.PluginId);
         Assert.Contains("feed.updates", package.Manifest.Capabilities);
+        Assert.Contains("account.profile", package.Manifest.Capabilities);
+        Assert.Contains("account.auth", package.Manifest.Capabilities);
         Assert.Contains("account.history", package.Manifest.Capabilities);
         Assert.Contains("collection.viewLater", package.Manifest.Capabilities);
         Assert.Contains("item.actions", package.Manifest.Capabilities);
@@ -210,7 +212,7 @@ public sealed class VideoSitePluginTests
         await credentials.SetOpaqueSecretAsync(
             PluginId,
             subscription.CredentialProfileId!,
-            "csrf",
+            "bili_jct",
             "csrf-token",
             CancellationToken.None);
         var bridge = new MutableSiteHttpBridge("""{"code":0}""");
@@ -260,6 +262,37 @@ public sealed class VideoSitePluginTests
                 Assert.Equal("POST", request.Method);
                 Assert.Equal("aid=505&csrf=csrf-token", request.Body);
             });
+    }
+
+    [Fact]
+    public async Task AccountProfile_IsReturnedThroughPluginContract()
+    {
+        var subscription = CreateSubscription();
+        var (runtime, _) = await CreateRuntimeAndProviderAsync(
+            new MutableSiteHttpBridge(
+                """{"code":0,"data":{"isLogin":true,"mid":42,"uname":"测试账号","face":"//img.example/avatar.jpg"}}"""),
+            subscription);
+        await using (runtime)
+        {
+            var client = new PluginClient(new TransportInvoker(runtime));
+            var account = new PluginAccountService(PluginId, client);
+            var auth = new PluginAuthService(PluginId, client);
+
+            Assert.Equal("webviewRequired", (await auth.BeginAsync(subscription)).State);
+            var profile = await account.GetProfileAsync(subscription);
+            var completed = await auth.CompleteAsync(subscription);
+            var validated = await auth.ValidateAsync(subscription);
+            var cleared = await auth.ClearAsync(subscription);
+
+            Assert.Equal("42", profile.AccountId);
+            Assert.Equal("测试账号", profile.DisplayName);
+            Assert.Equal("https://img.example/avatar.jpg", profile.AvatarUrl);
+            Assert.Equal("https://space.bilibili.com/42", profile.ProfileUrl);
+            Assert.Equal("authenticated", completed.State);
+            Assert.Equal("42", completed.Profile?.AccountId);
+            Assert.Equal("authenticated", validated.State);
+            Assert.Equal("signedOut", cleared.State);
+        }
     }
 
     private static string FixturePluginRoot

@@ -13,7 +13,7 @@ internal static class BuiltInVideoSitePlugin
     public const string UpdatesSubscriptionId = "feedpeek.video-site:account-default:updates";
     public const string HistorySubscriptionId = "feedpeek.video-site:account-default:history";
     public const string ViewLaterSubscriptionId = "feedpeek.video-site:account-default:viewLater";
-    public const string LegacyCredentialProfileId = "legacy-biliradar-cookie";
+    public const string DefaultCredentialProfileId = "account-default";
     public const string SourceIconOption = "source.icon";
 
     private static readonly TimeSpan DefaultRefreshInterval = TimeSpan.FromMinutes(15);
@@ -23,7 +23,7 @@ internal static class BuiltInVideoSitePlugin
             PluginId,
             SourceId,
             "哔哩哔哩",
-            LegacyCredentialProfileId,
+            DefaultCredentialProfileId,
             [
                 new FeedDefinition(
                     PluginFeedIds.Updates,
@@ -69,7 +69,7 @@ internal static class BuiltInVideoSitePlugin
             feedId,
             displayName,
             null,
-            LegacyCredentialProfileId,
+            DefaultCredentialProfileId,
             isEnabled,
             DefaultRefreshInterval,
             null);

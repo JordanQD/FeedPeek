@@ -18,15 +18,14 @@ public sealed partial class WebSignInWindow : Window
 {
     private const double StandardTitleBarHeight = 32;
 
-    private readonly CookieStore _cookieStore;
-    private readonly BiliKernelAuthService _authService;
+    private readonly FeedPeekPluginRuntime _pluginRuntime;
     private readonly AppWindow _appWindow;
+    private PluginLoginDescriptor? _login;
     private bool _isCookieSaved;
 
     public WebSignInWindow(CookieStore cookieStore)
     {
-        _cookieStore = cookieStore;
-        _authService = new BiliKernelAuthService(_cookieStore);
+        _pluginRuntime = new FeedPeekPluginRuntime(cookieStore);
         InitializeComponent();
 
         var hwnd = WindowNative.GetWindowHandle(this);
@@ -48,8 +47,25 @@ public sealed partial class WebSignInWindow : Window
         try
         {
             await mainView.EnsureCoreWebView2Async();
-            mainView.CoreWebView2.CookieManager.DeleteAllCookies();
-            mainView.CoreWebView2.Navigate("https://passport.bilibili.com/login");
+            var load = await _pluginRuntime.LoadAsync(default);
+            if (!load.IsAvailable)
+            {
+                throw new InvalidOperationException(load.ErrorMessage);
+            }
+
+            _login = _pluginRuntime.GetLoginDescriptor();
+            await _pluginRuntime.BeginAuthenticationAsync();
+            _appWindow.Title = $"{_login.DisplayName} 登录";
+            titleBar.Title = _appWindow.Title;
+            foreach (var domain in _login.Auth.CookieDomains)
+            {
+                var cookies = await mainView.CoreWebView2.CookieManager.GetCookiesAsync($"https://{domain}/");
+                foreach (var cookie in cookies)
+                {
+                    mainView.CoreWebView2.CookieManager.DeleteCookie(cookie);
+                }
+            }
+            mainView.CoreWebView2.Navigate(_login.Auth.LoginFlow!.LoginUrl);
         }
         catch (Exception ex)
         {
@@ -65,65 +81,51 @@ public sealed partial class WebSignInWindow : Window
         }
 
         var source = sender.CoreWebView2.Source ?? string.Empty;
-        if (source.StartsWith("https://passport.bilibili.com", StringComparison.OrdinalIgnoreCase))
-        {
-            await TryCleanPassportPageAsync(sender);
-            return;
-        }
-
-        if (!source.StartsWith("https://www.bilibili.com", StringComparison.OrdinalIgnoreCase))
+        var successPrefixes = _login?.Auth.LoginFlow?.SuccessUrlPrefixes;
+        if (successPrefixes is null
+            || !successPrefixes.Any(prefix => source.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
         {
             return;
         }
 
-        await TrySaveCookiesAsync(sender, source);
+        try
+        {
+            await TrySaveCookiesAsync(sender);
+        }
+        catch (Exception ex)
+        {
+            ShowStatus(LocalizationHelper.Format("LoginWindowInitFailed", ex.Message), InfoBarSeverity.Error);
+        }
     }
 
-    private async Task TrySaveCookiesAsync(WebView2 sender, string source)
+    private async Task TrySaveCookiesAsync(WebView2 sender)
     {
-        if (_isCookieSaved || sender.CoreWebView2 is null)
+        if (_isCookieSaved || sender.CoreWebView2 is null || _login?.Auth.LoginFlow is null)
         {
             return;
         }
 
-        var cookies = await sender.CoreWebView2.CookieManager.GetCookiesAsync(source);
-        var cookiePairs = cookies
-            .Where(cookie => !string.IsNullOrWhiteSpace(cookie.Name))
-            .GroupBy(cookie => cookie.Name, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(group => group.Key, group => group.Last().Value ?? string.Empty, StringComparer.OrdinalIgnoreCase);
+        var cookiePairs = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var domain in _login.Auth.CookieDomains)
+        {
+            var cookies = await sender.CoreWebView2.CookieManager.GetCookiesAsync($"https://{domain}/");
+            foreach (var cookie in cookies.Where(cookie => !string.IsNullOrWhiteSpace(cookie.Name)))
+            {
+                cookiePairs[cookie.Name] = cookie.Value ?? string.Empty;
+            }
+        }
 
-        if (!HasLoginCookies(cookiePairs))
+        if (_login.Auth.LoginFlow.SuccessCookieNames.Any(name => !cookiePairs.ContainsKey(name)))
         {
             return;
         }
 
         ShowStatus(LocalizationHelper.GetString("LoginSuccessExchanging"), InfoBarSeverity.Informational);
-        await _authService.SignInWithCookiesAsync(cookiePairs);
+        await _pluginRuntime.SaveWebCookiesAsync(_login, cookiePairs);
         _isCookieSaved = true;
         ShowStatus(LocalizationHelper.GetString("LoginSuccessSaved"), InfoBarSeverity.Success);
         SignInSucceeded?.Invoke(this, EventArgs.Empty);
         Close();
-    }
-
-    private static bool HasLoginCookies(IReadOnlyDictionary<string, string> cookies)
-        => cookies.ContainsKey("SESSDATA")
-            && cookies.ContainsKey("bili_jct")
-            && cookies.ContainsKey("DedeUserID");
-
-    private static async Task TryCleanPassportPageAsync(WebView2 sender)
-    {
-        const string script = """
-            document.querySelector('.international-footer')?.remove();
-            document.querySelector('.top-header')?.remove();
-            """;
-
-        try
-        {
-            await sender.CoreWebView2.ExecuteScriptAsync(script);
-        }
-        catch
-        {
-        }
     }
 
     private void ConfigureTitleBar(IntPtr hwnd)
@@ -154,7 +156,7 @@ public sealed partial class WebSignInWindow : Window
     private void WebSignInWindow_Closed(object sender, WindowEventArgs args)
     {
         Closed -= WebSignInWindow_Closed;
-        _authService.Dispose();
+        _pluginRuntime.Dispose();
     }
 
     [DllImport("user32.dll")]

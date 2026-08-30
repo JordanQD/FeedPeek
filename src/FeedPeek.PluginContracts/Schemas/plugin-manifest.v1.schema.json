@@ -18,9 +18,10 @@
         "kind": { "enum": ["webview-cookie", "opaque-secret"] },
         "cookieDomains": { "type": "array", "items": { "type": "string" } },
         "authSignalCookies": { "type": "array", "items": { "type": "string" } },
+        "exposedCookieNames": { "type": "array", "items": { "type": "string" } },
         "loginFlow": { "type": ["object", "null"] }
       },
-      "required": ["required", "kind", "cookieDomains", "authSignalCookies"]
+      "required": ["required", "kind", "cookieDomains", "authSignalCookies", "exposedCookieNames"]
     },
     "network": {
       "type": "object",

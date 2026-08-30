@@ -17,6 +17,7 @@ public sealed record PluginAuthManifest(
     string Kind,
     IReadOnlyList<string> CookieDomains,
     IReadOnlyList<string> AuthSignalCookies,
+    IReadOnlyList<string>? ExposedCookieNames,
     PluginLoginFlowManifest? LoginFlow);
 
 public sealed record PluginLoginFlowManifest(

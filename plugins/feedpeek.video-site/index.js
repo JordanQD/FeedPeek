@@ -5,6 +5,7 @@
   const updatesEndpoint = 'https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/all';
   const historyEndpoint = 'https://api.bilibili.com/x/web-interface/history/cursor';
   const viewLaterEndpoint = 'https://api.bilibili.com/x/v2/history/toview';
+  const accountProfileEndpoint = 'https://api.bilibili.com/x/web-interface/nav';
   const addViewLaterEndpoint = 'https://api.bilibili.com/x/v2/history/toview/add';
   const removeViewLaterEndpoint = 'https://api.bilibili.com/x/v2/history/toview/del';
   const browserUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
@@ -368,7 +369,7 @@
     if (aid <= 0) Host.raise('ACTION_PAYLOAD_INVALID', '当前条目缺少 avid。');
     const secret = await Host.credentials.getOpaqueSecret({
       credentialProfileId: context.credentialProfileId,
-      name: 'csrf'
+      name: 'bili_jct'
     });
     const csrf = text(secret?.value);
     if (!csrf) Host.raise('CSRF_MISSING', '登录状态中缺少 bili_jct。');
@@ -380,6 +381,35 @@
       bodyEncoding: 'utf8'
     });
     return { completed: 'true', isSaved: actionId === 'viewLater.add' ? 'true' : 'false' };
+  };
+
+  const getAccountProfile = async payload => {
+    const context = objectOrEmpty(payload?.context || payload);
+    if (context.providerId !== pluginId || !text(context.credentialProfileId)) {
+      Host.raise('REQUEST_CONTEXT_INVALID', '账户资料上下文无效。');
+    }
+    const root = await requestJson({
+      url: accountProfileEndpoint,
+      method: 'GET'
+    });
+    const data = objectOrEmpty(root.data);
+    if (!Boolean(data.isLogin)) Host.raise('AUTH_EXPIRED', '登录状态已失效。');
+    const accountId = text(data.mid);
+    const displayName = text(data.uname);
+    if (!accountId || !displayName) Host.raise('SITE_RESPONSE_INVALID', '站点没有返回有效账户资料。');
+    return {
+      accountId,
+      displayName,
+      avatarUrl: normalizeUrl(data.face),
+      profileUrl: `https://space.bilibili.com/${accountId}`,
+      metadata: null
+    };
+  };
+
+  const validateAuthentication = async payload => {
+    const context = objectOrEmpty(payload?.context || payload);
+    const profile = await getAccountProfile(context);
+    return { state: 'authenticated', profile, message: null };
   };
 
   const loadUpdates = async payload => {
@@ -446,10 +476,18 @@
           return {
             providerId: pluginId,
             apiVersion: 1,
-            capabilities: ['feed.updates', 'account.history', 'collection.viewLater', 'item.actions']
+            capabilities: ['feed.updates', 'account.auth', 'account.profile', 'account.history', 'collection.viewLater', 'item.actions']
           };
         case 'plugin.getStatus':
           return { state: 'ready', message: null, details: null };
+        case 'auth.begin':
+          return { state: 'webviewRequired', data: null };
+        case 'auth.complete':
+          return validateAuthentication(request.payload);
+        case 'auth.validate':
+          return validateAuthentication(request.payload);
+        case 'auth.clear':
+          return { state: 'signedOut', profile: null, message: null };
         case 'feed.getUpdates':
           if (text(request.payload?.cursor)) Host.raise('CURSOR_UNEXPECTED', '首次更新请求不能携带游标。');
           return loadUpdates(request.payload);
@@ -462,6 +500,8 @@
         case 'account.getMoreHistory':
           if (!text(request.payload?.cursor)) Host.raise('CURSOR_REQUIRED', '加载更多历史记录需要游标。');
           return loadHistory(request.payload);
+        case 'account.getProfile':
+          return getAccountProfile(request.payload);
         case 'collection.getViewLater':
           if (text(request.payload?.cursor)) Host.raise('CURSOR_UNEXPECTED', '首次稍后再看请求不能携带游标。');
           return loadViewLater(request.payload);

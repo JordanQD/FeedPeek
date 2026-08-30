@@ -76,7 +76,7 @@
                 Text="登录选项" />
             <controls:SettingsCard
                 x:Uid="GeneralLoginStatusCard"
-                Description="登录 Bilibili 账号后可以获取关注动态。"
+                Description="登录站点插件账户后可以获取更新、历史记录和稍后再看。"
                 Header="登录状态"
                 HorizontalContentAlignment="Stretch">
                 <controls:SettingsCard.HeaderIcon>

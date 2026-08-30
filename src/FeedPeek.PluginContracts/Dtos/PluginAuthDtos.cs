@@ -23,3 +23,5 @@ public sealed record PluginAccountProfile(
     string? AvatarUrl,
     string? ProfileUrl,
     IReadOnlyDictionary<string, string>? Metadata);
+
+public sealed record PluginAccountPayload(PluginInvocationContext Context);

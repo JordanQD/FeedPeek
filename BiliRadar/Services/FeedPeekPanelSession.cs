@@ -464,9 +464,11 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
 
         await _feedSession.InitializeAsync(cancellationToken).ConfigureAwait(false);
         var pluginLoad = await _pluginRuntime.LoadAsync(cancellationToken).ConfigureAwait(false);
+        var hasPluginCredentials = pluginLoad.IsAvailable
+            && await _pluginRuntime.HasCredentialsAsync(cancellationToken).ConfigureAwait(false);
         var source = BuiltInVideoSitePlugin.CreateSource();
         var siteSubscriptions = BuiltInVideoSitePlugin.CreateSubscriptions(
-            pluginLoad.IsAvailable && _cookieStore.HasCookie);
+            hasPluginCredentials);
         foreach (var subscription in siteSubscriptions)
         {
             await _feedSession.AddSubscriptionAsync(source, subscription, cancellationToken)

@@ -33,15 +33,16 @@ public sealed partial class GeneralSettingsPage : Page
     };
 
     private readonly CookieStore _cookieStore = new();
-    private readonly BiliAccountService _accountService;
+    private readonly BuiltInPluginAccountService _accountService;
     private WebSignInWindow? _signInWindow;
     private bool _isLoadingSettings;
+    private bool _isAccountAuthenticated;
     private bool _useRegistryStartup;
     private StartupTask? _startupTask;
 
     public GeneralSettingsPage()
     {
-        _accountService = new BiliAccountService(_cookieStore);
+        _accountService = new BuiltInPluginAccountService(_cookieStore);
         InitializeComponent();
         Loaded += GeneralSettingsPage_Loaded;
         Unloaded += GeneralSettingsPage_Unloaded;
@@ -256,14 +257,18 @@ public sealed partial class GeneralSettingsPage : Page
 
     private async void LoginActionButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_cookieStore.HasCookie)
+        if (_isAccountAuthenticated)
         {
-            using var authService = new BiliKernelAuthService(_cookieStore);
-            await authService.SignOutAsync();
+            await _accountService.SignOutAsync();
             await RefreshAccountStatusAsync();
         }
         else
         {
+            if (await _accountService.HasCredentialsAsync())
+            {
+                await _accountService.SignOutAsync();
+            }
+
             if (_signInWindow is null)
             {
                 _signInWindow = new WebSignInWindow(_cookieStore);
@@ -295,8 +300,9 @@ public sealed partial class GeneralSettingsPage : Page
 
     private async System.Threading.Tasks.Task RefreshAccountStatusAsync()
     {
-        if (!_cookieStore.HasCookie)
+        if (!await _accountService.HasCredentialsAsync())
         {
+            _isAccountAuthenticated = false;
             AccountNameText.Text = LocalizationHelper.GetString("NotLoggedInShort");
             SetAccountDetailText(string.Empty);
             AvatarPicture.ProfilePicture = null;
@@ -310,6 +316,7 @@ public sealed partial class GeneralSettingsPage : Page
             var profile = await _accountService.GetCurrentProfileAsync();
             if (profile is null)
             {
+                _isAccountAuthenticated = false;
                 AccountNameText.Text = LocalizationHelper.GetString("LoginStatusInvalid");
                 SetAccountDetailText(LocalizationHelper.GetString("PleaseRelogin"));
                 AvatarPicture.ProfilePicture = null;
@@ -318,9 +325,10 @@ public sealed partial class GeneralSettingsPage : Page
                 return;
             }
 
-            AccountNameText.Text = profile.Name;
+            _isAccountAuthenticated = true;
+            AccountNameText.Text = profile.DisplayName;
             SetAccountDetailText(string.Empty);
-            AvatarPicture.Initials = string.IsNullOrWhiteSpace(profile.Name) ? "" : profile.Name[..1];
+            AvatarPicture.Initials = string.IsNullOrWhiteSpace(profile.DisplayName) ? "" : profile.DisplayName[..1];
             AvatarPicture.ProfilePicture = string.IsNullOrWhiteSpace(profile.AvatarUrl)
                 ? null
                 : new BitmapImage(new Uri(profile.AvatarUrl));
@@ -328,6 +336,7 @@ public sealed partial class GeneralSettingsPage : Page
         }
         catch (Exception)
         {
+            _isAccountAuthenticated = false;
             AccountNameText.Text = LocalizationHelper.GetString("StatusUnknown");
             SetAccountDetailText(LocalizationHelper.GetString("CookieUnverifiable"));
             AvatarPicture.ProfilePicture = null;
@@ -391,7 +400,7 @@ public sealed partial class GeneralSettingsPage : Page
 
         try
         {
-            var export = CreateSettingsExport();
+            var export = await CreateSettingsExportAsync();
             var json = JsonSerializer.Serialize(export, JsonOptions);
             await File.WriteAllTextAsync(result.Path, json);
             SetConfigStatus(LocalizationHelper.Format("ExportedTo", result.Path));
@@ -431,8 +440,9 @@ public sealed partial class GeneralSettingsPage : Page
         }
     }
 
-    private SettingsExport CreateSettingsExport()
+    private async System.Threading.Tasks.Task<SettingsExport> CreateSettingsExportAsync()
     {
+        var cookie = await _accountService.ExportCookieHeaderAsync();
         return new SettingsExport
         {
             ExportedAt = DateTimeOffset.Now,
@@ -450,8 +460,8 @@ public sealed partial class GeneralSettingsPage : Page
             CustomNotificationCreators = AppSettings.CustomNotificationCreators.ToList(),
             Login = new LoginExport
             {
-                HasCookie = _cookieStore.HasCookie,
-                Cookie = _cookieStore.GetCookieString(),
+                HasCookie = !string.IsNullOrWhiteSpace(cookie),
+                Cookie = cookie ?? string.Empty,
             },
         };
     }
@@ -472,11 +482,11 @@ public sealed partial class GeneralSettingsPage : Page
 
         if (import.Login?.HasCookie == true && !string.IsNullOrWhiteSpace(import.Login.Cookie))
         {
-            _cookieStore.SaveCookieString(import.Login.Cookie);
+            await _accountService.ImportCookieHeaderAsync(import.Login.Cookie);
         }
         else
         {
-            _cookieStore.Clear();
+            await _accountService.SignOutAsync();
         }
 
         _isLoadingSettings = true;

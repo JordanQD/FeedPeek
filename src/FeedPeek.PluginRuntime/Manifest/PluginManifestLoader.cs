@@ -107,6 +107,7 @@ public sealed partial class PluginManifestLoader
                 throw new PluginManifestException("AUTH_KIND_UNSUPPORTED", $"Unsupported auth kind: {manifest.Auth.Kind}");
             ValidateHosts(manifest.Auth.CookieDomains, "auth.cookieDomains");
             EnsureUnique(manifest.Auth.AuthSignalCookies, "auth.authSignalCookies");
+            EnsureUnique(manifest.Auth.ExposedCookieNames, "auth.exposedCookieNames");
             if (manifest.Auth.LoginFlow is not null)
             {
                 ValidateHttpsUrl(manifest.Auth.LoginFlow.LoginUrl, "auth.loginFlow.loginUrl");

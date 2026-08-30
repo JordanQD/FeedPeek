@@ -1,6 +1,6 @@
 # FeedPeek Phase 4：站点插件迁移实施计划
 
-> 状态：4.0–4.4 已完成自动验证；4.3 已人工验收，4.4 待人工验收
+> 状态：4.0–4.5 已完成自动验证；4.3–4.4 已人工验收，4.5 待人工验收
 > 基线提交：`9c6dd3e Phase3`  
 > 原则：每个检查点均保持可构建、可回滚；兼容矩阵通过前不删除 legacy 路径。
 
@@ -21,9 +21,10 @@
 | 4.3 | 注册插件 Source/Subscription；切换关注页读取路径 | RSS 与站点更新可共存；legacy 路径仍可回退 |
 | 4.4 | 迁移历史、稍后再看和 item actions；协调本地/远端状态 | 两页及加入/移除操作达到迁移前效果 |
 | 4.5 | manifest 驱动 WebView2 登录；持久凭据/Cookie 代理；账户资料与退出 | 登录、重启保留、失效和退出路径可人工验收 |
-| 4.6 | 迁移直播、关注列表与 creator actions | 直播与关注/取消关注达到迁移前效果 |
-| 4.7 | 后台通知和单作者规则改用通用标识 | 刷新、视频/直播通知及自定义作者规则可用 |
-| 4.8 | 执行兼容矩阵；删除已无调用方的 legacy provider、模型和 adapter | 默认路径完全使用通用核心与站点插件；构建和人工关键路径通过 |
+| 4.6 | 迁移直播、关注列表、creator actions 与作者展示语义 | 站点更新能稳定取得 creator；卡片来源位显示 UP 主名称/头像；直播与关注/取消关注达到迁移前效果 |
+| 4.7 | 后台通知和单作者规则改用通用 creator 标识 | 视频通知显示 UP 主；按 UP 主订阅更新通知、直播通知及自定义作者规则可用 |
+| 4.8 | 通用插件接入：用户插件目录、动态 Provider、插件管理、来源配置与多账号 | 不改宿主代码即可安装/启用另一个合规站点插件、登录账号并创建来源 |
+| 4.9 | 执行扩展兼容矩阵；升级/回滚/卸载验收；删除 legacy provider、模型和 adapter | 默认路径完全使用通用核心和动态插件注册；构建与人工关键路径通过 |
 
 ### 2.1 已完成记录
 
@@ -47,6 +48,10 @@
 - 同一站点视频在 updates/history/viewLater 三个 feed 中按 provider/source/item 视为同一逻辑条目；saved 状态同步到所有缓存副本，历史和稍后再看查询按该逻辑键去重。
 - 4.4 暂通过只暴露 `bili_jct` 的窄 credential bridge 支持 CSRF 动作；持久 credential profile、登录和退出仍由 4.5 完成。
 - 4.4 完成时现有测试项目共 30 项通过；Release x64 为 0 警告、0 错误。真实账号的历史分页、加入/移除和外部状态同步待人工验收。
+- 4.5：WebView2 登录窗口改为读取 manifest 的登录 URL、成功 URL、Cookie 域和成功 Cookie；宿主按 `pluginId + credentialProfileId` 将 profile 持久化到 Windows Credential Locker。
+- 插件 HTTP 只能向 manifest 声明的 Cookie 域注入 Cookie；插件脚本只能读取 manifest `exposedCookieNames` 显式授权的 Cookie 值，当前站点仅授权动作所需的 `bili_jct`。
+- 登录闭环通过 `auth.begin/complete/validate/clear`；账户资料改走 `account.getProfile`。旧设置导入的 Cookie 会迁移到 profile；在 4.7 迁走后台通知前仍同步一份 legacy Cookie，Credential Locker 是插件路径的权威来源。
+- 4.5 完成时现有测试项目共 31 项通过，Debug/Release x64 构建均为 0 警告、0 错误；WebView 登录、重启保留、失效与退出待人工验收。
 
 ## 3. 4.1 结构边界
 
@@ -78,18 +83,23 @@ FeedPeek.Core              FeedPeek.PluginContracts
 | 关注/取消关注 | `creator.getActions` / `creator.executeAction` | 4.6 | legacy 可用 |
 | WebView 登录 | manifest login flow + Host credential/cookie proxy | 4.5 | legacy 可用 |
 | 账户资料 | `account.getProfile` | 4.5 | legacy 可用 |
+| 站点条目显示 UP 主 | `creatorKey/authorName/authorImageUrl` + 通用卡片展示策略 | 4.6 | legacy 可用 |
 | 关注列表 | `creator.getFollowing` | 4.6 | legacy 可用 |
-| 后台与单作者通知 | 通用 source/creator identity | 4.7 | legacy 可用 |
+| 后台与按 UP 主更新通知 | 通用 provider/source/creator identity | 4.7 | legacy 可用 |
+| 用户插件发现、安装、启停和升级 | 用户插件目录 + 持久插件记录 | 4.8 | 无 |
+| 动态 Provider/Source 与多账号 | manifest source schema + credential profile + 设置向导 | 4.8 | 无 |
+| 通用 item/creator action 分发 | capability + action descriptor dispatcher | 4.6–4.8 | 内置站点分支可用 |
 | 托盘/Flyout/设置/退出生命周期 | WinUI 宿主 | 全程不改语义 | 已验收基线 |
 
 直播播放与弹幕仍是可选扩展，不作为 Phase 4 退出门槛。
 
 ## 5. 控件与 UI 约束
 
-- 4.0–4.5 不重做主面板卡片。
+- 4.0–4.5 不重做主面板卡片；4.6 只切换站点条目的作者展示语义，不改变现有卡片布局。
 - 来源设置继续复用现有 CommunityToolkit `SettingsCard` 与 WinUI `ListView`。
 - 登录继续复用现有 WebView2 窗口，只把 URL、Cookie 域和成功条件改为 manifest 驱动。
 - 4.6 若恢复横向直播区域，候选是官方 `ItemsRepeater + StackLayout`；实施前单独向用户确认具体布局。
+- 4.8 插件和来源管理复用现有 CommunityToolkit `SettingsCard`、WinUI `ListView` 与系统文件选择器，不自制列表或安装控件。
 - 不新增自制列表、选项卡、卡片框架或新控件依赖。
 
 ## 6. 验证和停止规则

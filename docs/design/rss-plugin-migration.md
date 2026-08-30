@@ -2,7 +2,7 @@
 
 > 文档用途：供当前仓库及后续 FeedPeek 项目中的开发者或编码代理直接读取并执行。  
 > 推荐实施方式：在当前 BiliRadar 仓库内渐进迁移为 FeedPeek；保留可运行基线和阶段检查点，不进行一次性推倒重写。  
-> 文档状态：实施中；Phase 0–3、Phase 4.0–4.4 已完成自动验证。
+> 文档状态：实施中；Phase 0–3、Phase 4.0–4.5 已完成自动验证。
 > 最近更新：2026-08-30。
 
 ## 1. 执行摘要
@@ -286,6 +286,7 @@ RSS 和插件来源走两条明确路径：
     "kind": "webview-cookie",
     "cookieDomains": ["example.com"],
     "authSignalCookies": ["SESSION"],
+    "exposedCookieNames": ["CSRF_TOKEN"],
     "loginFlow": {
       "loginUrl": "https://passport.example.com/login",
       "successUrlPrefixes": ["https://www.example.com/"],
@@ -796,10 +797,14 @@ FeedPeek.PluginWorker.exe
 - Host 层通过强类型客户端包装 JSON envelope，通过授权注册表绑定 source/credential context，并以 `PluginFeedProvider` 将插件分页结果映射到通用 `FeedPage`。
 - Phase 4.3 已把内置站点插件注册为持久化 Source/Subscription，并切换“关注”页到 RSS 与站点插件共用的通用 Core 读取路径；`ListView` 使用 `ISupportIncrementalLoading` 消费插件 opaque cursor。
 - Phase 4.4 已迁移网站历史、稍后再看分页及加入/移除 item actions；三个页面继续复用现有 `ListView`，没有引入新控件或修改卡片布局。
+- Phase 4.5 已将 WebView2 登录参数切换为 manifest 驱动，凭据按插件和 profile 存入 Windows Credential Locker；登录验证、账户资料和退出分别通过通用 auth/account 合同。
+- `exposedCookieNames` 是插件读取 Cookie 值的显式最小权限清单；Cookie Header 仍只由 Host HTTP 代理注入 manifest 声明域，插件不能直接取得完整 Cookie。
 - 网站列表和动作成功结果是站点 saved 状态的权威来源；本地 SQLite 只缓存结果，同一逻辑条目跨 updates/history/viewLater 同步并去重。RSS saved 状态保持纯本地。
-- 迁移期由只读 Cookie bridge 复用现有登录态，并通过窄 credential bridge 仅暴露动作所需的 `bili_jct`；正式凭据与登录流程仍属于 Phase 4.5，legacy provider 尚未删除。
+- 旧设置导入的登录态会迁移到 profile；为保证 4.7 前的 legacy 后台通知可用，暂时镜像旧 Cookie，插件运行路径以 Credential Locker 为权威来源。
 - 4.2 已增加仓库维护的内置站点插件，完成更新首刷、opaque cursor 分页、archive/PGC/opus 映射、结构化错误和取消传播；插件进入应用构建输出，但未注册为默认来源。
-- 4.4 完成时现有测试项目共 30 项通过，Release x64 构建 0 警告、0 错误；真实账号交互待人工验收。
+- 4.5 完成时现有测试项目共 31 项通过，Debug/Release x64 构建均为 0 警告、0 错误；真实账号登录、重启保留、失效和退出待人工验收。
+
+为达到“后续只添加插件即可支持其他视频网站”的目标，Phase 4 后续扩展为：4.6 迁移 creator/live 并让站点卡片来源位显示 UP 主；4.7 迁移按 UP 主更新通知；4.8 实现用户插件目录、动态 Provider、插件管理、来源配置 Schema 和多账号；原 4.8 legacy 清理顺延为 4.9。
 
 ### Phase 5：FeedPeek 品牌、包身份与用户数据迁移
 
