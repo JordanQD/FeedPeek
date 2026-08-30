@@ -28,7 +28,7 @@ public sealed class BiliWebDataProvider : IBiliDataProvider, IDisposable
     private static readonly TimeSpan RequestRetryDelay = TimeSpan.FromMilliseconds(500);
     private readonly CookieStore _cookieStore;
     private readonly HttpClient _httpClient;
-    private readonly Queue<BiliVideoUpdate> _pendingVideoUpdates = new();
+    private readonly LegacyVideoPageBuffer<BiliVideoUpdate> _videoPageBuffer = new(VideoListPageSize);
     private string _nextOffset = string.Empty;
     private bool _hasMoreUpdates;
     private long _historyNextMax;
@@ -122,7 +122,7 @@ public sealed class BiliWebDataProvider : IBiliDataProvider, IDisposable
         var page = await TryGetVideoUpdatesAsync(CreateAllMomentsUrl(), cookie, cancellationToken).ConfigureAwait(false);
         _nextOffset = page.NextOffset;
         _hasMoreUpdates = page.HasMore;
-        _pendingVideoUpdates.Clear();
+        _videoPageBuffer.Clear();
         return TakeVideoUpdatePage(page.Items);
     }
 
@@ -265,12 +265,12 @@ public sealed class BiliWebDataProvider : IBiliDataProvider, IDisposable
             return new BiliVideoUpdatePage(Array.Empty<BiliVideoUpdate>(), _nextOffset, false);
         }
 
-        if (_pendingVideoUpdates.Count > 0)
+        if (_videoPageBuffer.Count > 0)
         {
             return new BiliVideoUpdatePage(
                 TakePendingVideoUpdates(),
                 _nextOffset,
-                _pendingVideoUpdates.Count > 0 || _hasMoreUpdates);
+                _videoPageBuffer.Count > 0 || _hasMoreUpdates);
         }
 
         var page = await TryGetVideoUpdatesAsync(CreateAllMomentsUrl(_nextOffset), cookie, cancellationToken).ConfigureAwait(false);
@@ -279,7 +279,7 @@ public sealed class BiliWebDataProvider : IBiliDataProvider, IDisposable
         return new BiliVideoUpdatePage(
             TakeVideoUpdatePage(page.Items),
             _nextOffset,
-            _pendingVideoUpdates.Count > 0 || _hasMoreUpdates);
+            _videoPageBuffer.Count > 0 || _hasMoreUpdates);
     }
 
     public async Task<BiliVideoHistoryPage> GetRecentVideoHistoryAsync(CancellationToken cancellationToken = default)
@@ -566,29 +566,11 @@ public sealed class BiliWebDataProvider : IBiliDataProvider, IDisposable
     private async Task<BiliVideoUpdatePage> TryGetVideoUpdatesAsync(string url, string cookie, CancellationToken cancellationToken)
     {
         using var document = await SendJsonAsync(url, cookie, cancellationToken).ConfigureAwait(false);
-        EnsureBiliSuccess(document.RootElement);
-
-        if (!document.RootElement.TryGetProperty("data", out var data)
-            || !data.TryGetProperty("items", out var items)
-            || items.ValueKind != JsonValueKind.Array)
-        {
-            return new BiliVideoUpdatePage(Array.Empty<BiliVideoUpdate>(), string.Empty, false);
-        }
-
-        var updates = new List<BiliVideoUpdate>();
-        foreach (var item in items.EnumerateArray())
-        {
-            var update = TryCreateVideoUpdate(item);
-            if (update is not null)
-            {
-                updates.Add(update);
-            }
-        }
-
-        var nextOffset = GetString(data, "offset");
-        var hasMore = GetBool(data, "has_more");
-        return new BiliVideoUpdatePage(updates, nextOffset, hasMore);
+        return ParseVideoUpdatesResponse(document.RootElement);
     }
+
+    internal static BiliVideoUpdatePage ParseVideoUpdatesResponse(JsonElement root)
+        => BiliLegacyJsonMapper.ParseVideoUpdatesResponse(root);
 
     private static string CreateAllMomentsUrl(string offset = "")
     {
@@ -608,36 +590,11 @@ public sealed class BiliWebDataProvider : IBiliDataProvider, IDisposable
         return $"{ViewLaterListUrl}?pn={pageNumber}&ps={VideoListPageSize}";
     }
 
-    private IReadOnlyList<BiliVideoUpdate> TakeVideoUpdatePage(IReadOnlyList<BiliVideoUpdate> items)
-    {
-        if (items.Count <= VideoListPageSize)
-        {
-            return items;
-        }
+    internal IReadOnlyList<BiliVideoUpdate> TakeVideoUpdatePage(IReadOnlyList<BiliVideoUpdate> items)
+        => _videoPageBuffer.TakePage(items);
 
-        var page = new List<BiliVideoUpdate>(VideoListPageSize);
-        for (var index = 0; index < items.Count; index++)
-        {
-            if (index < VideoListPageSize)
-                page.Add(items[index]);
-            else
-                _pendingVideoUpdates.Enqueue(items[index]);
-        }
-
-        return page;
-    }
-
-    private IReadOnlyList<BiliVideoUpdate> TakePendingVideoUpdates()
-    {
-        var count = Math.Min(VideoListPageSize, _pendingVideoUpdates.Count);
-        var page = new List<BiliVideoUpdate>(count);
-        for (var index = 0; index < count; index++)
-        {
-            page.Add(_pendingVideoUpdates.Dequeue());
-        }
-
-        return page;
-    }
+    internal IReadOnlyList<BiliVideoUpdate> TakePendingVideoUpdates()
+        => _videoPageBuffer.TakePendingPage();
 
     private static BiliVideoUpdate? TryCreateVideoUpdate(JsonElement item)
     {
@@ -754,34 +711,11 @@ public sealed class BiliWebDataProvider : IBiliDataProvider, IDisposable
     private async Task<BiliVideoHistoryPage> TryGetVideoHistoryAsync(string url, string cookie, CancellationToken cancellationToken)
     {
         using var document = await SendJsonAsync(url, cookie, cancellationToken).ConfigureAwait(false);
-        EnsureBiliSuccess(document.RootElement);
-
-        if (!document.RootElement.TryGetProperty("data", out var data)
-            || !data.TryGetProperty("list", out var list)
-            || list.ValueKind != JsonValueKind.Array)
-        {
-            return new BiliVideoHistoryPage(Array.Empty<BiliVideoUpdate>(), 0, 0, false);
-        }
-
-        var items = new List<BiliVideoUpdate>();
-        foreach (var item in list.EnumerateArray())
-        {
-            var historyItem = TryCreateVideoHistoryItem(item);
-            if (historyItem is not null)
-            {
-                items.Add(historyItem);
-            }
-        }
-
-        var cursor = data.TryGetProperty("cursor", out var cursorElement) ? cursorElement : default;
-        var nextMax = GetInt64(cursor, "max");
-        var nextViewAt = GetInt64(cursor, "view_at");
-        var hasMore = GetBool(data, "has_more")
-            || GetBool(cursor, "has_more")
-            || (items.Count > 0 && nextMax > 0 && nextMax != _historyNextMax);
-
-        return new BiliVideoHistoryPage(items, nextMax, nextViewAt, hasMore);
+        return ParseVideoHistoryResponse(document.RootElement, _historyNextMax);
     }
+
+    internal static BiliVideoHistoryPage ParseVideoHistoryResponse(JsonElement root, long previousNextMax = 0)
+        => BiliLegacyJsonMapper.ParseVideoHistoryResponse(root, previousNextMax);
 
     private static BiliVideoUpdate? TryCreateVideoHistoryItem(JsonElement item)
     {
@@ -853,30 +787,11 @@ public sealed class BiliWebDataProvider : IBiliDataProvider, IDisposable
     private async Task<BiliViewLaterPage> TryGetViewLaterAsync(string url, string cookie, int loadedCount, CancellationToken cancellationToken)
     {
         using var document = await SendJsonAsync(url, cookie, cancellationToken).ConfigureAwait(false);
-        EnsureBiliSuccess(document.RootElement);
-
-        if (!document.RootElement.TryGetProperty("data", out var data)
-            || !data.TryGetProperty("list", out var list)
-            || list.ValueKind != JsonValueKind.Array)
-        {
-            return new BiliViewLaterPage(Array.Empty<BiliVideoUpdate>(), 0, _viewLaterNextPageNumber, false);
-        }
-
-        var items = new List<BiliVideoUpdate>();
-        foreach (var item in list.EnumerateArray())
-        {
-            var video = TryCreateViewLaterItem(item);
-            if (video is not null)
-            {
-                items.Add(video);
-            }
-        }
-
-        var totalCount = GetInt32(data, "count");
-        var nextPageNumber = _viewLaterNextPageNumber + 1;
-        var hasMore = items.Count > 0 && loadedCount + items.Count < totalCount;
-        return new BiliViewLaterPage(items, totalCount, nextPageNumber, hasMore);
+        return ParseViewLaterResponse(document.RootElement, loadedCount, _viewLaterNextPageNumber);
     }
+
+    internal static BiliViewLaterPage ParseViewLaterResponse(JsonElement root, int loadedCount, int currentPageNumber)
+        => BiliLegacyJsonMapper.ParseViewLaterResponse(root, loadedCount, currentPageNumber);
 
     private static BiliVideoUpdate? TryCreateViewLaterItem(JsonElement item)
     {

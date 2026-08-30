@@ -23,7 +23,7 @@ internal sealed class TrayFlyoutService : IDisposable
     private const double MainPanelWidth = 420d;
     private const double MinimumPanelHeight = 320d;
     private const double FlyoutWorkAreaInset = 24d;
-    private static readonly Guid TrayIconGuid = new("F0D7B8D0-7063-4F3D-A962-9E81BD766431");
+    private static readonly Guid TrayIconGuid = new("9CB5A423-C114-4FF5-8AA6-271935539A0C");
     private static readonly TimeSpan TrayLightDismissReopenGuard = TimeSpan.FromMilliseconds(300);
 
     private readonly DispatcherQueue _dispatcherQueue;
@@ -77,7 +77,7 @@ internal sealed class TrayFlyoutService : IDisposable
 
         _contextMenu = CreateContextMenu(settingsAction, exitAction);
 
-        _trayIcon = new SystemTrayIcon(GetIconPath(), "BiliRadar", TrayIconGuid);
+        _trayIcon = new SystemTrayIcon(GetIconPath(), "FeedPeek Preview", TrayIconGuid);
         _trayIcon.LeftClicked += OnTrayIconLeftClicked;
         _trayIcon.RightClicked += OnTrayIconRightClicked;
         _trayIcon.Show();
@@ -253,7 +253,6 @@ internal sealed class TrayFlyoutService : IDisposable
         if (_mainFlyoutIsland.Content is MainPanelControl closedPanel)
         {
             closedPanel.OnFlyoutClosed();
-            _lastSnapshot = closedPanel.Session.CreateSnapshot();
             closedPanel.Dispose();
             _mainFlyoutIsland.Content = null;
         }

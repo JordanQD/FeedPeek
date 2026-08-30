@@ -1,20 +1,13 @@
 using BiliRadar.Models;
 using BiliRadar.Pages;
 using BiliRadar.Services;
-using Microsoft.UI.Composition;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Hosting;
-using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Navigation;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Numerics;
-using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -22,76 +15,52 @@ namespace BiliRadar.Controls;
 
 public sealed partial class MainPanelControl : UserControl, IDisposable
 {
-    private static readonly TimeSpan StatusNotificationEnterAnimationDuration = TimeSpan.FromMilliseconds(180);
-    private static readonly TimeSpan StatusNotificationExitAnimationDuration = TimeSpan.FromMilliseconds(160);
-    private static readonly Vector2 StatusNotificationEnterControlPoint1 = new(0.1f, 0.9f);
-    private static readonly Vector2 StatusNotificationEnterControlPoint2 = new(0.4f, 1.0f);
-    private static readonly Vector2 StatusNotificationExitControlPoint1 = new(0.2f, 0.0f);
-    private static readonly Vector2 StatusNotificationExitControlPoint2 = new(0.9f, 0.0f);
-
-    private int _previousSelectedPageIndex = -1;
     private readonly HashSet<IDisposable> _initializedPages = [];
     private CancellationTokenSource? _flyoutCts;
-    private CancellationTokenSource? _pageSwitchCleanupCts;
-    private StatusNotification? _currentStatusNotification;
     private double _hostHeight = double.NaN;
-    private int _statusNotificationAnimationVersion;
+    private int _previousSelectedPageIndex = -1;
     private bool _isFlyoutOpen;
     private bool _isDisposed;
     private bool _isSettingDefaultPage;
-    private bool _isSchedulingOpenActivation;
 
-    public MainPanelSession Session { get; }
+    public FeedPeekPanelSession Session { get; }
 
     public MainPanelControl()
     {
+        Session = new FeedPeekPanelSession();
         InitializeComponent();
-        ApplyPanelHeight();
+        Session.StatusRaised += Session_StatusRaised;
+        ContentFrame.Navigated += ContentFrame_Navigated;
         Loaded += MainPanelControl_Loaded;
-        Session = new MainPanelSession(new CookieStore());
-        Session.StatusAdded += Session_StatusAdded;
-        Session.StatusRemoved += Session_StatusRemoved;
-        Session.StatusCleared += Session_StatusCleared;
-        ContentFrame.Navigated += OnContentFrameNavigated;
         SelectDefaultPage();
     }
 
     public MainPanelControl(MainWindowSnapshot? snapshot)
+        : this()
     {
-        InitializeComponent();
-        ApplyPanelHeight();
-        Loaded += MainPanelControl_Loaded;
-        Session = new MainPanelSession(new CookieStore(), snapshot);
-        Session.StatusAdded += Session_StatusAdded;
-        Session.StatusRemoved += Session_StatusRemoved;
-        Session.StatusCleared += Session_StatusCleared;
-        ContentFrame.Navigated += OnContentFrameNavigated;
-        SelectDefaultPage();
     }
 
-    private void MainPanelControl_Loaded(object sender, RoutedEventArgs e)
-    {
-        ApplyPanelHeight();
-    }
-
-    private void ApplyPanelHeight()
-    {
-        if (!double.IsNaN(_hostHeight))
-        {
-            RootGrid.Height = _hostHeight;
-            Height = _hostHeight;
-            return;
-        }
-
-        var scale = XamlRoot?.RasterizationScale ?? 1.0;
-        var workAreaHeight = DisplayArea.Primary.WorkArea.Height / scale;
-        RootGrid.Height = Math.Min(workAreaHeight - 80, AppSettings.MainPanelHeight);
-    }
+    private void MainPanelControl_Loaded(object sender, RoutedEventArgs e) => ApplyPanelHeight();
 
     public void SetHostHeight(double height)
     {
         _hostHeight = Math.Max(1d, height);
         ApplyPanelHeight();
+    }
+
+    private void ApplyPanelHeight()
+    {
+        var height = _hostHeight;
+        if (double.IsNaN(height))
+        {
+            var scale = XamlRoot?.RasterizationScale ?? 1d;
+            height = Math.Min(
+                DisplayArea.Primary.WorkArea.Height / scale - 80,
+                AppSettings.MainPanelHeight);
+        }
+
+        RootGrid.Height = height;
+        Height = height;
     }
 
     private void SelectDefaultPage()
@@ -107,21 +76,9 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
         ContentSelectorBar.SelectedItem = selectedItem;
         selectedItem.IsSelected = true;
         _isSettingDefaultPage = false;
+        NavigateToSelectedPage(resetScrollPosition: false);
     }
 
-    private void OnContentFrameNavigated(object sender, NavigationEventArgs e)
-    {
-        if (e.Content is IMainPanelPage page)
-        {
-            page.Initialize(Session);
-            if (page is IDisposable disposablePage)
-                _initializedPages.Add(disposablePage);
-        }
-    }
-
-    /// <summary>
-    /// Flyout 打开时调用：创建新的 CancellationTokenSource，触发当前可见页面的数据刷新。
-    /// </summary>
     public void OnFlyoutOpened()
     {
         _isFlyoutOpen = true;
@@ -134,152 +91,61 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
             SelectDefaultPage();
         }
 
-        ScheduleCurrentPageActivation(resetScrollPosition: !AppSettings.SaveMainPanelPosition);
+        _ = InitializeAndRefreshAsync(_flyoutCts.Token);
     }
 
-    /// <summary>
-    /// Flyout 关闭时调用：取消仍在运行的 UI 请求。
-    /// 外层 TrayFlyoutService 负责保存 snapshot 并决定是否销毁整个面板。
-    /// </summary>
     public void OnFlyoutClosed()
     {
         _isFlyoutOpen = false;
         _flyoutCts?.Cancel();
     }
 
-    public Task RefreshCurrentPageAsync()
+    public async Task RefreshCurrentPageAsync()
     {
-        if (!_isFlyoutOpen || ContentFrame.Content is not IMainPanelPage page)
+        if (!_isFlyoutOpen || _isDisposed) return;
+        var cancellationToken = _flyoutCts?.Token ?? CancellationToken.None;
+        try
         {
-            return Task.CompletedTask;
+            await Session.RefreshAllAsync(cancellationToken);
+            await ActivateCurrentPageAsync(cancellationToken);
         }
-
-        return page.ActivateAsync(_flyoutCts?.Token ?? CancellationToken.None);
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch
+        {
+        }
     }
 
-    public void Dispose()
-    {
-        if (_isDisposed) return;
-        _isDisposed = true;
-
-        _flyoutCts?.Cancel();
-        _flyoutCts?.Dispose();
-        _flyoutCts = null;
-        _pageSwitchCleanupCts?.Cancel();
-        _pageSwitchCleanupCts?.Dispose();
-        _pageSwitchCleanupCts = null;
-        Loaded -= MainPanelControl_Loaded;
-        Session.StatusAdded -= Session_StatusAdded;
-        Session.StatusRemoved -= Session_StatusRemoved;
-        Session.StatusCleared -= Session_StatusCleared;
-        ContentFrame.Navigated -= OnContentFrameNavigated;
-        foreach (var page in _initializedPages)
-        {
-            page.Dispose();
-        }
-
-        _initializedPages.Clear();
-        _currentStatusNotification = null;
-        _statusNotificationAnimationVersion++;
-        StatusInfoBar.IsOpen = false;
-        StatusNotificationLayer.Visibility = Visibility.Collapsed;
-        StatusInfoBarText.Text = string.Empty;
-        ResetStatusNotificationVisual();
-        ContentFrame.Content = null;
-        Session.Dispose();
-    }
-
-    private void ContentSelectorBar_SelectionChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs args)
-    {
-        if (_isSettingDefaultPage)
-        {
-            return;
-        }
-
-        NavigateToSelectedPage(resetScrollPosition: true);
-    }
-
-    private void ScheduleCurrentPageActivation(bool resetScrollPosition)
-    {
-        if (_isSchedulingOpenActivation)
-        {
-            return;
-        }
-
-        _isSchedulingOpenActivation = true;
-        _ = ActivateCurrentPageAfterShellRenderAsync(
-            resetScrollPosition,
-            _flyoutCts?.Token ?? CancellationToken.None);
-    }
-
-    private async Task ActivateCurrentPageAfterShellRenderAsync(
-        bool resetScrollPosition,
-        CancellationToken cancellationToken)
+    private async Task InitializeAndRefreshAsync(CancellationToken cancellationToken)
     {
         try
         {
-            await WaitForRenderPassAsync(cancellationToken);
-            await WaitForRenderPassAsync(cancellationToken);
+            await Session.InitializeAsync(cancellationToken);
+            await Session.RefreshAllAsync(cancellationToken);
+            await ActivateCurrentPageAsync(cancellationToken);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            _isSchedulingOpenActivation = false;
-            return;
         }
-
-        DispatcherQueue.TryEnqueue(
-            Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
-            () =>
-            {
-                _isSchedulingOpenActivation = false;
-                if (_isDisposed || !_isFlyoutOpen || cancellationToken.IsCancellationRequested)
-                {
-                    return;
-                }
-
-                EnsureSelectedPageNavigated(resetScrollPosition);
-            });
+        catch
+        {
+            await ActivateCurrentPageAsync(cancellationToken);
+        }
     }
 
-    private static Task WaitForRenderPassAsync(CancellationToken cancellationToken)
+    private void ContentSelectorBar_SelectionChanged(
+        SelectorBar sender,
+        SelectorBarSelectionChangedEventArgs args)
     {
-        if (cancellationToken.IsCancellationRequested)
-        {
-            return Task.FromCanceled(cancellationToken);
-        }
-
-        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        EventHandler<object>? handler = null;
-        CancellationTokenRegistration registration = default;
-
-        handler = (_, _) =>
-        {
-            CompositionTarget.Rendering -= handler;
-            registration.Dispose();
-            completion.TrySetResult();
-        };
-
-        registration = cancellationToken.Register(() =>
-        {
-            if (handler is not null)
-            {
-                CompositionTarget.Rendering -= handler;
-            }
-
-            completion.TrySetCanceled(cancellationToken);
-        });
-
-        CompositionTarget.Rendering += handler;
-        return completion.Task;
+        if (_isSettingDefaultPage || _isDisposed) return;
+        NavigateToSelectedPage(resetScrollPosition: true);
     }
 
     private void NavigateToSelectedPage(bool resetScrollPosition)
     {
         var currentIndex = ContentSelectorBar.Items.IndexOf(ContentSelectorBar.SelectedItem);
-        if (currentIndex < 0)
-        {
-            currentIndex = 0;
-        }
+        if (currentIndex < 0) currentIndex = 0;
 
         var pageType = currentIndex switch
         {
@@ -290,95 +156,52 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
 
         if (ContentFrame.Content?.GetType() == pageType)
         {
-            if (resetScrollPosition)
-                ResetPageScrollPosition();
-
-            if (_isFlyoutOpen && ContentFrame.Content is IMainPanelPage existingPage)
-                _ = existingPage.ActivateAsync(_flyoutCts?.Token ?? CancellationToken.None);
+            if (resetScrollPosition) ResetPageScrollPosition();
+            if (_isFlyoutOpen) _ = ActivateCurrentPageAsync(_flyoutCts?.Token ?? CancellationToken.None);
             _previousSelectedPageIndex = currentIndex;
             return;
         }
 
-        var effect = currentIndex > _previousSelectedPageIndex
+        DisposeCurrentPage();
+        var transition = currentIndex > _previousSelectedPageIndex
             ? SlideNavigationTransitionEffect.FromRight
             : SlideNavigationTransitionEffect.FromLeft;
-
-        DeactivateCurrentPage();
-
         ContentFrame.Navigate(
             pageType,
             null,
-            new SlideNavigationTransitionInfo { Effect = effect });
-
+            new SlideNavigationTransitionInfo { Effect = transition });
         _previousSelectedPageIndex = currentIndex;
-        if (resetScrollPosition)
-            ResetPageScrollPosition();
 
-        if (_isFlyoutOpen && ContentFrame.Content is IMainPanelPage newPage)
-            _ = newPage.ActivateAsync(_flyoutCts?.Token ?? CancellationToken.None);
-
-        SchedulePageSwitchCleanup();
+        if (resetScrollPosition) ResetPageScrollPosition();
+        if (_isFlyoutOpen) _ = ActivateCurrentPageAsync(_flyoutCts?.Token ?? CancellationToken.None);
     }
 
-    private void EnsureSelectedPageNavigated(bool resetScrollPosition)
+    private void ContentFrame_Navigated(object sender, NavigationEventArgs e)
     {
-        NavigateToSelectedPage(resetScrollPosition);
-        ApplyCurrentPageOpenSettings();
+        if (e.Content is not IMainPanelPage page) return;
+        page.Initialize(Session);
+        if (page is IDisposable disposable) _initializedPages.Add(disposable);
     }
 
-    private void DeactivateCurrentPage()
+    private Task ActivateCurrentPageAsync(CancellationToken cancellationToken)
+        => ContentFrame.Content is IMainPanelPage page
+            ? page.ActivateAsync(cancellationToken)
+            : Task.CompletedTask;
+
+    private void DisposeCurrentPage()
     {
-        if (ContentFrame.Content is IMainPanelPage page)
+        if (ContentFrame.Content is IDisposable disposable)
         {
-            if (page is IDisposable disposablePage)
-            {
-                disposablePage.Dispose();
-                _initializedPages.Remove(disposablePage);
-            }
-            else
-            {
-                page.Deactivate();
-            }
+            disposable.Dispose();
+            _initializedPages.Remove(disposable);
         }
-    }
-
-    private void SchedulePageSwitchCleanup()
-    {
-        _pageSwitchCleanupCts?.Cancel();
-        _pageSwitchCleanupCts?.Dispose();
-        _pageSwitchCleanupCts = new CancellationTokenSource();
-        var token = _pageSwitchCleanupCts.Token;
-
-        _ = Task.Run(async () =>
+        else if (ContentFrame.Content is IMainPanelPage page)
         {
-            try
-            {
-                await Task.Delay(TimeSpan.FromSeconds(2), token);
-                DispatcherQueue.TryEnqueue(
-                    Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
-                    CollectReleasedPageResources);
-            }
-            catch (OperationCanceledException)
-            {
-            }
-        }, token);
+            page.Deactivate();
+        }
+
+        ContentFrame.Content = null;
     }
-
-    private static void CollectReleasedPageResources()
-    {
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        GC.Collect();
-
-        using var process = Process.GetCurrentProcess();
-        SetProcessWorkingSetSize(process.Handle, new IntPtr(-1), new IntPtr(-1));
-    }
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool SetProcessWorkingSetSize(
-        IntPtr process,
-        IntPtr minimumWorkingSetSize,
-        IntPtr maximumWorkingSetSize);
 
     private void ResetPageScrollPosition()
     {
@@ -387,158 +210,42 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
         (ContentFrame.Content as ViewLaterPage)?.ResetScrollPosition();
     }
 
-    private void ApplyCurrentPageOpenSettings()
-    {
-        (ContentFrame.Content as FollowingPage)?.ApplyOpenSettings();
-    }
+    private async void RefreshButton_Click(object sender, RoutedEventArgs e)
+        => await RefreshCurrentPageAsync();
 
-    private async void OpenBrowserButton_Click(object sender, RoutedEventArgs e)
+    private void Session_StatusRaised(object? sender, FeedPeekStatus status)
     {
-        var section = ContentSelectorBar.SelectedItem switch
+        if (_isDisposed) return;
+        DispatcherQueue.TryEnqueue(() =>
         {
-            SelectorBarItem item when item == HistorySelectorItem => MainPanelSection.History,
-            SelectorBarItem item when item == ViewLaterSelectorItem => MainPanelSection.ViewLater,
-            _ => MainPanelSection.Following,
-        };
-        await Session.LaunchSelectedBrowserUriAsync(section);
-    }
-
-    private void Session_StatusAdded(object? sender, StatusNotification notification)
-    {
-        var isReplacingVisibleNotification = StatusInfoBar.IsOpen && _currentStatusNotification is not null;
-        _currentStatusNotification = notification;
-        StatusNotificationLayer.Visibility = Visibility.Visible;
-        StatusInfoBarText.Text = notification.Message;
-        StatusInfoBar.Severity = notification.Severity;
-        StatusInfoBar.IsOpen = true;
-
-        if (isReplacingVisibleNotification)
-        {
-            _statusNotificationAnimationVersion++;
-            ResetStatusNotificationVisual();
-            return;
-        }
-
-        PlayStatusNotificationEnterAnimation(++_statusNotificationAnimationVersion);
-    }
-
-    private void Session_StatusRemoved(object? sender, StatusNotification notification)
-    {
-        if (!ReferenceEquals(_currentStatusNotification, notification))
-        {
-            return;
-        }
-
-        _currentStatusNotification = null;
-        _ = PlayStatusNotificationExitAnimationAsync(++_statusNotificationAnimationVersion);
-    }
-
-    private void Session_StatusCleared(object? sender, EventArgs e)
-    {
-        _currentStatusNotification = null;
-        _statusNotificationAnimationVersion++;
-        StatusInfoBar.IsOpen = false;
-        StatusNotificationLayer.Visibility = Visibility.Collapsed;
-        StatusInfoBarText.Text = string.Empty;
-        ResetStatusNotificationVisual();
+            if (_isDisposed) return;
+            StatusNotificationLayer.Visibility = Visibility.Visible;
+            StatusInfoBarText.Text = status.Message;
+            StatusInfoBar.Severity = status.Severity;
+            StatusInfoBar.IsOpen = true;
+        });
     }
 
     private void StatusNotificationInfoBar_CloseButtonClick(InfoBar sender, object args)
     {
-        if (_currentStatusNotification is StatusNotification notification)
-        {
-            Session.DismissStatusNotification(notification);
-            return;
-        }
-
         StatusInfoBar.IsOpen = false;
         StatusNotificationLayer.Visibility = Visibility.Collapsed;
-        StatusInfoBarText.Text = string.Empty;
-        ResetStatusNotificationVisual();
     }
 
-    private void PlayStatusNotificationEnterAnimation(int version)
+    public void Dispose()
     {
-        var visual = ElementCompositionPreview.GetElementVisual(StatusNotificationLayer);
-        visual.Opacity = 0f;
-        visual.Offset = new Vector3(0f, 12f, 0f);
-
-        var compositor = visual.Compositor;
-        var easing = compositor.CreateCubicBezierEasingFunction(
-            StatusNotificationEnterControlPoint1,
-            StatusNotificationEnterControlPoint2);
-
-        var opacityAnimation = compositor.CreateScalarKeyFrameAnimation();
-        opacityAnimation.Duration = StatusNotificationEnterAnimationDuration;
-        opacityAnimation.InsertKeyFrame(0f, 0f);
-        opacityAnimation.InsertKeyFrame(1f, 1f, easing);
-
-        var offsetAnimation = compositor.CreateScalarKeyFrameAnimation();
-        offsetAnimation.Duration = StatusNotificationEnterAnimationDuration;
-        offsetAnimation.InsertKeyFrame(0f, 12f);
-        offsetAnimation.InsertKeyFrame(1f, 0f, easing);
-
-        var batch = compositor.CreateScopedBatch(CompositionBatchTypes.Animation);
-        batch.Completed += (_, _) =>
-        {
-            if (version != _statusNotificationAnimationVersion)
-            {
-                return;
-            }
-
-            visual.Opacity = 1f;
-            visual.Offset = Vector3.Zero;
-        };
-
-        visual.StartAnimation("Opacity", opacityAnimation);
-        visual.StartAnimation("Offset.Y", offsetAnimation);
-        batch.End();
-    }
-
-    private async Task PlayStatusNotificationExitAnimationAsync(int version)
-    {
-        var visual = ElementCompositionPreview.GetElementVisual(StatusNotificationLayer);
-        visual.Opacity = 1f;
-        visual.Offset = Vector3.Zero;
-
-        var compositor = visual.Compositor;
-        var easing = compositor.CreateCubicBezierEasingFunction(
-            StatusNotificationExitControlPoint1,
-            StatusNotificationExitControlPoint2);
-
-        var opacityAnimation = compositor.CreateScalarKeyFrameAnimation();
-        opacityAnimation.Duration = StatusNotificationExitAnimationDuration;
-        opacityAnimation.InsertKeyFrame(0f, 1f);
-        opacityAnimation.InsertKeyFrame(1f, 0f, easing);
-
-        var offsetAnimation = compositor.CreateScalarKeyFrameAnimation();
-        offsetAnimation.Duration = StatusNotificationExitAnimationDuration;
-        offsetAnimation.InsertKeyFrame(0f, 0f);
-        offsetAnimation.InsertKeyFrame(1f, 12f, easing);
-
-        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var batch = compositor.CreateScopedBatch(CompositionBatchTypes.Animation);
-        batch.Completed += (_, _) => completion.TrySetResult();
-        visual.StartAnimation("Opacity", opacityAnimation);
-        visual.StartAnimation("Offset.Y", offsetAnimation);
-        batch.End();
-
-        await completion.Task;
-        if (version != _statusNotificationAnimationVersion)
-        {
-            return;
-        }
-
-        StatusInfoBar.IsOpen = false;
-        StatusNotificationLayer.Visibility = Visibility.Collapsed;
-        StatusInfoBarText.Text = string.Empty;
-        ResetStatusNotificationVisual();
-    }
-
-    private void ResetStatusNotificationVisual()
-    {
-        var visual = ElementCompositionPreview.GetElementVisual(StatusNotificationLayer);
-        visual.Opacity = 1f;
-        visual.Offset = Vector3.Zero;
+        if (_isDisposed) return;
+        _isDisposed = true;
+        _isFlyoutOpen = false;
+        _flyoutCts?.Cancel();
+        _flyoutCts?.Dispose();
+        _flyoutCts = null;
+        Loaded -= MainPanelControl_Loaded;
+        Session.StatusRaised -= Session_StatusRaised;
+        ContentFrame.Navigated -= ContentFrame_Navigated;
+        DisposeCurrentPage();
+        foreach (var page in _initializedPages) page.Dispose();
+        _initializedPages.Clear();
+        Session.Dispose();
     }
 }

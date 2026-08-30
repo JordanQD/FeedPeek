@@ -18,7 +18,7 @@
   <data name="SettingsGeneralNavItem.Content" xml:space="preserve"><value>通用</value></data>
   <data name="SettingsNotificationNavItem.Content" xml:space="preserve"><value>通知</value></data>
   <data name="SettingsAboutNavItem.Content" xml:space="preserve"><value>关于</value></data>
-  <data name="WebSignInTitleBar.Title" xml:space="preserve"><value>BiliRadar 登录</value></data>
+  <data name="WebSignInTitleBar.Title" xml:space="preserve"><value>FeedPeek Preview 登录</value></data>
 
   <data name="GeneralPageTitle.Text" xml:space="preserve"><value>通用</value></data>
   <data name="GeneralStartupSectionHeader.Text" xml:space="preserve"><value>启动</value></data>
@@ -72,6 +72,9 @@
   <data name="GeneralImportConfigCard.Description" xml:space="preserve"><value>从 JSON 配置文件恢复通知、启动和登录状态配置。</value></data>
   <data name="GeneralImportConfigButton.Content" xml:space="preserve"><value>导入</value></data>
   <data name="GeneralDebugSectionHeader.Text" xml:space="preserve"><value>调试</value></data>
+  <data name="GeneralFeedPeekPreviewCard.Header" xml:space="preserve"><value>FeedPeek RSS 预览界面</value></data>
+  <data name="GeneralFeedPeekPreviewCard.Description" xml:space="preserve"><value>关闭并重新打开托盘面板后生效；旧三页仍会保留。</value></data>
+  <data name="GeneralFeedPeekPreviewSwitch.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>FeedPeek RSS 预览界面</value></data>
   <data name="GeneralLanguageCard.Header" xml:space="preserve"><value>界面语言</value></data>
   <data name="GeneralLanguageCard.Description" xml:space="preserve"><value>选择跟随 Windows 语言，或手动指定界面显示语言。重启应用后生效。</value></data>
   <data name="GeneralLanguageSelectorBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>界面语言</value></data>
@@ -112,7 +115,7 @@
   <data name="NotificationSettings.LiveNotifyCard.Header" xml:space="preserve"><value>开播通知</value></data>
 
   <data name="AboutPageTitle.Text" xml:space="preserve"><value>关于</value></data>
-  <data name="AboutExpander.Header" xml:space="preserve"><value>BiliRadar</value></data>
+  <data name="AboutExpander.Header" xml:space="preserve"><value>FeedPeek Preview</value></data>
   <data name="AboutExpander.Description" xml:space="preserve"><value>一个放在任务栏托盘里的 B 站动态雷达。</value></data>
   <data name="AboutCloneRepositoryCard.Header" xml:space="preserve"><value>克隆此仓库</value></data>
   <data name="AboutIssueRequestCard.Header" xml:space="preserve"><value>提交问题或功能建议</value></data>
@@ -201,9 +204,9 @@
   <data name="LiveNotificationTitle" xml:space="preserve"><value>{0} 开播了</value></data>
   <data name="CloneCommandCopied" xml:space="preserve"><value>已复制克隆命令。</value></data>
   <data name="LanguageRestartMessage" xml:space="preserve"><value>语言已切换为 {0}，重启应用后生效。</value></data>
-  <data name="MainWindow.Title" xml:space="preserve"><value>BiliRadar</value></data>
-  <data name="SettingsWindow.Title" xml:space="preserve"><value>BiliRadar 设置</value></data>
-  <data name="WebSignInWindow.Title" xml:space="preserve"><value>BiliRadar 登录</value></data>
+  <data name="MainWindow.Title" xml:space="preserve"><value>FeedPeek Preview</value></data>
+  <data name="SettingsWindow.Title" xml:space="preserve"><value>FeedPeek Preview 设置</value></data>
+  <data name="WebSignInWindow.Title" xml:space="preserve"><value>FeedPeek Preview 登录</value></data>
   <data name="AddCreatorDialogVideoLabel" xml:space="preserve"><value>视频更新通知</value></data>
   <data name="AddCreatorDialogLiveLabel" xml:space="preserve"><value>开播通知</value></data>
   <data name="AddToNotificationListMenuItem" xml:space="preserve"><value>添加到通知列表</value></data>
@@ -212,6 +215,6 @@
   <data name="RemovedFromNotificationList" xml:space="preserve"><value>已从通知列表移除：{0}</value></data>
   <data name="CreatorNotFollowed" xml:space="preserve"><value>该 UP 不在你的关注列表中</value></data>
   <data name="CreatorNotFollowedDetail" xml:space="preserve"><value>仅能对已关注的 UP 添加通知。</value></data>
-  <data name="SignInNotificationTitle" xml:space="preserve"><value>欢迎使用 BiliRadar</value></data>
+  <data name="SignInNotificationTitle" xml:space="preserve"><value>欢迎使用 FeedPeek Preview</value></data>
   <data name="SignInNotificationBody" xml:space="preserve"><value>点击登录 Bilibili 账号以获取关注动态</value></data>
 </root>

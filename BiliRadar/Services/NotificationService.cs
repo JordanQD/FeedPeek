@@ -67,31 +67,25 @@ public sealed class NotificationService
 
     public async Task NotifyVideoUpdatesAsync(IReadOnlyList<BiliVideoUpdate> updates, bool showNotifications = true)
     {
-        var orderedUpdates = updates
-            .Where(item => !string.IsNullOrWhiteSpace(item.Id))
-            .OrderByDescending(item => item.PublishedAt)
-            .ToList();
-
-        if (!AppSettings.VideoNotificationBaselineInitialized)
+        var plan = NotificationBaselinePlanner.ForVideos(
+            updates,
+            AppSettings.KnownVideoUpdateIds,
+            AppSettings.VideoNotificationBaselineInitialized,
+            MaxNotificationsPerRefresh,
+            MaxStoredVideoUpdateIds);
+        AppSettings.KnownVideoUpdateIds = plan.KnownIds;
+        if (plan.InitializesBaseline)
         {
-            SaveKnownVideoUpdates(orderedUpdates.Select(item => item.Id));
             AppSettings.VideoNotificationBaselineInitialized = true;
             return;
         }
 
-        var knownIds = AppSettings.KnownVideoUpdateIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var newUpdates = orderedUpdates
-            .Where(item => !knownIds.Contains(item.Id))
-            .Take(MaxNotificationsPerRefresh)
-            .ToList();
-
-        SaveKnownVideoUpdates(orderedUpdates.Select(item => item.Id).Concat(knownIds));
-        if (!showNotifications || !IsVideoNotificationEnabled() || newUpdates.Count == 0)
+        if (!showNotifications || !IsVideoNotificationEnabled() || plan.NewItems.Count == 0)
         {
             return;
         }
 
-        foreach (var update in newUpdates.OrderBy(item => item.PublishedAt))
+        foreach (var update in plan.NewItems.OrderBy(item => item.PublishedAt))
         {
             ShowVideoNotification(update);
             await Task.Delay(NotificationSpacing);
@@ -100,32 +94,25 @@ public sealed class NotificationService
 
     public async Task NotifyLiveStartsAsync(IReadOnlyList<BiliLiveCreator> liveCreators, bool showNotifications = true)
     {
-        var currentLiveCreators = liveCreators
-            .Where(item => item.RoomId > 0)
-            .GroupBy(item => item.RoomId)
-            .Select(group => group.First())
-            .ToList();
-
-        if (!AppSettings.LiveNotificationBaselineInitialized)
+        var plan = NotificationBaselinePlanner.ForLiveCreators(
+            liveCreators,
+            AppSettings.KnownLiveRoomIds,
+            AppSettings.LiveNotificationBaselineInitialized,
+            MaxNotificationsPerRefresh,
+            MaxStoredLiveRoomIds);
+        AppSettings.KnownLiveRoomIds = plan.KnownIds;
+        if (plan.InitializesBaseline)
         {
-            SaveKnownLiveRooms(currentLiveCreators.Select(item => item.RoomId.ToString()));
             AppSettings.LiveNotificationBaselineInitialized = true;
             return;
         }
 
-        var knownRoomIds = AppSettings.KnownLiveRoomIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var newLiveCreators = currentLiveCreators
-            .Where(item => !knownRoomIds.Contains(item.RoomId.ToString()))
-            .Take(MaxNotificationsPerRefresh)
-            .ToList();
-
-        SaveKnownLiveRooms(currentLiveCreators.Select(item => item.RoomId.ToString()));
-        if (!showNotifications || !IsLiveNotificationEnabled() || newLiveCreators.Count == 0)
+        if (!showNotifications || !IsLiveNotificationEnabled() || plan.NewItems.Count == 0)
         {
             return;
         }
 
-        foreach (var creator in newLiveCreators)
+        foreach (var creator in plan.NewItems)
         {
             ShowLiveNotification(creator);
             await Task.Delay(NotificationSpacing);
@@ -342,24 +329,6 @@ public sealed class NotificationService
         }
 
         return AppSettings.LiveNotificationsEnabled;
-    }
-
-    private static void SaveKnownVideoUpdates(IEnumerable<string> ids)
-    {
-        AppSettings.KnownVideoUpdateIds = ids
-            .Where(id => !string.IsNullOrWhiteSpace(id))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Take(MaxStoredVideoUpdateIds)
-            .ToList();
-    }
-
-    private static void SaveKnownLiveRooms(IEnumerable<string> ids)
-    {
-        AppSettings.KnownLiveRoomIds = ids
-            .Where(id => !string.IsNullOrWhiteSpace(id))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Take(MaxStoredLiveRoomIds)
-            .ToList();
     }
 
     public sealed record NotificationActivationRequest(string Action, Uri? Uri, long Aid)

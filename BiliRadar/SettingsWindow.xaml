@@ -16,7 +16,7 @@
 
         <TitleBar
             x:Name="titleBar"
-            Title="BiliRadar"
+            Title="FeedPeek Preview"
             IsBackButtonVisible="False"
             IsPaneToggleButtonVisible="True"
             PaneToggleRequested="TitleBar_PaneToggleRequested">
@@ -42,6 +42,13 @@
                     Content="通用"
                     Icon="Setting"
                     Tag="general" />
+                <NavigationViewItem
+                    Content="来源"
+                    Tag="sources">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE774;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
                 <NavigationViewItem
                     x:Uid="SettingsNotificationNavItem"
                     Content="通知"

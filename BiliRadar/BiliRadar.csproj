@@ -21,7 +21,7 @@
     <WinUISDKReferences Condition="'$(Configuration)' != 'Debug'">false</WinUISDKReferences>
     <WindowsAppSDKSelfContained Condition="'$(Configuration)' != 'Debug'">true</WindowsAppSDKSelfContained>
     <SelfContained Condition="'$(Configuration)' != 'Debug'">true</SelfContained>
-    <PublishProfile Condition="'$(Configuration)' == 'Debug' or '$(Configuration)' == 'Release'">win-$(Platform).pubxml</PublishProfile>
+    <PublishProfile Condition="'$(Configuration)' == 'Release'">win-$(Platform).pubxml</PublishProfile>
     <PublishProfile Condition="'$(Configuration)' == 'ReleaseFull'">win-$(Platform)-full.pubxml</PublishProfile>
     <DefaultItemExcludes>$(DefaultItemExcludes);artifacts\**;bin\**;obj\**</DefaultItemExcludes>
     <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
@@ -33,7 +33,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Configurations>Debug;Release;ReleaseFull</Configurations>
     <UseProductionPackageIdentity Condition="'$(UseProductionPackageIdentity)' == ''">false</UseProductionPackageIdentity>
-    <DevelopmentPackageIdentityName Condition="'$(DevelopmentPackageIdentityName)' == ''">JordanQD.BiliRadar.Dev</DevelopmentPackageIdentityName>
+    <DevelopmentPackageIdentityName Condition="'$(DevelopmentPackageIdentityName)' == ''">JordanQD.FeedPeek.Preview</DevelopmentPackageIdentityName>
     <OutputPath Condition="'$(UseProductionPackageIdentity)' != 'true'">bin\dev\$(Platform)\$(Configuration)\</OutputPath>
     <IntermediateOutputPath Condition="'$(UseProductionPackageIdentity)' != 'true'">obj\dev\$(Platform)\$(Configuration)\</IntermediateOutputPath>
   </PropertyGroup>
@@ -104,6 +104,11 @@
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4129.50" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\src\FeedPeek.Core\FeedPeek.Core.csproj" />
+    <ProjectReference Include="..\src\FeedPeek.Rss\FeedPeek.Rss.csproj" />
+  </ItemGroup>
+
   <!--
     Defining the "HasPackageAndPublishMenuAddedByProject" property here allows the Solution
     Explorer "Package and Publish" context menu entry to be enabled for this project even if
@@ -144,11 +149,11 @@
       <_GeneratedAppxManifest>$(OutDir)AppxManifest.xml</_GeneratedAppxManifest>
       <_GeneratedAppxManifest Condition="!Exists('$(_GeneratedAppxManifest)')">$(OutDir)AppX\AppxManifest.xml</_GeneratedAppxManifest>
       <_GeneratedPackageIdentityName Condition="'$(UseProductionPackageIdentity)' != 'true'">$(DevelopmentPackageIdentityName)</_GeneratedPackageIdentityName>
-      <_GeneratedPackageIdentityName Condition="'$(_GeneratedPackageIdentityName)' == ''">JordanQD.BiliRadar</_GeneratedPackageIdentityName>
+      <_GeneratedPackageIdentityName Condition="'$(_GeneratedPackageIdentityName)' == ''">JordanQD.FeedPeek.Preview</_GeneratedPackageIdentityName>
     </PropertyGroup>
     <ItemGroup Condition="Exists('$(_GeneratedAppxManifest)')">
       <_GeneratedAppxManifestLine Include="$(_GeneratedAppxManifest)" />
     </ItemGroup>
-    <WriteLinesToFile Condition="Exists('$(_GeneratedAppxManifest)')" File="$(_GeneratedAppxManifest)" Lines="$([System.IO.File]::ReadAllText('$(_GeneratedAppxManifest)').Replace('Name=&quot;JordanQD.BiliRadar.Dev&quot;', 'Name=&quot;$(_GeneratedPackageIdentityName)&quot;').Replace('Name=&quot;JordanQD.BiliRadar&quot;', 'Name=&quot;$(_GeneratedPackageIdentityName)&quot;').Replace('$targetnametoken$.exe', 'BiliRadar.exe').Replace('EntryPoint=&quot;$targetentrypoint$&quot;', 'EntryPoint=&quot;Windows.FullTrustApplication&quot;'))" Overwrite="true" />
+    <WriteLinesToFile Condition="Exists('$(_GeneratedAppxManifest)')" File="$(_GeneratedAppxManifest)" Lines="$([System.IO.File]::ReadAllText('$(_GeneratedAppxManifest)').Replace('Name=&quot;JordanQD.FeedPeek.Preview&quot;', 'Name=&quot;$(_GeneratedPackageIdentityName)&quot;').Replace('Name=&quot;JordanQD.BiliRadar.Dev&quot;', 'Name=&quot;$(_GeneratedPackageIdentityName)&quot;').Replace('Name=&quot;JordanQD.BiliRadar&quot;', 'Name=&quot;$(_GeneratedPackageIdentityName)&quot;').Replace('$targetnametoken$.exe', 'BiliRadar.exe').Replace('EntryPoint=&quot;$targetentrypoint$&quot;', 'EntryPoint=&quot;Windows.FullTrustApplication&quot;'))" Overwrite="true" />
   </Target>
 </Project>

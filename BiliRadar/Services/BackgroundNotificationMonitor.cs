@@ -9,7 +9,6 @@ namespace BiliRadar.Services;
 
 internal sealed class BackgroundNotificationMonitor : IDisposable
 {
-    private readonly BiliWebDataProvider _dataProvider;
     private readonly UpdateMonitorService _updateMonitorService;
     private readonly NotificationService _notificationService = new();
     private readonly object _snapshotLock = new();
@@ -17,8 +16,8 @@ internal sealed class BackgroundNotificationMonitor : IDisposable
 
     public BackgroundNotificationMonitor(CookieStore cookieStore)
     {
-        _dataProvider = new BiliWebDataProvider(cookieStore);
-        _updateMonitorService = new UpdateMonitorService(_dataProvider);
+        _updateMonitorService = new UpdateMonitorService(
+            FeedPeekCompositionRoot.CreateDefaultLegacyDataProvider(cookieStore));
     }
 
     public Task StartAsync()

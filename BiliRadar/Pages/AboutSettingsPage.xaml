@@ -48,7 +48,7 @@
                 x:Uid="AboutExpander"
                 Margin="0,0,0,12"
                 Description="一个放在任务栏托盘里的 B 站动态雷达。"
-                Header="BiliRadar"
+                Header="FeedPeek Preview"
                 IsExpanded="True">
                 <controls:SettingsExpander.HeaderIcon>
                     <BitmapIcon

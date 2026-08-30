@@ -1,0 +1,19 @@
+{
+  "code": 0,
+  "data": {
+    "count": 30,
+    "list": [
+      {
+        "title": "稍后标题",
+        "bvid": "BV1LATER",
+        "aid": 505,
+        "pic": "//img.example/later-cover.jpg",
+        "duration": 61,
+        "progress": -1,
+        "add_at": 1700000000,
+        "owner": { "name": "稍后作者", "mid": 3001, "face": "//img.example/later-avatar.jpg" },
+        "stat": { "like": 9, "reply": 10 }
+      }
+    ]
+  }
+}

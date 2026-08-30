@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+            <StaticResource x:Key="ButtonBackground" ResourceKey="OverlayButtonBackgroundBrush" />
+            <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="OverlayButtonBackgroundPointerOverBrush" />
+            <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="OverlayButtonBackgroundPressedBrush" />
+            <StaticResource x:Key="ButtonBackgroundDisabled" ResourceKey="OverlayButtonBackgroundDisabledBrush" />
+            <StaticResource x:Key="ButtonForeground" ResourceKey="OverlayButtonForegroundBrush" />
+            <StaticResource x:Key="ButtonForegroundPointerOver" ResourceKey="OverlayButtonForegroundPointerOverBrush" />
+            <StaticResource x:Key="ButtonForegroundPressed" ResourceKey="OverlayButtonForegroundPressedBrush" />
+            <StaticResource x:Key="ButtonForegroundDisabled" ResourceKey="OverlayButtonForegroundDisabledBrush" />
+            <StaticResource x:Key="ButtonBorderBrush" ResourceKey="OverlayButtonBorderBrush" />
+            <StaticResource x:Key="ButtonBorderBrushPointerOver" ResourceKey="OverlayButtonBorderPointerOverBrush" />
+            <StaticResource x:Key="ButtonBorderBrushPressed" ResourceKey="OverlayButtonBorderPressedBrush" />
+            <StaticResource x:Key="ButtonBorderBrushDisabled" ResourceKey="OverlayButtonBorderDisabledBrush" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+            <StaticResource x:Key="ButtonBackground" ResourceKey="OverlayButtonBackgroundBrush" />
+            <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="OverlayButtonBackgroundPointerOverBrush" />
+            <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="OverlayButtonBackgroundPressedBrush" />
+            <StaticResource x:Key="ButtonBackgroundDisabled" ResourceKey="OverlayButtonBackgroundDisabledBrush" />
+            <StaticResource x:Key="ButtonForeground" ResourceKey="OverlayButtonForegroundBrush" />
+            <StaticResource x:Key="ButtonForegroundPointerOver" ResourceKey="OverlayButtonForegroundPointerOverBrush" />
+            <StaticResource x:Key="ButtonForegroundPressed" ResourceKey="OverlayButtonForegroundPressedBrush" />
+            <StaticResource x:Key="ButtonForegroundDisabled" ResourceKey="OverlayButtonForegroundDisabledBrush" />
+            <StaticResource x:Key="ButtonBorderBrush" ResourceKey="OverlayButtonBorderBrush" />
+            <StaticResource x:Key="ButtonBorderBrushPointerOver" ResourceKey="OverlayButtonBorderPointerOverBrush" />
+            <StaticResource x:Key="ButtonBorderBrushPressed" ResourceKey="OverlayButtonBorderPressedBrush" />
+            <StaticResource x:Key="ButtonBorderBrushDisabled" ResourceKey="OverlayButtonBorderDisabledBrush" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="HighContrast">
+            <StaticResource x:Key="ButtonBackground" ResourceKey="OverlayButtonBackgroundBrush" />
+            <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="OverlayButtonBackgroundPointerOverBrush" />
+            <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="OverlayButtonBackgroundPressedBrush" />
+            <StaticResource x:Key="ButtonBackgroundDisabled" ResourceKey="OverlayButtonBackgroundDisabledBrush" />
+            <StaticResource x:Key="ButtonForeground" ResourceKey="OverlayButtonForegroundBrush" />
+            <StaticResource x:Key="ButtonForegroundPointerOver" ResourceKey="OverlayButtonForegroundPointerOverBrush" />
+            <StaticResource x:Key="ButtonForegroundPressed" ResourceKey="OverlayButtonForegroundPressedBrush" />
+            <StaticResource x:Key="ButtonForegroundDisabled" ResourceKey="OverlayButtonForegroundDisabledBrush" />
+            <StaticResource x:Key="ButtonBorderBrush" ResourceKey="OverlayButtonBorderBrush" />
+            <StaticResource x:Key="ButtonBorderBrushPointerOver" ResourceKey="OverlayButtonBorderPointerOverBrush" />
+            <StaticResource x:Key="ButtonBorderBrushPressed" ResourceKey="OverlayButtonBorderPressedBrush" />
+            <StaticResource x:Key="ButtonBorderBrushDisabled" ResourceKey="OverlayButtonBorderDisabledBrush" />
+        </ResourceDictionary>
+    </ResourceDictionary.ThemeDictionaries>
+</ResourceDictionary>

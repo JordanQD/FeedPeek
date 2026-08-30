@@ -1,0 +1,105 @@
+using FeedPeek.Core.Feeds;
+using FeedPeek.Core.Models;
+using FeedPeek.Core.Persistence;
+
+namespace FeedPeek.Core.Tests;
+
+public sealed class FeedPollingTests
+{
+    [Fact]
+    public async Task FirstSuccessfulPollEstablishesBaselineBeforeReportingNewItems()
+    {
+        await using var store = new SqliteFeedStore("Data Source=:memory:");
+        var subscription = CreateSubscription();
+        await store.SaveSourceAndSubscriptionAsync(CreateSource(), subscription);
+        using var providers = new FeedProviderRegistry([
+            new SequenceProvider(
+                Page(CreateItem("first")),
+                Page(CreateItem("first"), CreateItem("second")))
+        ]);
+        var polling = new FeedPollingService(store, providers);
+
+        var first = await polling.PollAsync(subscription);
+        var second = await polling.PollAsync(subscription);
+
+        Assert.True(first.InitializedBaseline);
+        Assert.Empty(first.NewItems);
+        Assert.False(second.InitializedBaseline);
+        Assert.Equal("second", Assert.Single(second.NewItems).ItemId);
+    }
+
+    [Fact]
+    public async Task UpsertPreservesReadState()
+    {
+        await using var store = new SqliteFeedStore("Data Source=:memory:");
+        var subscription = CreateSubscription();
+        await store.SaveSourceAndSubscriptionAsync(CreateSource(), subscription);
+        var original = CreateItem("first");
+        await store.UpsertItemsAsync(subscription.SubscriptionId, [original], DateTimeOffset.UtcNow);
+        await store.MarkReadAsync(original.Key);
+
+        var updated = original with { Title = "Updated title" };
+        await store.UpsertItemsAsync(subscription.SubscriptionId, [updated], DateTimeOffset.UtcNow.AddMinutes(1));
+
+        Assert.Empty(await store.GetItemsAsync(new FeedQuery(UnreadOnly: true)));
+        var stored = Assert.Single(await store.GetItemsAsync(new FeedQuery()));
+        Assert.True(stored.IsRead);
+        Assert.Equal("Updated title", stored.Item.Title);
+    }
+
+    private static SourceDefinition CreateSource() => new(
+        "test.provider",
+        "source",
+        "Test source",
+        null,
+        [new FeedDefinition("updates", "Updates", "items", false, true)],
+        null);
+
+    private static FeedSubscription CreateSubscription() => new(
+        "subscription",
+        "test.provider",
+        "source",
+        "updates",
+        "Test source",
+        "https://example.test/feed.xml",
+        null,
+        true,
+        TimeSpan.FromMinutes(15),
+        null);
+
+    private static FeedItem CreateItem(string itemId) => new(
+        "test.provider",
+        "source",
+        "updates",
+        itemId,
+        itemId,
+        null,
+        "Author",
+        null,
+        $"https://example.test/{itemId}",
+        DateTimeOffset.Parse("2026-01-01T00:00:00Z"),
+        null,
+        null,
+        null,
+        null,
+        null);
+
+    private static FeedPage Page(params FeedItem[] items) => new(items, null, false);
+
+    private sealed class SequenceProvider(params FeedPage[] pages) : IFeedProvider
+    {
+        private int _index;
+
+        public string ProviderId => "test.provider";
+
+        public Task<FeedPage> GetPageAsync(
+            FeedPageRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var page = pages[Math.Min(_index, pages.Length - 1)];
+            _index++;
+            return Task.FromResult(page);
+        }
+    }
+}

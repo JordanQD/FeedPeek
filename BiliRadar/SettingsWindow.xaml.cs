@@ -26,7 +26,7 @@ public sealed partial class SettingsWindow : Window
 
         var hwnd = WindowNative.GetWindowHandle(this);
         _appWindow = AppWindow.GetFromWindowId(Win32Interop.GetWindowIdFromWindow(hwnd));
-        _appWindow.Title = LocalizationHelper.GetString("SettingsWindow.Title", "BiliRadar 设置");
+        _appWindow.Title = LocalizationHelper.GetString("SettingsWindow.Title", "FeedPeek Preview 设置");
         WindowIconHelper.ApplyTo(_appWindow, hwnd);
         ResizeForCurrentDpi(hwnd);
         ConfigureTitleBar(hwnd);
@@ -70,6 +70,7 @@ public sealed partial class SettingsWindow : Window
         var pageType = tag switch
         {
             "general" => typeof(GeneralSettingsPage),
+            "sources" => typeof(SourcesSettingsPage),
             "notification" => typeof(NotificationSettingsPage),
             "about" => typeof(AboutSettingsPage),
             _ => typeof(GeneralSettingsPage),

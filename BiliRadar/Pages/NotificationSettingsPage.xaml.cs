@@ -24,7 +24,8 @@ public sealed partial class NotificationSettingsPage : Page
     private UpdateMonitorService? _updateMonitorService;
     private bool _isLoadingSettings;
 
-    private BiliWebDataProvider DataProvider => _dataProvider ??= new(new CookieStore());
+    private BiliWebDataProvider DataProvider
+        => _dataProvider ??= FeedPeekCompositionRoot.CreateLegacyWebDataProvider(new CookieStore());
     private UpdateMonitorService UpdateMonitorService => _updateMonitorService ??= new(DataProvider);
 
     public ObservableCollection<NotificationCreatorSubscription> CustomNotificationCreators { get; } = [];

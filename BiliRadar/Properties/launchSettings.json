@@ -1,9 +1,9 @@
 {
   "profiles": {
-    "BiliRadar (Package)": {
+    "FeedPeek Preview (Package)": {
       "commandName": "MsixPackage"
     },
-    "BiliRadar (Unpackaged)": {
+    "FeedPeek Preview (Unpackaged)": {
       "commandName": "Project"
     }
   }

@@ -6,24 +6,11 @@
     <Grid x:Name="RootGrid" Width="420">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <ProgressBar
-            Grid.Row="0"
-            Height="3"
-            Margin="0"
-            HorizontalAlignment="Stretch"
-            VerticalAlignment="Top"
-            IsIndeterminate="{x:Bind Session.RefreshProgressIsActive, Mode=OneWay}"
-            Opacity="{x:Bind Session.RefreshProgressOpacity, Mode=OneWay}"
-            ShowError="False"
-            ShowPaused="False"
-            Value="0" />
-
         <Grid
-            Grid.Row="1"
+            Grid.Row="0"
             Padding="8,2,12,4"
             ColumnSpacing="8">
             <Grid.ColumnDefinitions>
@@ -58,13 +45,14 @@
                 Width="34"
                 Height="34"
                 Padding="0"
-                Click="OpenBrowserButton_Click"
-                Style="{StaticResource SubtleButtonStyle}">
-                <FontIcon FontSize="15" Glyph="&#xE774;" />
+                Click="RefreshButton_Click"
+                Style="{StaticResource SubtleButtonStyle}"
+                ToolTipService.ToolTip="刷新更新">
+                <FontIcon FontSize="15" Glyph="&#xE72C;" />
             </Button>
         </Grid>
 
-        <Grid Grid.Row="2">
+        <Grid Grid.Row="1">
             <Frame
                 x:Name="ContentFrame"
                 CacheSize="0"

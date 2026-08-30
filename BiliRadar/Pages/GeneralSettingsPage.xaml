@@ -286,11 +286,6 @@
                 TextWrapping="Wrap"
                 Visibility="Collapsed" />
 
-            <TextBlock
-                x:Name="DebugSectionHeader"
-                x:Uid="GeneralDebugSectionHeader"
-                Style="{StaticResource SettingsSectionHeaderTextBlockStyle}"
-                Text="调试" />
             <controls:SettingsCard
                 x:Name="LanguageSettingsCard"
                 x:Uid="GeneralLanguageCard"

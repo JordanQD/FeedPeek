@@ -19,7 +19,7 @@
             x:Uid="WebSignInTitleBar"
             IsBackButtonVisible="False"
             IsPaneToggleButtonVisible="False"
-            Title="BiliRadar 登录">
+            Title="FeedPeek Preview 登录">
             <TitleBar.IconSource>
                 <ImageIconSource ImageSource="/Assets/Square44x44Logo.targetsize-24_altform-unplated.png" />
             </TitleBar.IconSource>

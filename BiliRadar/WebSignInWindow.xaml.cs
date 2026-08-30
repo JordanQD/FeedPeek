@@ -31,7 +31,7 @@ public sealed partial class WebSignInWindow : Window
 
         var hwnd = WindowNative.GetWindowHandle(this);
         _appWindow = AppWindow.GetFromWindowId(Win32Interop.GetWindowIdFromWindow(hwnd));
-        _appWindow.Title = LocalizationHelper.GetString("WebSignInWindow.Title", "BiliRadar 登录");
+        _appWindow.Title = LocalizationHelper.GetString("WebSignInWindow.Title", "FeedPeek Preview 登录");
         WindowIconHelper.ApplyTo(_appWindow, hwnd);
         _appWindow.Resize(new SizeInt32(1200, 720));
         ConfigureTitleBar(hwnd);

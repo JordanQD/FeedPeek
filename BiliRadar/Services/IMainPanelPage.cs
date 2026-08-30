@@ -5,7 +5,7 @@ namespace BiliRadar.Services;
 
 internal interface IMainPanelPage
 {
-    void Initialize(MainPanelSession session);
+    void Initialize(FeedPeekPanelSession session);
 
     Task ActivateAsync(CancellationToken cancellationToken = default);
 

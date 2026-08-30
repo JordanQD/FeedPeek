@@ -17,7 +17,7 @@ namespace BiliRadar;
 
 public partial class App : Application
 {
-    private const string MainInstanceKey = "BiliRadar.Main";
+    private const string MainInstanceKey = "FeedPeek.Preview.Main";
     private const string SignInAction = "signIn";
 
     private SettingsWindow? _settingsWindow;
@@ -53,10 +53,6 @@ public partial class App : Application
         InitializeTrayAndData();
         HandleActivation(activatedArgs, isRedirectedActivation: false);
 
-        if (!_cookieStore.HasCookie)
-        {
-            ShowSignInNotification();
-        }
     }
 
     private static async Task<bool> RedirectToMainInstanceIfNeededAsync(AppActivationArguments activatedArgs)
@@ -87,12 +83,6 @@ public partial class App : Application
                 _backgroundNotificationMonitor?.GetSnapshot());
         }
 
-        if (_backgroundNotificationMonitor is null)
-        {
-            _backgroundNotificationMonitor = new BackgroundNotificationMonitor(_cookieStore);
-            _ = _backgroundNotificationMonitor.StartAsync();
-            HandlePendingNotificationRequest();
-        }
     }
 
     private void ShowSettingsWindow()
@@ -155,7 +145,7 @@ public partial class App : Application
             else
             {
                 var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "Square44x44Logo.targetsize-24_altform-unplated.png");
-                _notificationManager.Register("BiliRadar", new Uri(iconPath));
+                _notificationManager.Register("FeedPeek Preview", new Uri(iconPath));
             }
         }
         catch

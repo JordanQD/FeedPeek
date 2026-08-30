@@ -22,9 +22,9 @@ public sealed class MainPanelSession : IDisposable, INotifyPropertyChanged
     private readonly UpdateMonitorService _updateMonitorService;
     private readonly CookieStore _cookieStore;
     private readonly DispatcherQueue _dispatcherQueue;
-    private readonly HashSet<string> _loadedUpdateIds = new(StringComparer.OrdinalIgnoreCase);
-    private readonly HashSet<string> _loadedHistoryIds = new(StringComparer.OrdinalIgnoreCase);
-    private readonly HashSet<string> _loadedViewLaterIds = new(StringComparer.OrdinalIgnoreCase);
+    private readonly LegacyItemIdTracker _loadedUpdateIds = new();
+    private readonly LegacyItemIdTracker _loadedHistoryIds = new();
+    private readonly LegacyItemIdTracker _loadedViewLaterIds = new();
 
     // ── Loading state ──
     private bool _isLoading;
@@ -48,7 +48,8 @@ public sealed class MainPanelSession : IDisposable, INotifyPropertyChanged
     {
         _cookieStore = cookieStore;
         _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
-        _updateMonitorService = new UpdateMonitorService(new BiliWebDataProvider(cookieStore));
+        _updateMonitorService = new UpdateMonitorService(
+            FeedPeekCompositionRoot.CreateDefaultLegacyDataProvider(cookieStore));
 
         if (snapshot is not null)
         {

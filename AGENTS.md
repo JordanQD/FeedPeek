@@ -166,6 +166,13 @@ dotnet build BiliRadar/BiliRadar.csproj -p:Platform=x64 --no-restore
 
 DesktopFlyouts 迁移详见 `docs/design/desktopflyouts-migration.md`；旧架构记录见 `docs/design/tray-flyout-migration.md`。
 
+## WinUI 控件选型约束
+
+1. **优先复用，不手搓替代品** — 只要 WinUI、Windows App SDK、WinUI Gallery、Windows Community Toolkit 或微软官方推荐库已有适合的控件/模式，就不要先实现自定义控件、模板或交互替代品。
+2. **先检索官方来源** — 新增或重做 UI 前，先检索本机 `C:\Users\Q\Data\Projects\WinUI-Gallery`、`C:\Users\Q\Data\Projects\Windows` 以及可用的官方示例索引；记录找到的候选控件、来源和适用限制。
+3. **采用前先通知用户** — 找到合适的官方或官方推荐控件后，先向用户说明候选、收益、依赖和迁移影响，由用户决定是否采用。未经用户决定，不要擅自引入新控件库或用自制控件替代候选。
+4. **确需自定义时说明证据** — 只有确认现有控件无法满足需求后才考虑自定义，并在动手前说明缺口、键盘/无障碍/主题/高对比度/虚拟化成本及建议实现边界。
+
 ## 后续迁移约束
 
 1. **右键菜单范围** — 右键菜单只做设置和退出。左键托盘图标是唯一主面板入口，不要重新加入右键“打开”；之前尝试在 `MenuFlyout` 命令中主动打开主 Flyout，出现过状态重入和卡死。
