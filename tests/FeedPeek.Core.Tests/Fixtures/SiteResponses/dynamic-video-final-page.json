@@ -1,0 +1,31 @@
+{
+  "code": 0,
+  "data": {
+    "offset": "",
+    "has_more": false,
+    "items": [
+      {
+        "modules": {
+          "module_dynamic": {
+            "major": {
+              "archive": {
+                "bvid": "BV1FINAL",
+                "aid": 404,
+                "title": "Final 标题",
+                "cover": "//img.example/final.jpg",
+                "duration_text": "01:02",
+                "desc": "Final 描述"
+              }
+            }
+          },
+          "module_author": {
+            "mid": 1005,
+            "name": "Final 作者",
+            "face": "//img.example/final-avatar.jpg",
+            "pub_ts": 1700000300
+          }
+        }
+      }
+    ]
+  }
+}

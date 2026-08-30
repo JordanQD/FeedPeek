@@ -794,7 +794,8 @@ FeedPeek.PluginWorker.exe
 - 4.0 已固化 Phase 3 Git 基线、兼容矩阵、依赖顺序和按检查点停止规则。
 - 4.1 已补齐 auth/source/account/creator/live DTO，并新增独立 `FeedPeek.PluginHost` 层；Core 不依赖 Jint，Runtime 不依赖 Core。
 - Host 层通过强类型客户端包装 JSON envelope，通过授权注册表绑定 source/credential context，并以 `PluginFeedProvider` 将插件分页结果映射到通用 `FeedPage`。
-- 4.1 必要验证已加入现有测试项目；当前共 22 项通过。默认 WinUI 数据路径仍未切换，4.2 尚未开始。
+- 4.2 已增加仓库维护的内置站点插件，完成更新首刷、opaque cursor 分页、archive/PGC/opus 映射、结构化错误和取消传播；插件进入应用构建输出，但未注册为默认来源。
+- 4.2 必要验证已加入现有测试项目；当前共 25 项通过。默认 WinUI 数据路径仍未切换，4.3 尚未开始。
 
 ### Phase 5：FeedPeek 品牌、包身份与用户数据迁移
 

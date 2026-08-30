@@ -21,8 +21,10 @@ public sealed class PluginFeedProvider(string pluginId, PluginClient client) : I
         var subscription = request.Subscription;
         if (!string.Equals(subscription.ProviderId, ProviderId, StringComparison.Ordinal))
             throw new InvalidOperationException("The subscription provider does not match this plugin.");
-        if (request.PageSize is < 1 or > 100)
-            throw new ArgumentOutOfRangeException(nameof(request), "Plugin page size must be between 1 and 100.");
+        if (request.PageSize is < 1 or > PluginProtocolLimits.MaxPageSize)
+            throw new ArgumentOutOfRangeException(
+                nameof(request),
+                $"Plugin page size must be between 1 and {PluginProtocolLimits.MaxPageSize}.");
 
         var method = ResolveMethod(subscription.FeedId, request.Cursor);
         var context = new PluginInvocationContext(

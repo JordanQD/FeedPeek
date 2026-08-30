@@ -1,6 +1,6 @@
 # FeedPeek Phase 4：站点插件迁移实施计划
 
-> 状态：4.0–4.1 已完成自动验证；4.2 未开始
+> 状态：4.0–4.2 已完成自动验证；4.3 未开始
 > 基线提交：`9c6dd3e Phase3`  
 > 原则：每个检查点均保持可构建、可回滚；兼容矩阵通过前不删除 legacy 路径。
 
@@ -32,6 +32,10 @@
 - `PluginFeedProvider` 已覆盖 updates/history/viewLater 方法路由、opaque cursor、插件结果校验和 `FeedItem` 映射；瞬时直播数据保留独立 `PluginLivePage` 合同，避免丢失直播语义。
 - 默认 WinUI 运行路径尚未切换；未修改 XAML、RSS 行为或 legacy 服务。
 - 4.1 完成时现有测试项目共 22 项通过。
+- 4.2：新增仓库维护的内置 `plugins/feedpeek.video-site` JavaScript 插件；从项目自有 legacy 实现重新实现更新解析，没有引入第三方插件代码或品牌资产。
+- 站点插件已实现 handshake/status、更新首刷、opaque cursor 分页、archive/PGC/opus 映射、结构化站点错误和取消传播；登录等未实现能力没有提前写入 capability 列表。
+- 插件作为内容进入 WinUI Release 输出的 `Plugins/feedpeek.video-site`，但尚未注册 Source/Subscription，也未切换默认 UI 数据路径。
+- 4.2 完成时现有测试项目共 25 项通过；使用脱敏 fixture，不以实时站点网络作为自动验证前提。
 
 ## 3. 4.1 结构边界
 
