@@ -9,6 +9,7 @@ using FeedPeek.PluginRuntime.Host;
 using FeedPeek.PluginRuntime.Manifest;
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace FeedPeek.Core.Tests;
 
@@ -100,6 +101,24 @@ public sealed class VideoSitePluginTests
             var recovered = await provider.GetPageAsync(
                 new FeedPageRequest(CreateSubscription(), null, 20));
             Assert.Equal("BV1FINAL", Assert.Single(recovered.Items).ItemId);
+        }
+    }
+
+    [Fact]
+    public async Task DuplicateVideoIdsInOneSitePage_AreCollapsedBeforeHostValidation()
+    {
+        var root = JsonNode.Parse(await File.ReadAllTextAsync(FirstPagePath))!.AsObject();
+        var items = root["data"]!["items"]!.AsArray();
+        items.Add(items[0]!.DeepClone());
+        var (runtime, provider) = await CreateRuntimeAndProviderAsync(
+            new MutableSiteHttpBridge(root.ToJsonString()));
+        await using (runtime)
+        {
+            var page = await provider.GetPageAsync(
+                new FeedPageRequest(CreateSubscription(), null, 20));
+
+            Assert.Equal(3, page.Items.Count);
+            Assert.Equal(page.Items.Count, page.Items.Select(item => item.ItemId).Distinct().Count());
         }
     }
 

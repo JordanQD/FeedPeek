@@ -175,7 +175,14 @@
     mapApiError(root);
 
     const data = objectOrEmpty(root.data);
-    const items = arrayOrEmpty(data.items).map(mapItem).filter(item => item !== null);
+    const items = [];
+    const itemIds = new Set();
+    for (const rawItem of arrayOrEmpty(data.items)) {
+      const item = mapItem(rawItem);
+      if (item === null || itemIds.has(item.itemId)) continue;
+      itemIds.add(item.itemId);
+      items.push(item);
+    }
     const nextCursor = text(data.offset);
     const hasMore = Boolean(data.has_more) && Boolean(nextCursor);
     return {
