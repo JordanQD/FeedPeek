@@ -1,6 +1,6 @@
 # FeedPeek Phase 4：站点插件迁移实施计划
 
-> 状态：4.0–4.1 实施中  
+> 状态：4.0–4.1 已完成自动验证；4.2 未开始
 > 基线提交：`9c6dd3e Phase3`  
 > 原则：每个检查点均保持可构建、可回滚；兼容矩阵通过前不删除 legacy 路径。
 
@@ -24,6 +24,14 @@
 | 4.6 | 迁移直播、关注列表与 creator actions | 直播与关注/取消关注达到迁移前效果 |
 | 4.7 | 后台通知和单作者规则改用通用标识 | 刷新、视频/直播通知及自定义作者规则可用 |
 | 4.8 | 执行兼容矩阵；删除已无调用方的 legacy provider、模型和 adapter | 默认路径完全使用通用核心与站点插件；构建和人工关键路径通过 |
+
+### 2.1 已完成记录
+
+- 4.0：Phase 3 基线为 `9c6dd3e`；本计划、兼容矩阵与停止规则由 `53bdc49` 固化。
+- 4.1：新增 auth/source/account/creator/live v1 DTO；新增 `FeedPeek.PluginHost`，提供强类型 `PluginClient`、Runtime Catalog invoker、授权上下文注册表和 `PluginFeedProvider`。
+- `PluginFeedProvider` 已覆盖 updates/history/viewLater 方法路由、opaque cursor、插件结果校验和 `FeedItem` 映射；瞬时直播数据保留独立 `PluginLivePage` 合同，避免丢失直播语义。
+- 默认 WinUI 运行路径尚未切换；未修改 XAML、RSS 行为或 legacy 服务。
+- 4.1 完成时现有测试项目共 22 项通过。
 
 ## 3. 4.1 结构边界
 
@@ -82,4 +90,3 @@ FeedPeek.Core              FeedPeek.PluginContracts
 - 当前全局 Cookie 与通用 credential profile 的迁移必须延后到 4.5，并保持可回滚；不得静默复制或导出明文凭据。
 - 远端“稍后再看”与本地 saved 状态必须在 4.4 明确定义一致性，避免按钮成功但列表状态回滚。
 - 后台通知直到 4.7 仍保留 legacy 实现，不能误判为站点插件已完成全量切换。
-

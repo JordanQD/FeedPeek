@@ -789,6 +789,13 @@ FeedPeek.PluginWorker.exe
 
 退出条件：兼容矩阵中除明确可选项外全部达到迁移前功能效果；默认运行路径已使用通用核心和站点插件，legacy 路径可以安全移除。
 
+实施记录（2026-08-30）：
+
+- 4.0 已固化 Phase 3 Git 基线、兼容矩阵、依赖顺序和按检查点停止规则。
+- 4.1 已补齐 auth/source/account/creator/live DTO，并新增独立 `FeedPeek.PluginHost` 层；Core 不依赖 Jint，Runtime 不依赖 Core。
+- Host 层通过强类型客户端包装 JSON envelope，通过授权注册表绑定 source/credential context，并以 `PluginFeedProvider` 将插件分页结果映射到通用 `FeedPage`。
+- 4.1 必要验证已加入现有测试项目；当前共 22 项通过。默认 WinUI 数据路径仍未切换，4.2 尚未开始。
+
 ### Phase 5：FeedPeek 品牌、包身份与用户数据迁移
 
 - 将 DisplayName、应用图标、资源文本、程序集/项目名和默认命名空间分成可审阅的小批次改为 FeedPeek。
