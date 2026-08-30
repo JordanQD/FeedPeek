@@ -421,6 +421,33 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
             cancellationToken);
     }
 
+    internal Task ReconcileBuiltInPluginSourceAsync(
+        CancellationToken cancellationToken = default)
+        => RunExclusiveAsync(
+            async operationToken =>
+            {
+                await EnsureInitializedAsync(operationToken).ConfigureAwait(false);
+                var hasCredentials = await _pluginRuntime.HasCredentialsAsync(operationToken)
+                    .ConfigureAwait(false);
+                if (!hasCredentials)
+                {
+                    await _feedSession.DeleteSourceAsync(
+                        BuiltInVideoSitePlugin.PluginId,
+                        BuiltInVideoSitePlugin.SourceId,
+                        operationToken).ConfigureAwait(false);
+                    return;
+                }
+
+                var source = BuiltInVideoSitePlugin.CreateSource();
+                foreach (var subscription in BuiltInVideoSitePlugin.CreateSubscriptions(isEnabled: true))
+                {
+                    await _feedSession.AddSubscriptionAsync(source, subscription, operationToken)
+                        .ConfigureAwait(false);
+                    _pluginRuntime.Register(subscription);
+                }
+            },
+            cancellationToken);
+
     public async ValueTask DisposeAsync()
     {
         if (_disposed)

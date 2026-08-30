@@ -23,7 +23,7 @@
 | 4.5 | manifest 驱动 WebView2 登录；持久凭据/Cookie 代理；账户资料与退出 | 登录、重启保留、失效和退出路径可人工验收 |
 | 4.6 | 迁移直播、关注列表、creator actions 与作者展示语义 | 站点更新能稳定取得 creator；卡片来源位显示 UP 主名称/头像；直播与关注/取消关注达到迁移前效果 |
 | 4.7 | 后台通知和单作者规则改用通用 creator 标识 | 视频通知显示 UP 主；按 UP 主订阅更新通知、直播通知及自定义作者规则可用 |
-| 4.8 | 通用插件接入：用户插件目录、动态 Provider、插件管理、来源配置与多账号 | 不改宿主代码即可安装/启用另一个合规站点插件、登录账号并创建来源 |
+| 4.8 | 通用插件接入：用户插件目录、动态 Provider、插件管理、可选插件登录与多来源配置 | 不改宿主代码即可安装/启用另一个合规站点插件；一个网站插件可创建多个来源，需要账户权限时复用该插件的登录凭据 |
 | 4.9 | 执行扩展兼容矩阵；升级/回滚/卸载验收；删除 legacy provider、模型和 adapter | 默认路径完全使用通用核心和动态插件注册；构建与人工关键路径通过 |
 
 ### 2.1 已完成记录
@@ -51,7 +51,9 @@
 - 4.5：WebView2 登录窗口改为读取 manifest 的登录 URL、成功 URL、Cookie 域和成功 Cookie；宿主按 `pluginId + credentialProfileId` 将 profile 持久化到 Windows Credential Locker。
 - 插件 HTTP 只能向 manifest 声明的 Cookie 域注入 Cookie；插件脚本只能读取 manifest `exposedCookieNames` 显式授权的 Cookie 值，当前站点仅授权动作所需的 `bili_jct`。
 - 登录闭环通过 `auth.begin/complete/validate/clear`；账户资料改走 `account.getProfile`。旧设置导入的 Cookie 会迁移到 profile；在 4.7 迁走后台通知前仍同步一份 legacy Cookie，Credential Locker 是插件路径的权威来源。
-- 4.5 完成时现有测试项目共 31 项通过，Debug/Release x64 构建均为 0 警告、0 错误；WebView 登录、重启保留、失效与退出待人工验收。
+- 登录入口已从“通用”移到“来源”的网站插件卡片。退出登录会删除该网站来源的 SQLite 缓存并通知已打开的托盘面板刷新；RSS 与其他网站数据不受影响。
+- 当前内置网站实现为“一个插件 + 一个可选凭据 profile + 一个聚合来源”；4.8 将来源数量动态化。来源可不绑定凭据；需要账户权限的多个来源共享该插件的凭据。
+- 4.5 完成时现有测试项目共 32 项通过，Debug/Release x64 构建均为 0 警告、0 错误；WebView 登录、重启保留、失效与退出待人工验收。
 
 ## 3. 4.1 结构边界
 
@@ -87,7 +89,7 @@ FeedPeek.Core              FeedPeek.PluginContracts
 | 关注列表 | `creator.getFollowing` | 4.6 | legacy 可用 |
 | 后台与按 UP 主更新通知 | 通用 provider/source/creator identity | 4.7 | legacy 可用 |
 | 用户插件发现、安装、启停和升级 | 用户插件目录 + 持久插件记录 | 4.8 | 无 |
-| 动态 Provider/Source 与多账号 | manifest source schema + credential profile + 设置向导 | 4.8 | 无 |
+| 动态 Provider/Source、可选登录与多来源 | manifest source schema + plugin credential profile + 设置向导 | 4.8 | 无 |
 | 通用 item/creator action 分发 | capability + action descriptor dispatcher | 4.6–4.8 | 内置站点分支可用 |
 | 托盘/Flyout/设置/退出生命周期 | WinUI 宿主 | 全程不改语义 | 已验收基线 |
 
@@ -100,6 +102,7 @@ FeedPeek.Core              FeedPeek.PluginContracts
 - 登录继续复用现有 WebView2 窗口，只把 URL、Cookie 域和成功条件改为 manifest 驱动。
 - 4.6 若恢复横向直播区域，候选是官方 `ItemsRepeater + StackLayout`；实施前单独向用户确认具体布局。
 - 4.8 插件和来源管理复用现有 CommunityToolkit `SettingsCard`、WinUI `ListView` 与系统文件选择器，不自制列表或安装控件。
+- 4.8 的关系固定为 `Plugin（网站） 1 → N Source（来源）`；每个插件当前最多一个可选 credential profile，需要登录的来源引用它，无需登录的来源保持空引用。不要把登录重新做成全局设置，也不要在每个来源上复制同一份 Cookie。
 - 不新增自制列表、选项卡、卡片框架或新控件依赖。
 
 ## 6. 验证和停止规则

@@ -152,7 +152,7 @@ dotnet build BiliRadar/BiliRadar.csproj -p:Platform=x64 --no-restore
 
 Phase 3 生产项目为 `src/FeedPeek.PluginContracts` 与 `src/FeedPeek.PluginRuntime`。Runtime 锁定 Jint 4.16.1；同一插件 realm 串行调用，通过 JSON `IPluginTransport` 保持 transport-neutral。插件只能使用显式 Host Bridge，不开放 CLR、文件系统、进程、注册表、COM 或 WinUI。mock JS fixture 和必要验证复用 `tests/FeedPeek.Core.Tests`，不再新增测试项目。
 
-Phase 4 详细检查点见 `docs/design/rss-plugin-phase4-plan.md`。4.1–4.4 已完成通用 Host、内置 JS、关注/历史/稍后再看和 item actions。4.5 已实现 manifest 驱动 WebView 登录、按插件/profile 隔离的 Credential Locker、auth 合同与插件账户资料。4.6 负责 creator/live 及卡片 UP 主展示，4.7 负责按 UP 主更新通知，4.8 新增动态插件安装/来源/多账号，legacy 清理顺延至 4.9。当前现有测试项目共 31 项通过。
+Phase 4 详细检查点见 `docs/design/rss-plugin-phase4-plan.md`。4.1–4.4 已完成通用 Host、内置 JS、关注/历史/稍后再看和 item actions。4.5 已实现 manifest 驱动 WebView 登录、按插件/profile 隔离的 Credential Locker、auth 合同与插件账户资料；登录入口位于“来源”，退出会清除该网站来源缓存。4.6 负责 creator/live 及卡片 UP 主展示，4.7 负责按 UP 主更新通知，4.8 新增动态插件安装、插件级可选登录和网站多来源配置，legacy 清理顺延至 4.9。当前现有测试项目共 32 项通过。
 
 ### DesktopFlyouts 迁移
 

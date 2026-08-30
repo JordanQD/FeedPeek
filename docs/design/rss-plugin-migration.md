@@ -175,7 +175,7 @@ MSIX 安装目录是只读的。内置插件可以随包发布；用户安装或
 
 - `PluginId`：安装包和运行时实例的标识，例如一个 JS 插件目录。
 - `ProviderId`：插件公开的数据提供者标识。第一版一个插件只公开一个 Provider，允许 `ProviderId == PluginId`，但合同保留两者以支持未来一个插件提供多个 Provider。
-- `SourceId`：用户配置出的来源实例，例如一个 RSS URL，或某插件下的一个登录账户。
+- `SourceId`：用户配置出的来源实例，例如一个 RSS URL，或某网站插件下的聚合动态、UP 主、栏目等来源；它不是登录账户本身。
 - `FeedId`：来源内部的逻辑信息流，例如 `updates`、`live`、`history`、`viewLater`。
 - `SubscriptionId`：用户的轮询和通知规则，指向一个 `ProviderId + SourceId + FeedId` 组合。
 - `ItemId`：插件保证在同一 Feed 内稳定的条目标识。
@@ -798,13 +798,14 @@ FeedPeek.PluginWorker.exe
 - Phase 4.3 已把内置站点插件注册为持久化 Source/Subscription，并切换“关注”页到 RSS 与站点插件共用的通用 Core 读取路径；`ListView` 使用 `ISupportIncrementalLoading` 消费插件 opaque cursor。
 - Phase 4.4 已迁移网站历史、稍后再看分页及加入/移除 item actions；三个页面继续复用现有 `ListView`，没有引入新控件或修改卡片布局。
 - Phase 4.5 已将 WebView2 登录参数切换为 manifest 驱动，凭据按插件和 profile 存入 Windows Credential Locker；登录验证、账户资料和退出分别通过通用 auth/account 合同。
+- 登录入口位于“来源”的网站插件卡片，不属于“通用”设置。退出登录会清除该网站来源的本地缓存并刷新已打开面板，避免账户内容在退出后继续显示。
 - `exposedCookieNames` 是插件读取 Cookie 值的显式最小权限清单；Cookie Header 仍只由 Host HTTP 代理注入 manifest 声明域，插件不能直接取得完整 Cookie。
 - 网站列表和动作成功结果是站点 saved 状态的权威来源；本地 SQLite 只缓存结果，同一逻辑条目跨 updates/history/viewLater 同步并去重。RSS saved 状态保持纯本地。
 - 旧设置导入的登录态会迁移到 profile；为保证 4.7 前的 legacy 后台通知可用，暂时镜像旧 Cookie，插件运行路径以 Credential Locker 为权威来源。
 - 4.2 已增加仓库维护的内置站点插件，完成更新首刷、opaque cursor 分页、archive/PGC/opus 映射、结构化错误和取消传播；插件进入应用构建输出，但未注册为默认来源。
-- 4.5 完成时现有测试项目共 31 项通过，Debug/Release x64 构建均为 0 警告、0 错误；真实账号登录、重启保留、失效和退出待人工验收。
+- 4.5 完成时现有测试项目共 32 项通过，Debug/Release x64 构建均为 0 警告、0 错误；真实账号登录、重启保留、失效和退出待人工验收。
 
-为达到“后续只添加插件即可支持其他视频网站”的目标，Phase 4 后续扩展为：4.6 迁移 creator/live 并让站点卡片来源位显示 UP 主；4.7 迁移按 UP 主更新通知；4.8 实现用户插件目录、动态 Provider、插件管理、来源配置 Schema 和多账号；原 4.8 legacy 清理顺延为 4.9。
+为达到“后续只添加插件即可支持其他视频网站”的目标，Phase 4 后续扩展为：4.6 迁移 creator/live 并让站点卡片来源位显示 UP 主；4.7 迁移按 UP 主更新通知；4.8 实现用户插件目录、动态 Provider、插件管理、来源配置 Schema、插件级可选登录和网站多来源；原 4.8 legacy 清理顺延为 4.9。关系固定为一个插件对应一个网站，一个网站插件可有多个来源；当前每个插件最多一个可选凭据 profile，需要账户权限的来源共享它，无需登录的来源不绑定凭据。
 
 ### Phase 5：FeedPeek 品牌、包身份与用户数据迁移
 

@@ -118,6 +118,36 @@ public sealed class FeedPollingTests
         Assert.Single(await store.GetItemsAsync(new FeedQuery(SavedOnly: true)));
     }
 
+    [Fact]
+    public async Task DeleteSourceRemovesOnlyThatSourcesCachedItems()
+    {
+        await using var store = new SqliteFeedStore("Data Source=:memory:");
+        var firstSource = CreateSource();
+        var firstSubscription = CreateSubscription();
+        var secondSource = firstSource with { SourceId = "other-source", DisplayName = "Other source" };
+        var secondSubscription = firstSubscription with
+        {
+            SubscriptionId = "other-subscription",
+            SourceId = secondSource.SourceId,
+            DisplayName = secondSource.DisplayName,
+        };
+        await store.SaveSourceAndSubscriptionAsync(firstSource, firstSubscription);
+        await store.SaveSourceAndSubscriptionAsync(secondSource, secondSubscription);
+        await store.UpsertItemsAsync(firstSubscription.SubscriptionId, [CreateItem("first")], DateTimeOffset.UtcNow);
+        await store.UpsertItemsAsync(
+            secondSubscription.SubscriptionId,
+            [CreateItem("second") with { SourceId = secondSource.SourceId }],
+            DateTimeOffset.UtcNow);
+
+        await store.DeleteSourceAsync(firstSource.ProviderId, firstSource.SourceId);
+
+        var remaining = Assert.Single(await store.GetItemsAsync(new FeedQuery()));
+        Assert.Equal(secondSource.SourceId, remaining.Item.SourceId);
+        var remainingSource = Assert.Single(await store.GetSourceSummariesAsync()).Source;
+        Assert.Equal(secondSource.ProviderId, remainingSource.ProviderId);
+        Assert.Equal(secondSource.SourceId, remainingSource.SourceId);
+    }
+
     private static SourceDefinition CreateSource() => new(
         "test.provider",
         "source",

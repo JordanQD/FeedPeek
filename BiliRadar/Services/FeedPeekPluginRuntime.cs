@@ -1,4 +1,5 @@
 using FeedPeek.Core.Feeds;
+using FeedPeek.Core.Persistence;
 using FeedPeek.PluginContracts.Dtos;
 using FeedPeek.PluginContracts.Manifest;
 using FeedPeek.PluginHost;
@@ -11,6 +12,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Windows.Storage;
 
 namespace BiliRadar.Services;
 
@@ -175,6 +177,8 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
             {
                 throw new InvalidOperationException(validated.Message ?? "插件未能验证登录状态。");
             }
+
+            PluginAccountEvents.RaiseChanged();
         }
         catch
         {
@@ -217,6 +221,7 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
             descriptor.Auth.ExposedCookieNames?.ToHashSet(StringComparer.OrdinalIgnoreCase),
             cancellationToken).ConfigureAwait(false);
         _legacyCookieStore.SaveCookieString(cookieHeader);
+        PluginAccountEvents.RaiseChanged();
     }
 
     public async Task<string?> ExportCookieHeaderAsync(CancellationToken cancellationToken = default)
@@ -245,6 +250,8 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
         }
 
         await DeleteCredentialCopiesAsync(cancellationToken).ConfigureAwait(false);
+        await PurgeCachedSourceDataAsync(cancellationToken).ConfigureAwait(false);
+        PluginAccountEvents.RaiseChanged();
     }
 
     public async Task<PluginAccountProfile?> GetAccountProfileAsync(
@@ -324,6 +331,19 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
             cancellationToken).ConfigureAwait(false);
         using var legacyAuth = new BiliKernelAuthService(_legacyCookieStore);
         await legacyAuth.SignOutAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task PurgeCachedSourceDataAsync(CancellationToken cancellationToken)
+    {
+        var databasePath = Path.Combine(
+            ApplicationData.Current.LocalFolder.Path,
+            "FeedPeek",
+            "feedpeek.db");
+        await using var store = new SqliteFeedStore(databasePath);
+        await store.DeleteSourceAsync(
+            BuiltInVideoSitePlugin.PluginId,
+            BuiltInVideoSitePlugin.SourceId,
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async ValueTask DisposeAsync()

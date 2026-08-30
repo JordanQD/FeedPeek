@@ -30,6 +30,7 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
         Session = new FeedPeekPanelSession();
         InitializeComponent();
         Session.StatusRaised += Session_StatusRaised;
+        PluginAccountEvents.Changed += PluginAccountEvents_Changed;
         ContentFrame.Navigated += ContentFrame_Navigated;
         Loaded += MainPanelControl_Loaded;
         SelectDefaultPage();
@@ -226,6 +227,30 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
         });
     }
 
+    private void PluginAccountEvents_Changed(object? sender, EventArgs e)
+    {
+        if (_isDisposed) return;
+        DispatcherQueue.TryEnqueue(async () =>
+        {
+            if (_isDisposed) return;
+            try
+            {
+                var cancellationToken = _flyoutCts?.Token ?? CancellationToken.None;
+                await Session.ReconcileBuiltInPluginSourceAsync(cancellationToken);
+                if (_isFlyoutOpen)
+                {
+                    await RefreshCurrentPageAsync();
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch
+            {
+            }
+        });
+    }
+
     private void StatusNotificationInfoBar_CloseButtonClick(InfoBar sender, object args)
     {
         StatusInfoBar.IsOpen = false;
@@ -241,6 +266,7 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
         _flyoutCts?.Dispose();
         _flyoutCts = null;
         Loaded -= MainPanelControl_Loaded;
+        PluginAccountEvents.Changed -= PluginAccountEvents_Changed;
         Session.StatusRaised -= Session_StatusRaised;
         ContentFrame.Navigated -= ContentFrame_Navigated;
         DisposeCurrentPage();

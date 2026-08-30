@@ -70,61 +70,6 @@
                 IsOpen="False"
                 Severity="Informational" />
 
-            <TextBlock
-                x:Uid="GeneralLaunchOptionsSectionHeader"
-                Style="{StaticResource SettingsSectionHeaderTextBlockStyle}"
-                Text="登录选项" />
-            <controls:SettingsCard
-                x:Uid="GeneralLoginStatusCard"
-                Description="登录站点插件账户后可以获取更新、历史记录和稍后再看。"
-                Header="登录状态"
-                HorizontalContentAlignment="Stretch">
-                <controls:SettingsCard.HeaderIcon>
-                    <FontIcon Glyph="&#xE77B;" />
-                </controls:SettingsCard.HeaderIcon>
-                <Grid ColumnSpacing="16">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <PersonPicture
-                        x:Name="AvatarPicture"
-                        Width="32"
-                        Height="32"
-                        VerticalAlignment="Center"
-                        Initials="BR" />
-                    <StackPanel
-                        Grid.Column="1"
-                        VerticalAlignment="Center"
-                        Spacing="0">
-                        <TextBlock
-                            x:Name="AccountNameText"
-                            x:Uid="GeneralAccountNameText"
-                            VerticalAlignment="Center"
-                            Style="{ThemeResource BodyStrongTextBlockStyle}"
-                            Text="未登录" />
-                        <TextBlock
-                            x:Name="AccountDetailText"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                            Text="网页登录后会保存登录状态，用于刷新关注动态。"
-                            TextWrapping="Wrap" />
-                    </StackPanel>
-                    <Button
-                        x:Name="LoginActionButton"
-                        Grid.Column="2"
-                        Width="40"
-                        Height="40"
-                        Padding="0"
-                        VerticalAlignment="Center"
-                        AutomationProperties.AutomationId="LoginActionButton"
-                        AutomationProperties.Name="登录操作"
-                        Click="LoginActionButton_Click"
-                        ToolTipService.ToolTip="网页登录">
-                        <FontIcon Glyph="&#xE722;" />
-                    </Button>
-                </Grid>
-            </controls:SettingsCard>
             <controls:SettingsCard
                 x:Uid="GeneralRunningLaunchActionCard"
                 Description="应用已经在后台运行时，从开始菜单再次打开后的行为。"
