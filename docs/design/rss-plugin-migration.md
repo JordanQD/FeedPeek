@@ -2,8 +2,8 @@
 
 > 文档用途：供当前仓库及后续 FeedPeek 项目中的开发者或编码代理直接读取并执行。  
 > 推荐实施方式：在当前 BiliRadar 仓库内渐进迁移为 FeedPeek；保留可运行基线和阶段检查点，不进行一次性推倒重写。  
-> 文档状态：设计基线。尚未实施。  
-> 最近更新：2026-08-28。
+> 文档状态：实施中；Phase 0–3 已完成自动验证。
+> 最近更新：2026-08-30。
 
 ## 1. 执行摘要
 
@@ -766,6 +766,15 @@ FeedPeek.PluginWorker.exe
 - 协议接口保持 transport-neutral。
 
 退出条件：mock 插件能返回 feed、分页和动作；错误不会破坏主程序会话。
+
+实施记录（2026-08-30）：
+
+- `FeedPeek.PluginContracts` 已提供 v1 manifest、请求/响应 envelope、方法名、feed/action/Host DTO、transport-neutral `IPluginTransport` 及三份 JSON Schema。
+- `FeedPeek.PluginRuntime` 已锁定 Jint 4.16.1；每插件使用独立 realm，并通过串行调用通道、取消令牌、Promise 超时、语句预算、内存限制、递归限制和响应体上限约束执行。
+- Host Bridge 已实现 HTTP、opaque credential、日志、MD5、时钟和结构化错误；HTTP 对初始 URL 和每次重定向重新执行 manifest 域名校验，禁止插件设置 Cookie、Host、Authorization 等保留头。
+- manifest 加载已校验 API/语义化版本、能力、凭据类型、视图、路径穿越、重解析点、可执行文件、通配域名及可选安装哈希。
+- mock JS 插件已跑通发现、加载、Host Promise、feed/分页、动作、禁用、结构化错误后的继续调用、取消、死循环与内存增长边界。
+- 必要验证位于现有 `FeedPeek.Core.Tests`，没有新增测试项目；当前 18 项通过。Release x64 整体解决方案构建 0 警告、0 错误。
 
 ### Phase 4：站点插件迁移
 

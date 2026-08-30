@@ -10,5 +10,7 @@
     <Deploy />
   </Project>
   <Project Path="src/FeedPeek.Core/FeedPeek.Core.csproj" />
+  <Project Path="src/FeedPeek.PluginContracts/FeedPeek.PluginContracts.csproj" />
+  <Project Path="src/FeedPeek.PluginRuntime/FeedPeek.PluginRuntime.csproj" />
   <Project Path="src/FeedPeek.Rss/FeedPeek.Rss.csproj" />
 </Solution>

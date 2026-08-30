@@ -17,9 +17,13 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\FeedPeek.Core\FeedPeek.Core.csproj" />
     <ProjectReference Include="..\..\src\FeedPeek.PluginContracts\FeedPeek.PluginContracts.csproj" />
+    <ProjectReference Include="..\..\src\FeedPeek.PluginRuntime\FeedPeek.PluginRuntime.csproj" />
     <ProjectReference Include="..\..\src\FeedPeek.Rss\FeedPeek.Rss.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Fixtures\Plugins\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

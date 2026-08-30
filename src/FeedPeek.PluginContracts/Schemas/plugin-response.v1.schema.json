@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://feedpeek.local/schemas/plugin-response.v1.schema.json",
+  "type": "object",
+  "required": ["requestId", "success"],
+  "properties": {
+    "requestId": { "type": "string", "minLength": 1 },
+    "success": { "type": "boolean" },
+    "result": {},
+    "error": {
+      "type": ["object", "null"],
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "message": { "type": "string" },
+        "retryable": { "type": "boolean" },
+        "context": { "type": ["object", "null"], "additionalProperties": { "type": "string" } }
+      },
+      "required": ["code", "message", "retryable"]
+    }
+  },
+  "oneOf": [
+    { "properties": { "success": { "const": true } }, "required": ["result"] },
+    { "properties": { "success": { "const": false } }, "required": ["error"] }
+  ]
+}

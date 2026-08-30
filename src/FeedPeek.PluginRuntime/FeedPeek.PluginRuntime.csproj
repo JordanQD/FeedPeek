@@ -5,6 +5,9 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Jint" Version="[4.16.1]" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\FeedPeek.PluginContracts\FeedPeek.PluginContracts.csproj" />
   </ItemGroup>
 </Project>

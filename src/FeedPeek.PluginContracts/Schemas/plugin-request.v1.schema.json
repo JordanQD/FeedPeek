@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://feedpeek.local/schemas/plugin-request.v1.schema.json",
+  "type": "object",
+  "required": ["requestId", "apiVersion", "pluginId", "method", "payload"],
+  "properties": {
+    "requestId": { "type": "string", "minLength": 1 },
+    "apiVersion": { "const": 1 },
+    "pluginId": { "type": "string", "minLength": 1 },
+    "method": { "type": "string", "minLength": 1 },
+    "payload": {}
+  }
+}

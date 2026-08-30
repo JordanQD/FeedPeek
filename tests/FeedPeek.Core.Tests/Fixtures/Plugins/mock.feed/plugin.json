@@ -1,0 +1,23 @@
+{
+  "pluginId": "mock.feed",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "displayName": "Mock Feed",
+  "entry": "index.js",
+  "preloadScripts": ["preload.js"],
+  "capabilities": ["feed.updates", "item.actions"],
+  "auth": {
+    "required": false,
+    "kind": "opaque-secret",
+    "cookieDomains": ["api.example.test"],
+    "authSignalCookies": [],
+    "loginFlow": null
+  },
+  "network": {
+    "allowedHosts": ["api.example.test"],
+    "allowRedirectHosts": []
+  },
+  "views": [
+    { "id": "updates", "kind": "feed", "title": "Updates" }
+  ]
+}

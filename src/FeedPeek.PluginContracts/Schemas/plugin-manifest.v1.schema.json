@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://feedpeek.local/schemas/plugin-manifest.v1.schema.json",
+  "type": "object",
+  "required": ["pluginId", "version", "apiVersion", "displayName", "entry", "capabilities", "network", "views"],
+  "properties": {
+    "pluginId": { "type": "string", "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)+$" },
+    "version": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$" },
+    "apiVersion": { "const": 1 },
+    "displayName": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "entry": { "type": "string", "minLength": 1 },
+    "preloadScripts": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "capabilities": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "auth": {
+      "type": ["object", "null"],
+      "properties": {
+        "required": { "type": "boolean" },
+        "kind": { "enum": ["webview-cookie", "opaque-secret"] },
+        "cookieDomains": { "type": "array", "items": { "type": "string" } },
+        "authSignalCookies": { "type": "array", "items": { "type": "string" } },
+        "loginFlow": { "type": ["object", "null"] }
+      },
+      "required": ["required", "kind", "cookieDomains", "authSignalCookies"]
+    },
+    "network": {
+      "type": "object",
+      "required": ["allowedHosts", "allowRedirectHosts"],
+      "properties": {
+        "allowedHosts": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "allowRedirectHosts": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+      }
+    },
+    "views": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "kind", "title"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "kind": { "enum": ["feed", "collection", "live"] },
+          "title": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

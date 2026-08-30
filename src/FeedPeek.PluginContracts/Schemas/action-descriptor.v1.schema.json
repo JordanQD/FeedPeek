@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://feedpeek.local/schemas/action-descriptor.v1.schema.json",
+  "type": "object",
+  "required": ["actionId", "fallbackText", "dangerLevel", "requiresConfirmation", "isRepeatable"],
+  "properties": {
+    "actionId": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "localizationKey": { "type": ["string", "null"] },
+    "fallbackText": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "iconSemantic": {
+      "type": ["string", "null"],
+      "enum": ["add", "remove", "save", "open", "refresh", "follow", "unfollow", "settings", null]
+    },
+    "dangerLevel": { "enum": ["none", "warning", "destructive"] },
+    "requiresConfirmation": { "type": "boolean" },
+    "isRepeatable": { "type": "boolean" },
+    "payload": {
+      "type": ["object", "null"],
+      "additionalProperties": { "type": "string" }
+    }
+  }
+}
