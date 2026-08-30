@@ -8,7 +8,10 @@ public sealed record FeedPollResult(
     IReadOnlyList<FeedItem> NewItems,
     bool InitializedBaseline,
     bool NotModified,
-    DateTimeOffset CompletedAt);
+    DateTimeOffset CompletedAt)
+{
+    public IReadOnlyList<FeedItem> FetchedItems { get; init; } = [];
+}
 
 public sealed record FeedLoadMoreResult(
     FeedSubscription Subscription,
@@ -72,7 +75,10 @@ public sealed class FeedPollingService
                     null),
                 cancellationToken);
 
-            return new FeedPollResult(subscription, newItems, initializedBaseline, page.NotModified, now);
+            return new FeedPollResult(subscription, newItems, initializedBaseline, page.NotModified, now)
+            {
+                FetchedItems = page.Items,
+            };
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -133,7 +139,7 @@ public sealed class FeedPollingService
 
             return new FeedLoadMoreResult(
                 subscription,
-                upsert.InsertedItems,
+                page.Items,
                 page.HasMore,
                 now);
         }

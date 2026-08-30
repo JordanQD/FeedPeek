@@ -18,4 +18,6 @@ public sealed record FeedQuery(
     string? SourceId = null,
     int Limit = 500,
     bool ReadOnly = false,
-    bool SavedOnly = false);
+    bool SavedOnly = false,
+    string? ProviderId = null,
+    string? FeedId = null);

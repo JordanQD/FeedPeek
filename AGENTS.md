@@ -148,11 +148,11 @@ dotnet build BiliRadar/BiliRadar.csproj -p:Platform=x64 --no-restore
 | Phase 1（通用项目骨架） | ✅ |
 | Phase 2（通用核心与 RSS） | ✅ 已人工验收主路径 |
 | Phase 3（插件合同与 Jint Runtime） | ✅ 18 项必要验证通过，Release x64 构建通过 |
-| Phase 4（站点插件迁移） | 🧪 4.0–4.3 自动验证通过；4.3 待人工验收 |
+| Phase 4（站点插件迁移） | 🧪 4.0–4.4 自动验证通过；4.3 已人工验收，4.4 待人工验收 |
 
 Phase 3 生产项目为 `src/FeedPeek.PluginContracts` 与 `src/FeedPeek.PluginRuntime`。Runtime 锁定 Jint 4.16.1；同一插件 realm 串行调用，通过 JSON `IPluginTransport` 保持 transport-neutral。插件只能使用显式 Host Bridge，不开放 CLR、文件系统、进程、注册表、COM 或 WinUI。mock JS fixture 和必要验证复用 `tests/FeedPeek.Core.Tests`，不再新增测试项目。
 
-Phase 4 详细检查点见 `docs/design/rss-plugin-phase4-plan.md`。4.1 新增 `src/FeedPeek.PluginHost` 作为 Core 与 Runtime 之间的宿主适配层，负责强类型 envelope 调用、调用上下文授权、插件结果校验和 `PluginFeedPage` → `FeedPage` 映射。4.2 新增仓库维护的 `plugins/feedpeek.video-site` 内置 JS 插件，已实现更新和 opaque cursor 分页并进入应用构建输出；尚未注册 Source/Subscription，默认 WinUI 数据路径未切换。当前现有测试项目共 25 项通过。
+Phase 4 详细检查点见 `docs/design/rss-plugin-phase4-plan.md`。4.1 新增 `src/FeedPeek.PluginHost` 作为 Core 与 Runtime 之间的宿主适配层。4.2 新增仓库维护的内置 JS 插件。4.3 已将关注页切换到 RSS 与站点插件共用的通用 Core 路径。4.4 已迁移网站历史、稍后再看分页及加入/移除 item actions；远端列表为站点 saved 状态的权威来源，RSS saved 仍为本地状态。当前现有测试项目共 30 项通过。
 
 ### DesktopFlyouts 迁移
 

@@ -2,7 +2,7 @@
 
 > 文档用途：供当前仓库及后续 FeedPeek 项目中的开发者或编码代理直接读取并执行。  
 > 推荐实施方式：在当前 BiliRadar 仓库内渐进迁移为 FeedPeek；保留可运行基线和阶段检查点，不进行一次性推倒重写。  
-> 文档状态：实施中；Phase 0–3、Phase 4.0–4.3 已完成自动验证。
+> 文档状态：实施中；Phase 0–3、Phase 4.0–4.4 已完成自动验证。
 > 最近更新：2026-08-30。
 
 ## 1. 执行摘要
@@ -795,9 +795,11 @@ FeedPeek.PluginWorker.exe
 - 4.1 已补齐 auth/source/account/creator/live DTO，并新增独立 `FeedPeek.PluginHost` 层；Core 不依赖 Jint，Runtime 不依赖 Core。
 - Host 层通过强类型客户端包装 JSON envelope，通过授权注册表绑定 source/credential context，并以 `PluginFeedProvider` 将插件分页结果映射到通用 `FeedPage`。
 - Phase 4.3 已把内置站点插件注册为持久化 Source/Subscription，并切换“关注”页到 RSS 与站点插件共用的通用 Core 读取路径；`ListView` 使用 `ISupportIncrementalLoading` 消费插件 opaque cursor。
-- 迁移期由只读 Cookie bridge 复用现有登录态，正式凭据与登录流程仍属于 Phase 4.5；legacy provider 尚未删除。
+- Phase 4.4 已迁移网站历史、稍后再看分页及加入/移除 item actions；三个页面继续复用现有 `ListView`，没有引入新控件或修改卡片布局。
+- 网站列表和动作成功结果是站点 saved 状态的权威来源；本地 SQLite 只缓存结果，同一逻辑条目跨 updates/history/viewLater 同步并去重。RSS saved 状态保持纯本地。
+- 迁移期由只读 Cookie bridge 复用现有登录态，并通过窄 credential bridge 仅暴露动作所需的 `bili_jct`；正式凭据与登录流程仍属于 Phase 4.5，legacy provider 尚未删除。
 - 4.2 已增加仓库维护的内置站点插件，完成更新首刷、opaque cursor 分页、archive/PGC/opus 映射、结构化错误和取消传播；插件进入应用构建输出，但未注册为默认来源。
-- 4.2 必要验证已加入现有测试项目；当前共 25 项通过。默认 WinUI 数据路径仍未切换，4.3 尚未开始。
+- 4.4 完成时现有测试项目共 30 项通过，Release x64 构建 0 警告、0 错误；真实账号交互待人工验收。
 
 ### Phase 5：FeedPeek 品牌、包身份与用户数据迁移
 

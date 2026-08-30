@@ -63,7 +63,16 @@ public sealed partial class FollowingPage : Page, IMainPanelPage, IDisposable
     private async void SaveButton_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button { DataContext: FeedItemRow item } && _session is not null)
-            await _session.SetSavedAsync(item, true);
+        {
+            try
+            {
+                await _session.SetSavedAsync(item, true);
+            }
+            catch
+            {
+                // The session already reports the actionable error through its status notification.
+            }
+        }
     }
 
     public void ResetScrollPosition()

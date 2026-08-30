@@ -10,7 +10,9 @@ internal static class BuiltInVideoSitePlugin
 {
     public const string PluginId = "feedpeek.video-site";
     public const string SourceId = "account-default";
-    public const string SubscriptionId = "feedpeek.video-site:account-default:updates";
+    public const string UpdatesSubscriptionId = "feedpeek.video-site:account-default:updates";
+    public const string HistorySubscriptionId = "feedpeek.video-site:account-default:history";
+    public const string ViewLaterSubscriptionId = "feedpeek.video-site:account-default:viewLater";
     public const string LegacyCredentialProfileId = "legacy-biliradar-cookie";
     public const string SourceIconOption = "source.icon";
 
@@ -22,24 +24,50 @@ internal static class BuiltInVideoSitePlugin
             SourceId,
             "哔哩哔哩",
             LegacyCredentialProfileId,
-            [new FeedDefinition(
-                PluginFeedIds.Updates,
-                "关注更新",
-                "video",
-                SupportsPaging: true,
-                SupportsNotifications: true)],
+            [
+                new FeedDefinition(
+                    PluginFeedIds.Updates,
+                    "关注更新",
+                    "video",
+                    SupportsPaging: true,
+                    SupportsNotifications: true),
+                new FeedDefinition(
+                    PluginFeedIds.History,
+                    "历史记录",
+                    "history",
+                    SupportsPaging: true,
+                    SupportsNotifications: false),
+                new FeedDefinition(
+                    PluginFeedIds.ViewLater,
+                    "稍后再看",
+                    "collection",
+                    SupportsPaging: true,
+                    SupportsNotifications: false),
+            ],
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 [SourceIconOption] = "https://www.bilibili.com/favicon.ico",
             });
 
-    public static FeedSubscription CreateSubscription(bool isEnabled)
+    public static IReadOnlyList<FeedSubscription> CreateSubscriptions(bool isEnabled)
+        =>
+        [
+            CreateSubscription(UpdatesSubscriptionId, PluginFeedIds.Updates, "哔哩哔哩关注更新", isEnabled),
+            CreateSubscription(HistorySubscriptionId, PluginFeedIds.History, "哔哩哔哩历史记录", isEnabled),
+            CreateSubscription(ViewLaterSubscriptionId, PluginFeedIds.ViewLater, "哔哩哔哩稍后再看", isEnabled),
+        ];
+
+    private static FeedSubscription CreateSubscription(
+        string subscriptionId,
+        string feedId,
+        string displayName,
+        bool isEnabled)
         => new(
-            SubscriptionId,
+            subscriptionId,
             PluginId,
             SourceId,
-            PluginFeedIds.Updates,
-            "哔哩哔哩关注更新",
+            feedId,
+            displayName,
             null,
             LegacyCredentialProfileId,
             isEnabled,

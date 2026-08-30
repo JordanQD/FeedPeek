@@ -75,6 +75,49 @@ public sealed class FeedPollingTests
         Assert.Equal(2, provider.RequestedCursors.Count);
     }
 
+    [Fact]
+    public async Task LogicalItemSavedStateIsSynchronizedAcrossPluginFeeds()
+    {
+        await using var store = new SqliteFeedStore("Data Source=:memory:");
+        var source = new SourceDefinition(
+            "test.provider",
+            "source",
+            "Test source",
+            null,
+            [
+                new FeedDefinition("updates", "Updates", "items", true, true),
+                new FeedDefinition("viewLater", "View later", "collection", true, false),
+            ],
+            null);
+        var updates = CreateSubscription();
+        var viewLater = updates with
+        {
+            SubscriptionId = "subscription-view-later",
+            FeedId = "viewLater",
+        };
+        await store.SaveSourceAndSubscriptionAsync(source, updates);
+        await store.SaveSourceAndSubscriptionAsync(source, viewLater);
+        await store.UpsertItemsAsync(updates.SubscriptionId, [CreateItem("shared")], DateTimeOffset.UtcNow);
+        await store.UpsertItemsAsync(
+            viewLater.SubscriptionId,
+            [CreateItem("shared") with { FeedId = "viewLater" }],
+            DateTimeOffset.UtcNow);
+
+        await store.SetSavedForItemAsync("test.provider", "source", "shared", true);
+
+        var saved = await store.GetItemsAsync(new FeedQuery(
+            SavedOnly: true,
+            ProviderId: "test.provider"));
+        Assert.Equal(2, saved.Count);
+        Assert.Single(await store.GetItemsAsync(new FeedQuery(
+            SavedOnly: true,
+            ProviderId: "test.provider",
+            FeedId: "viewLater")));
+
+        await store.SetSavedForFeedAsync("test.provider", "source", "viewLater", false);
+        Assert.Single(await store.GetItemsAsync(new FeedQuery(SavedOnly: true)));
+    }
+
     private static SourceDefinition CreateSource() => new(
         "test.provider",
         "source",

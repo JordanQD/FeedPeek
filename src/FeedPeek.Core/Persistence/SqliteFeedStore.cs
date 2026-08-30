@@ -284,14 +284,18 @@ public sealed class SqliteFeedStore : IFeedStore
             WHERE (@unread_only = 0 OR COALESCE(states.is_read, 0) = 0)
               AND (@read_only = 0 OR COALESCE(states.is_read, 0) = 1)
               AND (@saved_only = 0 OR COALESCE(states.is_saved, 0) = 1)
+              AND (@provider_id IS NULL OR i.provider_id = @provider_id)
               AND (@source_id IS NULL OR i.source_id = @source_id)
+              AND (@feed_id IS NULL OR i.feed_id = @feed_id)
             ORDER BY i.published_at DESC, i.item_id COLLATE NOCASE
             LIMIT @limit;
             """);
         AddParameter(command, "@unread_only", ToSqliteBoolean(query.UnreadOnly));
         AddParameter(command, "@read_only", ToSqliteBoolean(query.ReadOnly));
         AddParameter(command, "@saved_only", ToSqliteBoolean(query.SavedOnly));
+        AddParameter(command, "@provider_id", query.ProviderId);
         AddParameter(command, "@source_id", query.SourceId);
+        AddParameter(command, "@feed_id", query.FeedId);
         AddParameter(command, "@limit", NormalizeLimit(query.Limit));
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -628,6 +632,70 @@ public sealed class SqliteFeedStore : IFeedStore
             ("@feed_id", key.FeedId),
             ("@item_id", key.ItemId),
             ("@is_saved", ToSqliteBoolean(isSaved))).ConfigureAwait(false);
+    }
+
+    public async Task SetSavedForFeedAsync(
+        string providerId,
+        string sourceId,
+        string feedId,
+        bool isSaved,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateIdentifier(providerId, nameof(providerId));
+        ValidateIdentifier(sourceId, nameof(sourceId));
+        ValidateIdentifier(feedId, nameof(feedId));
+        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await ConfigureConnectionAsync(connection, cancellationToken).ConfigureAwait(false);
+        await ExecuteAsync(
+            connection,
+            null,
+            """
+            UPDATE item_states
+            SET is_saved = @is_saved
+            WHERE provider_id = @provider_id
+              AND source_id = @source_id
+              AND feed_id = @feed_id;
+            """,
+            cancellationToken,
+            ("@is_saved", ToSqliteBoolean(isSaved)),
+            ("@provider_id", providerId),
+            ("@source_id", sourceId),
+            ("@feed_id", feedId)).ConfigureAwait(false);
+    }
+
+    public async Task SetSavedForItemAsync(
+        string providerId,
+        string sourceId,
+        string itemId,
+        bool isSaved,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateIdentifier(providerId, nameof(providerId));
+        ValidateIdentifier(sourceId, nameof(sourceId));
+        ValidateIdentifier(itemId, nameof(itemId));
+        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await ConfigureConnectionAsync(connection, cancellationToken).ConfigureAwait(false);
+        await ExecuteAsync(
+            connection,
+            null,
+            """
+            INSERT INTO item_states (
+                provider_id, source_id, feed_id, item_id, is_read, read_at, is_saved)
+            SELECT provider_id, source_id, feed_id, item_id, 0, NULL, @is_saved
+            FROM feed_items
+            WHERE provider_id = @provider_id
+              AND source_id = @source_id
+              AND item_id = @item_id
+            ON CONFLICT (provider_id, source_id, feed_id, item_id) DO UPDATE SET
+                is_saved = excluded.is_saved;
+            """,
+            cancellationToken,
+            ("@is_saved", ToSqliteBoolean(isSaved)),
+            ("@provider_id", providerId),
+            ("@source_id", sourceId),
+            ("@item_id", itemId)).ConfigureAwait(false);
     }
 
     public async Task DeleteSourceAsync(

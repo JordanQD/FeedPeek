@@ -45,6 +45,20 @@ public interface IFeedStore : IAsyncDisposable
         bool isSaved = true,
         CancellationToken cancellationToken = default);
 
+    Task SetSavedForFeedAsync(
+        string providerId,
+        string sourceId,
+        string feedId,
+        bool isSaved,
+        CancellationToken cancellationToken = default);
+
+    Task SetSavedForItemAsync(
+        string providerId,
+        string sourceId,
+        string itemId,
+        bool isSaved,
+        CancellationToken cancellationToken = default);
+
     Task DeleteSourceAsync(
         string providerId,
         string sourceId,

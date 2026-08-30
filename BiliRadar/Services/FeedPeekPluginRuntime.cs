@@ -17,6 +17,7 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
     private readonly PluginInvocationRegistry _invocations = new();
     private readonly PluginHttpBridge _httpBridge;
     private readonly PluginRuntimeCatalog _catalog;
+    private readonly PluginItemActionService _itemActions;
     private bool _loaded;
     private bool _disposed;
 
@@ -25,12 +26,14 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
         _httpBridge = new PluginHttpBridge(new LegacyPluginCookieProvider(cookieStore));
         _catalog = new PluginRuntimeCatalog(new PluginHostServices(
             _httpBridge,
-            new InMemoryPluginCredentialStore(),
+            new LegacyPluginCredentialStore(cookieStore),
             NullPluginLogSink.Instance,
             _invocations));
+        var client = new PluginClient(new PluginRuntimeCatalogInvoker(_catalog));
         FeedProvider = new PluginFeedProvider(
             BuiltInVideoSitePlugin.PluginId,
-            new PluginClient(new PluginRuntimeCatalogInvoker(_catalog)));
+            client);
+        _itemActions = new PluginItemActionService(BuiltInVideoSitePlugin.PluginId, client);
     }
 
     public IFeedProvider FeedProvider { get; }
@@ -72,6 +75,22 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
 
     public void Register(FeedPeek.Core.Models.FeedSubscription subscription)
         => _invocations.Register(BuiltInVideoSitePlugin.CreateInvocationContext(subscription));
+
+    public async Task ExecuteViewLaterActionAsync(
+        FeedPeek.Core.Models.FeedSubscription subscription,
+        FeedPeek.Core.Models.FeedItem item,
+        bool isSaved,
+        CancellationToken cancellationToken)
+    {
+        var actionId = isSaved ? "viewLater.add" : "viewLater.remove";
+        var actions = await _itemActions.GetActionsAsync(subscription, item, cancellationToken)
+            .ConfigureAwait(false);
+        var action = actions.FirstOrDefault(candidate =>
+            string.Equals(candidate.ActionId, actionId, StringComparison.Ordinal))
+            ?? throw new InvalidOperationException("站点插件没有为当前条目提供稍后再看操作。");
+        await _itemActions.ExecuteAsync(subscription, action, cancellationToken)
+            .ConfigureAwait(false);
+    }
 
     public async ValueTask DisposeAsync()
     {

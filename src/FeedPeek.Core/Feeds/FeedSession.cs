@@ -77,6 +77,32 @@ public sealed class FeedSession
         CancellationToken cancellationToken = default)
         => _store.MarkSavedAsync(key, isSaved, cancellationToken);
 
+    public Task SetSavedForFeedAsync(
+        string providerId,
+        string sourceId,
+        string feedId,
+        bool isSaved,
+        CancellationToken cancellationToken = default)
+        => _store.SetSavedForFeedAsync(
+            providerId,
+            sourceId,
+            feedId,
+            isSaved,
+            cancellationToken);
+
+    public Task SetSavedForItemAsync(
+        string providerId,
+        string sourceId,
+        string itemId,
+        bool isSaved,
+        CancellationToken cancellationToken = default)
+        => _store.SetSavedForItemAsync(
+            providerId,
+            sourceId,
+            itemId,
+            isSaved,
+            cancellationToken);
+
     public Task DeleteSourceAsync(
         string providerId,
         string sourceId,

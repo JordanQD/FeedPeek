@@ -33,5 +33,11 @@
     <None Include="..\FeedPeek.Compatibility.Tests\Fixtures\dynamic-video-page.json"
           Link="Fixtures\SiteResponses\dynamic-video-page.json"
           CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\FeedPeek.Compatibility.Tests\Fixtures\history-page.json"
+          Link="Fixtures\SiteResponses\history-page.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\FeedPeek.Compatibility.Tests\Fixtures\view-later-page.json"
+          Link="Fixtures\SiteResponses\view-later-page.json"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

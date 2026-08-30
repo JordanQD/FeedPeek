@@ -6,7 +6,10 @@
   "entry": "index.js",
   "preloadScripts": [],
   "capabilities": [
-    "feed.updates"
+    "feed.updates",
+    "account.history",
+    "collection.viewLater",
+    "item.actions"
   ],
   "auth": {
     "required": true,
@@ -44,6 +47,16 @@
       "id": "updates",
       "kind": "feed",
       "title": "更新"
+    },
+    {
+      "id": "history",
+      "kind": "feed",
+      "title": "历史记录"
+    },
+    {
+      "id": "viewLater",
+      "kind": "collection",
+      "title": "稍后再看"
     }
   ]
 }
