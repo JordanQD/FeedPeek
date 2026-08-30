@@ -42,6 +42,16 @@ public sealed class FeedSession
         CancellationToken cancellationToken = default)
         => _pollingService.PollAsync(subscription, cancellationToken);
 
+    public Task<FeedLoadMoreResult> LoadMoreAsync(
+        FeedSubscription subscription,
+        CancellationToken cancellationToken = default)
+        => _pollingService.LoadMoreAsync(subscription, cancellationToken);
+
+    public Task<bool> HasMoreAsync(
+        FeedSubscription subscription,
+        CancellationToken cancellationToken = default)
+        => _pollingService.HasMoreAsync(subscription, cancellationToken);
+
     public Task<IReadOnlyList<FeedSubscription>> GetSubscriptionsAsync(
         CancellationToken cancellationToken = default)
         => _store.GetSubscriptionsAsync(cancellationToken);

@@ -10,6 +10,12 @@ public sealed record FeedPollResult(
     bool NotModified,
     DateTimeOffset CompletedAt);
 
+public sealed record FeedLoadMoreResult(
+    FeedSubscription Subscription,
+    IReadOnlyList<FeedItem> Items,
+    bool HasMore,
+    DateTimeOffset CompletedAt);
+
 public sealed class FeedPollingService
 {
     private readonly IFeedStore _store;
@@ -88,5 +94,73 @@ public sealed class FeedPollingService
                 cancellationToken);
             throw;
         }
+    }
+
+    public async Task<FeedLoadMoreResult> LoadMoreAsync(
+        FeedSubscription subscription,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(subscription);
+        var state = await _store.GetPollingStateAsync(subscription.SubscriptionId, cancellationToken);
+        var now = _timeProvider.GetUtcNow();
+        if (string.IsNullOrWhiteSpace(state?.NextCursor))
+        {
+            return new FeedLoadMoreResult(subscription, [], false, now);
+        }
+
+        try
+        {
+            var provider = _providers.Resolve(subscription.ProviderId);
+            var page = await provider.GetPageAsync(
+                new FeedPageRequest(subscription, state.NextCursor, 200),
+                cancellationToken);
+            var upsert = await _store.UpsertItemsAsync(
+                subscription.SubscriptionId,
+                page.Items,
+                now,
+                cancellationToken);
+
+            await _store.SavePollingStateAsync(
+                state with
+                {
+                    NextCursor = page.NextCursor,
+                    LastAttemptAt = now,
+                    LastSuccessAt = now,
+                    FailureCount = 0,
+                    LastError = null,
+                },
+                cancellationToken);
+
+            return new FeedLoadMoreResult(
+                subscription,
+                upsert.InsertedItems,
+                page.HasMore,
+                now);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            await _store.SavePollingStateAsync(
+                state with
+                {
+                    LastAttemptAt = now,
+                    FailureCount = state.FailureCount + 1,
+                    LastError = ex.Message,
+                },
+                cancellationToken);
+            throw;
+        }
+    }
+
+    public async Task<bool> HasMoreAsync(
+        FeedSubscription subscription,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(subscription);
+        var state = await _store.GetPollingStateAsync(subscription.SubscriptionId, cancellationToken);
+        return !string.IsNullOrWhiteSpace(state?.NextCursor);
     }
 }

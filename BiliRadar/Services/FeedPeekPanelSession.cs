@@ -25,6 +25,10 @@ public sealed class FeedPeekStatus(string message, InfoBarSeverity severity) : E
     public InfoBarSeverity Severity { get; } = severity;
 }
 
+public sealed record FeedItemLoadResult(
+    IReadOnlyList<FeedItemRow> Items,
+    bool HasMore);
+
 public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, IAsyncDisposable
 {
     private const string RssEndpointOption = "rss.endpoint";
@@ -32,7 +36,9 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
     private static readonly TimeSpan DefaultRefreshInterval = TimeSpan.FromMinutes(15);
 
     private readonly SqliteFeedStore _store;
+    private readonly CookieStore _cookieStore;
     private readonly RssFeedProvider _rssProvider;
+    private readonly FeedPeekPluginRuntime _pluginRuntime;
     private readonly FeedProviderRegistry _providerRegistry;
     private readonly FeedPollingService _pollingService;
     private readonly FeedSession _feedSession;
@@ -46,6 +52,7 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
     public FeedPeekPanelSession()
     {
         _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
+        _cookieStore = new CookieStore();
         var databasePath = Path.Combine(
             ApplicationData.Current.LocalFolder.Path,
             "FeedPeek",
@@ -53,7 +60,11 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
 
         _store = new SqliteFeedStore(databasePath);
         _rssProvider = new RssFeedProvider();
-        _providerRegistry = new FeedProviderRegistry([_rssProvider]);
+        _pluginRuntime = new FeedPeekPluginRuntime(_cookieStore);
+        _providerRegistry = new FeedProviderRegistry([
+            _rssProvider,
+            _pluginRuntime.FeedProvider,
+        ]);
         _pollingService = new FeedPollingService(_store, _providerRegistry);
         _feedSession = new FeedSession(_store, _pollingService);
     }
@@ -163,7 +174,30 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
             async operationToken =>
             {
                 await EnsureInitializedAsync(operationToken).ConfigureAwait(false);
-                results = await _feedSession.RefreshAllAsync(operationToken).ConfigureAwait(false);
+                var successful = new List<FeedPollResult>();
+                var subscriptions = await _feedSession.GetSubscriptionsAsync(operationToken)
+                    .ConfigureAwait(false);
+                foreach (var subscription in subscriptions.Where(item => item.IsEnabled))
+                {
+                    operationToken.ThrowIfCancellationRequested();
+                    try
+                    {
+                        successful.Add(await _feedSession.RefreshAsync(subscription, operationToken)
+                            .ConfigureAwait(false));
+                    }
+                    catch (OperationCanceledException) when (operationToken.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+                    catch (Exception exception)
+                    {
+                        RaiseStatus(
+                            $"{subscription.DisplayName}：{exception.Message}",
+                            InfoBarSeverity.Error);
+                    }
+                }
+
+                results = successful;
             },
             cancellationToken);
         return results;
@@ -180,6 +214,58 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
     public Task<IReadOnlyList<FeedItemRow>> GetFollowingItemsAsync(
         CancellationToken cancellationToken = default)
         => GetItemsAsync(new FeedQuery(), cancellationToken);
+
+    public async Task<FeedItemLoadResult> GetFollowingPageAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var items = await GetFollowingItemsAsync(cancellationToken);
+        var hasMore = await HasMoreFollowingItemsAsync(cancellationToken);
+        return new FeedItemLoadResult(items, hasMore);
+    }
+
+    public async Task<FeedItemLoadResult> LoadMoreFollowingItemsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        FeedItemLoadResult result = new([], false);
+        await RunExclusiveAsync(
+            async operationToken =>
+            {
+                await EnsureInitializedAsync(operationToken).ConfigureAwait(false);
+                var subscriptions = await _feedSession.GetSubscriptionsAsync(operationToken)
+                    .ConfigureAwait(false);
+                foreach (var subscription in subscriptions.Where(IsPagedFollowingSubscription))
+                {
+                    if (await _feedSession.HasMoreAsync(subscription, operationToken).ConfigureAwait(false))
+                    {
+                        await _feedSession.LoadMoreAsync(subscription, operationToken).ConfigureAwait(false);
+                    }
+                }
+
+                var items = await QueryItemsAsync(new FeedQuery(), operationToken).ConfigureAwait(false);
+                var hasMore = await HasMoreFollowingItemsCoreAsync(subscriptions, operationToken)
+                    .ConfigureAwait(false);
+                result = new FeedItemLoadResult(items, hasMore);
+            },
+            cancellationToken);
+        return result;
+    }
+
+    public async Task<bool> HasMoreFollowingItemsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var result = false;
+        await RunExclusiveAsync(
+            async operationToken =>
+            {
+                await EnsureInitializedAsync(operationToken).ConfigureAwait(false);
+                var subscriptions = await _feedSession.GetSubscriptionsAsync(operationToken)
+                    .ConfigureAwait(false);
+                result = await HasMoreFollowingItemsCoreAsync(subscriptions, operationToken)
+                    .ConfigureAwait(false);
+            },
+            cancellationToken);
+        return result;
+    }
 
     public Task<IReadOnlyList<FeedItemRow>> GetHistoryItemsAsync(
         CancellationToken cancellationToken = default)
@@ -198,22 +284,7 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
             async operationToken =>
             {
                 await EnsureInitializedAsync(operationToken).ConfigureAwait(false);
-                var summaries = await _feedSession.GetSourceSummariesAsync(operationToken)
-                    .ConfigureAwait(false);
-                var sources = summaries.ToDictionary(
-                    item => item.Source.SourceId,
-                    item => item.Source,
-                    StringComparer.Ordinal);
-                var storedItems = await _feedSession.GetItemsAsync(query, operationToken)
-                    .ConfigureAwait(false);
-                result = storedItems.Select(item =>
-                {
-                    sources.TryGetValue(item.Item.SourceId, out var source);
-                    return new FeedItemRow(
-                        item,
-                        source?.DisplayName,
-                        GetSourceIconUrl(source));
-                }).ToList();
+                result = await QueryItemsAsync(query, operationToken).ConfigureAwait(false);
             },
             cancellationToken);
         return result;
@@ -312,6 +383,7 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
             try
             {
                 _providerRegistry.Dispose();
+                await _pluginRuntime.DisposeAsync().ConfigureAwait(false);
                 await _store.DisposeAsync().ConfigureAwait(false);
             }
             finally
@@ -337,8 +409,67 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
         }
 
         await _feedSession.InitializeAsync(cancellationToken).ConfigureAwait(false);
+        var pluginLoad = await _pluginRuntime.LoadAsync(cancellationToken).ConfigureAwait(false);
+        var siteSubscription = BuiltInVideoSitePlugin.CreateSubscription(
+            pluginLoad.IsAvailable && _cookieStore.HasCookie);
+        await _feedSession.AddSubscriptionAsync(
+            BuiltInVideoSitePlugin.CreateSource(),
+            siteSubscription,
+            cancellationToken).ConfigureAwait(false);
+        _pluginRuntime.Register(siteSubscription);
         _initialized = true;
+
+        if (!pluginLoad.IsAvailable)
+        {
+            RaiseStatus(
+                $"内置视频站点插件不可用：{pluginLoad.ErrorMessage}",
+                InfoBarSeverity.Warning);
+        }
     }
+
+    private async Task<IReadOnlyList<FeedItemRow>> QueryItemsAsync(
+        FeedQuery query,
+        CancellationToken cancellationToken)
+    {
+        var summaries = await _feedSession.GetSourceSummariesAsync(cancellationToken)
+            .ConfigureAwait(false);
+        var sources = summaries.ToDictionary(
+            item => (item.Source.ProviderId, item.Source.SourceId),
+            item => item.Source);
+        var storedItems = await _feedSession.GetItemsAsync(query, cancellationToken)
+            .ConfigureAwait(false);
+        return storedItems.Select(item =>
+        {
+            sources.TryGetValue((item.Item.ProviderId, item.Item.SourceId), out var source);
+            return new FeedItemRow(
+                item,
+                source?.DisplayName,
+                GetSourceIconUrl(source));
+        }).ToList();
+    }
+
+    private async Task<bool> HasMoreFollowingItemsCoreAsync(
+        IReadOnlyList<FeedSubscription> subscriptions,
+        CancellationToken cancellationToken)
+    {
+        foreach (var subscription in subscriptions.Where(IsPagedFollowingSubscription))
+        {
+            if (await _feedSession.HasMoreAsync(subscription, cancellationToken).ConfigureAwait(false))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsPagedFollowingSubscription(FeedSubscription subscription)
+        => subscription.IsEnabled
+            && string.Equals(
+                subscription.ProviderId,
+                BuiltInVideoSitePlugin.PluginId,
+                StringComparison.Ordinal)
+            && string.Equals(subscription.FeedId, "updates", StringComparison.Ordinal);
 
     private async Task RunExclusiveAsync(
         Func<CancellationToken, Task> operation,
@@ -380,7 +511,8 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
             return null;
         }
 
-        if (source.Options.TryGetValue(RssIconOption, out var iconUrl)
+        if ((source.Options.TryGetValue(BuiltInVideoSitePlugin.SourceIconOption, out var iconUrl)
+                || source.Options.TryGetValue(RssIconOption, out iconUrl))
             && Uri.TryCreate(iconUrl, UriKind.Absolute, out _))
         {
             return iconUrl;

@@ -148,7 +148,7 @@ dotnet build BiliRadar/BiliRadar.csproj -p:Platform=x64 --no-restore
 | Phase 1（通用项目骨架） | ✅ |
 | Phase 2（通用核心与 RSS） | ✅ 已人工验收主路径 |
 | Phase 3（插件合同与 Jint Runtime） | ✅ 18 项必要验证通过，Release x64 构建通过 |
-| Phase 4（站点插件迁移） | 🧪 4.0–4.2 自动验证通过；4.3 未开始 |
+| Phase 4（站点插件迁移） | 🧪 4.0–4.3 自动验证通过；4.3 待人工验收 |
 
 Phase 3 生产项目为 `src/FeedPeek.PluginContracts` 与 `src/FeedPeek.PluginRuntime`。Runtime 锁定 Jint 4.16.1；同一插件 realm 串行调用，通过 JSON `IPluginTransport` 保持 transport-neutral。插件只能使用显式 Host Bridge，不开放 CLR、文件系统、进程、注册表、COM 或 WinUI。mock JS fixture 和必要验证复用 `tests/FeedPeek.Core.Tests`，不再新增测试项目。
 

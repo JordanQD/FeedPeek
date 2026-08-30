@@ -1,6 +1,6 @@
 # FeedPeek Phase 4：站点插件迁移实施计划
 
-> 状态：4.0–4.2 已完成自动验证；4.3 未开始
+> 状态：4.0–4.3 已完成自动验证；4.3 待人工验收
 > 基线提交：`9c6dd3e Phase3`  
 > 原则：每个检查点均保持可构建、可回滚；兼容矩阵通过前不删除 legacy 路径。
 
@@ -36,6 +36,12 @@
 - 站点插件已实现 handshake/status、更新首刷、opaque cursor 分页、archive/PGC/opus 映射、结构化站点错误和取消传播；登录等未实现能力没有提前写入 capability 列表。
 - 插件作为内容进入 WinUI Release 输出的 `Plugins/feedpeek.video-site`，但尚未注册 Source/Subscription，也未切换默认 UI 数据路径。
 - 4.2 完成时现有测试项目共 25 项通过；使用脱敏 fixture，不以实时站点网络作为自动验证前提。
+- 4.3：WinUI composition root 已加载输出目录中的内置站点插件，并将其作为 `feedpeek.video-site` Provider 注册到现有 `FeedPeekPanelSession`。
+- 启动通用会话时会持久化内置站点 Source/Subscription；RSS 与站点订阅共享同一 SQLite、轮询与关注页查询。现有 Cookie 存在且插件可用时启用站点订阅，否则保留为禁用状态。
+- 4.3 暂以只读 `LegacyPluginCookieProvider` 把原 `CookieStore` 注入 Host HTTP；正式 credential profile、manifest 驱动登录和退出仍严格留在 4.5。
+- 关注页继续使用现有 WinUI `ListView`，通过官方 `ISupportIncrementalLoading` 模式接入 opaque cursor 加载更多；Core 新增游标页持久化与 `HasMore` 查询。
+- 单个来源刷新失败不再阻断同一会话内其他来源刷新，因此 RSS 与站点更新可以共存；legacy provider 与站点专属服务尚未删除，可按 4.2 提交回退。
+- 4.3 完成时现有测试项目共 26 项通过；Debug x64 与 Release x64 均为 0 警告、0 错误。真实账号、滚动分页与 RSS 共存路径待人工验收。
 
 ## 3. 4.1 结构边界
 

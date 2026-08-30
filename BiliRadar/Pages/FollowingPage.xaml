@@ -113,7 +113,7 @@
             <TextBlock
                 HorizontalAlignment="Center"
                 Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                Text="请先在设置的“来源”页面添加 RSS。" />
+                Text="请先在设置中添加来源或登录站点账户。" />
         </StackPanel>
     </Grid>
 </Page>

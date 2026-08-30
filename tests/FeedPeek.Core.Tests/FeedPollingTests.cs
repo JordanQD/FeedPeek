@@ -47,6 +47,34 @@ public sealed class FeedPollingTests
         Assert.Equal("Updated title", stored.Item.Title);
     }
 
+    [Fact]
+    public async Task LoadMoreUsesStoredOpaqueCursorAndPersistsTheNextPage()
+    {
+        await using var store = new SqliteFeedStore("Data Source=:memory:");
+        var subscription = CreateSubscription();
+        await store.SaveSourceAndSubscriptionAsync(CreateSource(), subscription);
+        var provider = new SequenceProvider(
+            new FeedPage([CreateItem("first")], "opaque-next", true),
+            new FeedPage([CreateItem("second")], null, false));
+        using var providers = new FeedProviderRegistry([provider]);
+        var polling = new FeedPollingService(store, providers);
+
+        await polling.PollAsync(subscription);
+        Assert.True(await polling.HasMoreAsync(subscription));
+
+        var loaded = await polling.LoadMoreAsync(subscription);
+
+        Assert.Equal("second", Assert.Single(loaded.Items).ItemId);
+        Assert.False(loaded.HasMore);
+        Assert.False(await polling.HasMoreAsync(subscription));
+        Assert.Equal([null, "opaque-next"], provider.RequestedCursors);
+        Assert.Equal(2, (await store.GetItemsAsync(new FeedQuery())).Count);
+
+        var final = await polling.LoadMoreAsync(subscription);
+        Assert.Empty(final.Items);
+        Assert.Equal(2, provider.RequestedCursors.Count);
+    }
+
     private static SourceDefinition CreateSource() => new(
         "test.provider",
         "source",
@@ -90,6 +118,8 @@ public sealed class FeedPollingTests
     {
         private int _index;
 
+        public List<string?> RequestedCursors { get; } = [];
+
         public string ProviderId => "test.provider";
 
         public Task<FeedPage> GetPageAsync(
@@ -97,6 +127,7 @@ public sealed class FeedPollingTests
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            RequestedCursors.Add(request.Cursor);
             var page = pages[Math.Min(_index, pages.Length - 1)];
             _index++;
             return Task.FromResult(page);
