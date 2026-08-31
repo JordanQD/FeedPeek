@@ -44,7 +44,7 @@ jobs:
       - name: Set package manifest version
         shell: pwsh
         run: |
-          $manifestPath = "BiliRadar/Package.appxmanifest"
+          $manifestPath = "src/FeedPeek.App/Package.appxmanifest"
           [xml]$manifest = Get-Content -Raw -LiteralPath $manifestPath
           $manifest.Package.Identity.Version = $env:APP_VERSION
           $manifest.Save((Resolve-Path -LiteralPath $manifestPath))
@@ -70,7 +70,7 @@ jobs:
 
       - name: Build and package x64
         run: >
-          dotnet build BiliRadar/BiliRadar.csproj
+          dotnet build src/FeedPeek.App/FeedPeek.App.csproj
           -c Release
           -p:Platform=x64
           -p:Version=${{ env.APP_VERSION }}
@@ -122,10 +122,10 @@ jobs:
 
           Write-Host "makeappx: $($makeappx.FullName)"
           Write-Host "signtool: $($signtool.FullName)"
-          & $($makeappx.FullName) bundle /d bundle-input /p artifacts/BiliRadar.msixbundle /bv $env:APP_VERSION
+          & $($makeappx.FullName) bundle /d bundle-input /p artifacts/FeedPeek.msixbundle /bv $env:APP_VERSION
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-          & $($signtool.FullName) sign /fd SHA256 /f "${{ github.workspace }}\ci-cert.pfx" /p $env:PFX_PASSWORD artifacts/BiliRadar.msixbundle
+          & $($signtool.FullName) sign /fd SHA256 /f "${{ github.workspace }}\ci-cert.pfx" /p $env:PFX_PASSWORD artifacts/FeedPeek.msixbundle
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           Write-Host "Bundle created:"
@@ -140,7 +140,7 @@ jobs:
           $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($cerBytes, $env:PFX_PASSWORD)
           $cerBytes = $cert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert)
           New-Item -ItemType Directory -Force -Path artifacts | Out-Null
-          [System.IO.File]::WriteAllBytes("artifacts/BiliRadar_Certificate.cer", $cerBytes)
+          [System.IO.File]::WriteAllBytes("artifacts/FeedPeek_Certificate.cer", $cerBytes)
           Write-Host "Certificate exported: $($cert.Subject)"
 
       - name: Create Store submission bundle
@@ -151,15 +151,15 @@ jobs:
       - name: Upload sideload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: BiliRadar-Release
+          name: FeedPeek-Release
           path: artifacts/*
 
       - name: Upload Store submission artifact
         if: github.ref_type == 'tag'
         uses: actions/upload-artifact@v4
         with:
-          name: BiliRadar-StoreSubmission
-          path: BiliRadar/artifacts/StoreSubmission-${{ env.APP_VERSION }}/BiliRadar_${{ env.APP_VERSION }}_x64.msixbundle
+          name: FeedPeek-StoreSubmission
+          path: src/FeedPeek.App/artifacts/StoreSubmission-${{ env.APP_VERSION }}/FeedPeek_${{ env.APP_VERSION }}_x64.msixbundle
 
   release:
     needs: build
@@ -169,7 +169,7 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: BiliRadar-Release
+          name: FeedPeek-Release
           path: release-assets
 
       - name: Create GitHub Release

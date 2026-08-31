@@ -196,8 +196,8 @@ DesktopFlyouts 迁移详见 `docs/design/desktopflyouts-migration.md`；旧架�
 
 ## 本地化
 
-资源文件在 `Strings/zh-CN/Resources.resw` 和 `zh-HK/Resources.resw`。通过 `LocalizationHelper.GetString(key)` 获取。
+资源文件在 `src/FeedPeek.App/Strings/zh-CN/Resources.resw` 和 `src/FeedPeek.App/Strings/zh-HK/Resources.resw`。通过 `LocalizationHelper.GetString(key)` 获取。
 
 ## Git 分支
 
-当前迁移分支 `codex/desktopflyouts-migration`，主分支 `main`。
+当前正式分支为 `main`；迁移工作已合并。
