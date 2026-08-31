@@ -6,6 +6,7 @@ using Microsoft.Windows.AppNotifications;
 using Microsoft.Windows.AppNotifications.Builder;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading.Tasks;
@@ -20,6 +21,7 @@ public sealed class NotificationService
     private const int MaxStoredVideoUpdateIds = 80;
     private const int MaxStoredLiveRoomIds = 80;
     private const int MaxNotificationsPerRefresh = 3;
+    private const int MaxFeedNotificationsPerRefresh = 20;
     private static readonly TimeSpan NotificationSpacing = TimeSpan.FromMilliseconds(750);
     private DispatcherTimer? _timer;
     private Func<Task>? _refreshAction;
@@ -32,8 +34,6 @@ public sealed class NotificationService
     {
         _refreshAction = refreshAction;
         _serviceStartedAt = DateTimeOffset.Now;
-        AppSettings.VideoNotificationBaselineInitialized = false;
-        AppSettings.LiveNotificationBaselineInitialized = false;
         if (_timer is null)
         {
             _timer = new DispatcherTimer
@@ -45,6 +45,12 @@ public sealed class NotificationService
         }
 
         UpdateTimerState();
+        TraceNotification(
+            $"Started. mode={AppSettings.NotificationTargetMode}, " +
+            $"updates={AppSettings.VideoNotificationsEnabled}, " +
+            $"live={AppSettings.LiveNotificationsEnabled}, " +
+            $"interval={AppSettings.NotificationCheckIntervalMinutes}m, " +
+            $"timerEnabled={_timer.IsEnabled}");
 
         if (_timer.IsEnabled)
         {
@@ -128,17 +134,25 @@ public sealed class NotificationService
             items,
             AppSettings.KnownVideoUpdateIds,
             AppSettings.VideoNotificationBaselineInitialized,
-            MaxNotificationsPerRefresh,
+            MaxFeedNotificationsPerRefresh,
             MaxStoredVideoUpdateIds);
         AppSettings.KnownVideoUpdateIds = plan.KnownIds;
         if (plan.InitializesBaseline)
         {
             AppSettings.VideoNotificationBaselineInitialized = true;
+            TraceNotification($"Update baseline initialized with {plan.KnownIds.Count} item(s)");
             return;
         }
 
         if (!showNotifications || !IsVideoNotificationEnabled() || plan.NewItems.Count == 0)
+        {
+            TraceNotification(
+                $"Update notification plan: new={plan.NewItems.Count}, " +
+                $"enabled={IsVideoNotificationEnabled()}, show={showNotifications}");
             return;
+        }
+
+        TraceNotification($"Showing {plan.NewItems.Count} update notification(s)");
 
         foreach (var item in plan.NewItems.OrderBy(item => item.PublishedAt))
         {
@@ -161,11 +175,19 @@ public sealed class NotificationService
         if (plan.InitializesBaseline)
         {
             AppSettings.LiveNotificationBaselineInitialized = true;
+            TraceNotification($"Live baseline initialized with {plan.KnownIds.Count} item(s)");
             return;
         }
 
         if (!showNotifications || !IsLiveNotificationEnabled() || plan.NewItems.Count == 0)
+        {
+            TraceNotification(
+                $"Live notification plan: new={plan.NewItems.Count}, " +
+                $"enabled={IsLiveNotificationEnabled()}, show={showNotifications}");
             return;
+        }
+
+        TraceNotification($"Showing {plan.NewItems.Count} live notification(s)");
 
         foreach (var item in plan.NewItems)
         {
@@ -263,6 +285,11 @@ public sealed class NotificationService
         {
             _timer.Stop();
         }
+
+        TraceNotification(
+            $"Timer updated. enabled={_timer.IsEnabled}, " +
+            $"interval={AppSettings.NotificationCheckIntervalMinutes}m, " +
+            $"mode={AppSettings.NotificationTargetMode}");
     }
 
     private async Task RefreshForNotificationsAsync()
@@ -417,11 +444,17 @@ public sealed class NotificationService
         try
         {
             AppNotificationManager.Default.Show(notification);
+            TraceNotification("App notification submitted");
         }
-        catch
+        catch (Exception exception)
         {
+            TraceNotification(
+                $"App notification submission failed: {exception.GetType().Name}: {exception.Message}");
         }
     }
+
+    internal static void TraceNotification(string message)
+        => Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] [Notification] {message}");
 
     private static bool IsAnyNotificationEnabled()
     {

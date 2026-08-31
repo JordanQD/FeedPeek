@@ -148,15 +148,19 @@ public partial class App : Application
             if (IsPackaged())
             {
                 _notificationManager.Register();
+                NotificationService.TraceNotification("Packaged app notification manager registered");
             }
             else
             {
                 var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "Square44x44Logo.targetsize-24_altform-unplated.png");
                 _notificationManager.Register("FeedPeek Preview", new Uri(iconPath));
+                NotificationService.TraceNotification("Unpackaged app notification manager registered");
             }
         }
-        catch
+        catch (Exception exception)
         {
+            NotificationService.TraceNotification(
+                $"App notification registration failed: {exception.GetType().Name}: {exception.Message}");
             _notificationManager = null;
         }
     }

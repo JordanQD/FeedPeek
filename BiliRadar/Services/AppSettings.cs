@@ -196,13 +196,13 @@ public static class AppSettings
     public static IReadOnlyList<string> KnownVideoUpdateIds
     {
         get => ReadStringList(KnownVideoUpdateIdsKey);
-        set => LocalSettings.Values[KnownVideoUpdateIdsKey] = string.Join('\n', value);
+        set => WriteStringList(KnownVideoUpdateIdsKey, value);
     }
 
     public static IReadOnlyList<string> KnownLiveRoomIds
     {
         get => ReadStringList(KnownLiveRoomIdsKey);
-        set => LocalSettings.Values[KnownLiveRoomIdsKey] = string.Join('\n', value);
+        set => WriteStringList(KnownLiveRoomIdsKey, value);
     }
 
     public static IReadOnlyList<NotificationCreatorSubscription> CustomNotificationCreators
@@ -302,13 +302,37 @@ public static class AppSettings
             return [];
         }
 
+        try
+        {
+            if (text.TrimStart().StartsWith("[", StringComparison.Ordinal))
+            {
+                return JsonSerializer.Deserialize<List<string>>(text, JsonOptions)?
+                    .Where(item => !string.IsNullOrWhiteSpace(item))
+                    .Distinct(StringComparer.Ordinal)
+                    .ToList() ?? [];
+            }
+        }
+        catch (JsonException)
+        {
+            // Fall through to the legacy newline format. The next write
+            // migrates it to JSON, which can preserve composite feed keys.
+        }
+
         return text
             .Split('\n')
             .Select(item => item.Trim())
             .Where(item => !string.IsNullOrWhiteSpace(item))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Distinct(StringComparer.Ordinal)
             .ToList();
     }
+
+    private static void WriteStringList(string key, IReadOnlyList<string> value)
+        => LocalSettings.Values[key] = JsonSerializer.Serialize(
+            value
+                .Where(item => !string.IsNullOrWhiteSpace(item))
+                .Distinct(StringComparer.Ordinal)
+                .ToList(),
+            JsonOptions);
 
     private static IReadOnlyList<NotificationCreatorSubscription> ReadCustomNotificationCreators()
     {

@@ -49,8 +49,10 @@ internal sealed class BackgroundNotificationMonitor : IDisposable
         {
             updates = await _session.RefreshUpdatesAsync();
         }
-        catch
+        catch (Exception exception)
         {
+            NotificationService.TraceNotification(
+                $"Update refresh failed: {exception.GetType().Name}: {exception.Message}");
             updates = [];
         }
 
@@ -59,16 +61,25 @@ internal sealed class BackgroundNotificationMonitor : IDisposable
         {
             liveItems = await _session.GetLiveItemsAsync();
         }
-        catch
+        catch (Exception exception)
         {
+            NotificationService.TraceNotification(
+                $"Live refresh failed: {exception.GetType().Name}: {exception.Message}");
             liveItems = [];
         }
+
+        NotificationService.TraceNotification(
+            $"Refresh returned updates={updates.Count}, live={liveItems.Count}, " +
+            $"mode={AppSettings.NotificationTargetMode}");
 
         if (AppSettings.NotificationTargetMode == NotificationTargetMode.CustomCreators)
         {
             var rules = AppSettings.CustomNotificationCreators;
             updates = updates.Where(item => MatchesRule(item, rules)).ToArray();
             liveItems = liveItems.Where(item => MatchesRule(item, rules)).ToArray();
+            NotificationService.TraceNotification(
+                $"Custom creator filter retained updates={updates.Count}, live={liveItems.Count}, " +
+                $"rules={rules.Count}");
         }
 
         await _notificationService.NotifyFeedUpdatesAsync(updates);

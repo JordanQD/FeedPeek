@@ -48,29 +48,33 @@ internal sealed class FeedPeekNotificationSession : IDisposable, IAsyncDisposabl
             {
                 await EnsureInitializedAsync(token).ConfigureAwait(false);
                 var subscriptions = await _feedSession.GetSubscriptionsAsync(token).ConfigureAwait(false);
+                var newItems = new List<FeedItem>();
                 foreach (var subscription in subscriptions.Where(item =>
                     item.IsEnabled && string.Equals(item.FeedId, PluginFeedIds.Updates, StringComparison.Ordinal)))
                 {
                     token.ThrowIfCancellationRequested();
                     try
                     {
-                        await _feedSession.RefreshAsync(subscription, token).ConfigureAwait(false);
+                        var poll = await _feedSession.RefreshAsync(subscription, token).ConfigureAwait(false);
+                        newItems.AddRange(poll.NewItems);
                     }
                     catch (OperationCanceledException) when (token.IsCancellationRequested)
                     {
                         throw;
                     }
-                    catch
+                    catch (Exception exception)
                     {
                         // A failing source must not prevent other sources from producing notifications.
+                        NotificationService.TraceNotification(
+                            $"Source refresh failed. provider={subscription.ProviderId}, " +
+                            $"source={subscription.SourceId}, feed={subscription.FeedId}: " +
+                            $"{exception.GetType().Name}: {exception.Message}");
                     }
                 }
 
-                var stored = await _feedSession.GetItemsAsync(
-                    new FeedQuery(FeedId: PluginFeedIds.Updates, Limit: 500),
-                    token).ConfigureAwait(false);
-                return (IReadOnlyList<FeedItem>)stored
-                    .Select(item => item.Item)
+                return (IReadOnlyList<FeedItem>)newItems
+                    .GroupBy(item => item.Key)
+                    .Select(group => group.First())
                     .OrderByDescending(item => item.PublishedAt)
                     .ToArray();
             },

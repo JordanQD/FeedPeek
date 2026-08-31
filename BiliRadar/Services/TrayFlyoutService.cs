@@ -23,19 +23,24 @@ internal sealed class TrayFlyoutService : IDisposable
     private const double MainPanelWidth = 420d;
     private const double MinimumPanelHeight = 320d;
     private const double FlyoutWorkAreaInset = 24d;
+    private const int MaxMainFlyoutShowAttempts = 10;
     private static readonly Guid TrayIconGuid = new("9CB5A423-C114-4FF5-8AA6-271935539A0C");
     private static readonly TimeSpan TrayLightDismissReopenGuard = TimeSpan.FromMilliseconds(300);
+    private static readonly TimeSpan MainFlyoutShowRetryInterval = TimeSpan.FromMilliseconds(160);
 
     private readonly DispatcherQueue _dispatcherQueue;
     private readonly DesktopFlyout _mainFlyout;
     private readonly DesktopFlyoutIsland _mainFlyoutIsland;
     private readonly DesktopMenuFlyout _contextMenu;
+    private readonly DispatcherQueueTimer _mainFlyoutShowRetryTimer;
     private readonly long _mainFlyoutIsOpenCallbackToken;
     private readonly SystemTrayIcon _trayIcon;
     private MainWindowSnapshot? _lastSnapshot;
     private UISettings? _uiSettings;
     private DateTime _lastMainFlyoutClosedAt = DateTime.MinValue;
     private Point? _pendingContextMenuPoint;
+    private Point? _pendingMainFlyoutPoint;
+    private int _mainFlyoutShowAttempts;
     private bool _isMainFlyoutShowPending;
     private bool _isDisposed;
 
@@ -76,6 +81,9 @@ internal sealed class TrayFlyoutService : IDisposable
             OnMainFlyoutIsOpenChanged);
 
         _contextMenu = CreateContextMenu(settingsAction, exitAction);
+        _mainFlyoutShowRetryTimer = _dispatcherQueue.CreateTimer();
+        _mainFlyoutShowRetryTimer.IsRepeating = false;
+        _mainFlyoutShowRetryTimer.Tick += MainFlyoutShowRetryTimer_Tick;
 
         _trayIcon = new SystemTrayIcon(GetIconPath(), "FeedPeek Preview", TrayIconGuid);
         _trayIcon.LeftClicked += OnTrayIconLeftClicked;
@@ -101,7 +109,8 @@ internal sealed class TrayFlyoutService : IDisposable
 
         _isDisposed = true;
         _pendingContextMenuPoint = null;
-        _isMainFlyoutShowPending = false;
+        CancelPendingMainFlyoutShow(disposeUnopenedContent: false);
+        _mainFlyoutShowRetryTimer.Tick -= MainFlyoutShowRetryTimer_Tick;
 
         if (_uiSettings is not null)
         {
@@ -171,19 +180,7 @@ internal sealed class TrayFlyoutService : IDisposable
             return;
         }
 
-        if (_isMainFlyoutShowPending
-            || DateTime.UtcNow - _lastMainFlyoutClosedAt < TrayLightDismissReopenGuard)
-        {
-            return;
-        }
-
-        var panelHeight = GetMainPanelHeight(args.Point);
-        EnsureFlyoutContent(panelHeight);
-        ConfigureMainFlyout(panelHeight);
-
-        _mainFlyout.IsTransitionAnimationEnabled = _uiSettings?.AnimationsEnabled == true;
-        _isMainFlyoutShowPending = true;
-        _mainFlyout.Show(args.Point);
+        RequestMainFlyoutShow(args.Point);
     }
 
     private void OnTrayIconRightClicked(object? sender, MouseEventReceivedEventArgs args)
@@ -199,7 +196,15 @@ internal sealed class TrayFlyoutService : IDisposable
         }
 
         var menuPoint = GetContextMenuPoint(args.Point);
-        if (_mainFlyout.IsOpen || _isMainFlyoutShowPending)
+        if (_isMainFlyoutShowPending && !_mainFlyout.IsOpen)
+        {
+            // A right click supersedes an open request that DesktopFlyouts has
+            // not accepted yet. Do not wait for an IsOpen callback that may
+            // never arrive after an ignored Show call.
+            CancelPendingMainFlyoutShow(disposeUnopenedContent: true);
+        }
+
+        if (_mainFlyout.IsOpen)
         {
             // DesktopFlyouts ignores Hide while an open/close transition is in
             // progress. Defer the menu until the main flyout is fully closed so
@@ -229,7 +234,7 @@ internal sealed class TrayFlyoutService : IDisposable
 
         if (_mainFlyout.IsOpen)
         {
-            _isMainFlyoutShowPending = false;
+            CompletePendingMainFlyoutShow();
             TraceFlyout("DesktopFlyout opened");
 
             if (_pendingContextMenuPoint.HasValue)
@@ -246,7 +251,7 @@ internal sealed class TrayFlyoutService : IDisposable
             return;
         }
 
-        _isMainFlyoutShowPending = false;
+        CompletePendingMainFlyoutShow();
         _lastMainFlyoutClosedAt = DateTime.UtcNow;
         TraceFlyout("DesktopFlyout closed");
 
@@ -288,6 +293,115 @@ internal sealed class TrayFlyoutService : IDisposable
             TraceFlyout("Showing deferred context menu");
             _contextMenu.Show(menuPoint);
         });
+    }
+
+    private void RequestMainFlyoutShow(Point anchorPoint)
+    {
+        _pendingMainFlyoutPoint = anchorPoint;
+        if (!_isMainFlyoutShowPending)
+        {
+            _isMainFlyoutShowPending = true;
+            _mainFlyoutShowAttempts = 0;
+        }
+
+        ProcessPendingMainFlyoutShow();
+    }
+
+    private void ProcessPendingMainFlyoutShow()
+    {
+        if (_isDisposed || !_isMainFlyoutShowPending || _pendingMainFlyoutPoint is not Point anchorPoint)
+        {
+            return;
+        }
+
+        if (_mainFlyout.IsOpen)
+        {
+            CompletePendingMainFlyoutShow();
+            return;
+        }
+
+        if (_contextMenu.IsOpen)
+        {
+            _contextMenu.Hide();
+            ScheduleMainFlyoutShowRetry(MainFlyoutShowRetryInterval);
+            return;
+        }
+
+        var elapsedSinceClose = DateTime.UtcNow - _lastMainFlyoutClosedAt;
+        if (elapsedSinceClose < TrayLightDismissReopenGuard)
+        {
+            ScheduleMainFlyoutShowRetry(
+                TrayLightDismissReopenGuard - elapsedSinceClose + TimeSpan.FromMilliseconds(20));
+            return;
+        }
+
+        if (_mainFlyoutShowAttempts >= MaxMainFlyoutShowAttempts)
+        {
+            TraceFlyout("DesktopFlyout open request timed out; pending state reset");
+            CancelPendingMainFlyoutShow(disposeUnopenedContent: true);
+            return;
+        }
+
+        try
+        {
+            var panelHeight = GetMainPanelHeight(anchorPoint);
+            EnsureFlyoutContent(panelHeight);
+            ConfigureMainFlyout(panelHeight);
+            _mainFlyout.IsTransitionAnimationEnabled = _uiSettings?.AnimationsEnabled == true;
+            _mainFlyoutShowAttempts++;
+            TraceFlyout($"Requesting DesktopFlyout open. attempt={_mainFlyoutShowAttempts}");
+            _mainFlyout.Show(anchorPoint);
+        }
+        catch (Exception exception)
+        {
+            TraceFlyout($"DesktopFlyout Show failed: {exception.GetType().Name}: {exception.Message}");
+        }
+
+        // Show is intentionally fire-and-forget and can be ignored by the
+        // library during a transition. Retry until IsOpen changes or the
+        // bounded attempt count resets the request.
+        ScheduleMainFlyoutShowRetry(MainFlyoutShowRetryInterval);
+    }
+
+    private void ScheduleMainFlyoutShowRetry(TimeSpan delay)
+    {
+        if (_isDisposed || !_isMainFlyoutShowPending)
+        {
+            return;
+        }
+
+        _mainFlyoutShowRetryTimer.Stop();
+        _mainFlyoutShowRetryTimer.Interval = delay > TimeSpan.Zero
+            ? delay
+            : TimeSpan.FromMilliseconds(1);
+        _mainFlyoutShowRetryTimer.Start();
+    }
+
+    private void MainFlyoutShowRetryTimer_Tick(DispatcherQueueTimer sender, object args)
+    {
+        sender.Stop();
+        ProcessPendingMainFlyoutShow();
+    }
+
+    private void CompletePendingMainFlyoutShow()
+    {
+        _mainFlyoutShowRetryTimer.Stop();
+        _pendingMainFlyoutPoint = null;
+        _mainFlyoutShowAttempts = 0;
+        _isMainFlyoutShowPending = false;
+    }
+
+    private void CancelPendingMainFlyoutShow(bool disposeUnopenedContent)
+    {
+        CompletePendingMainFlyoutShow();
+        if (disposeUnopenedContent
+            && !_mainFlyout.IsOpen
+            && _mainFlyoutIsland.Content is MainPanelControl panel)
+        {
+            panel.OnFlyoutClosed();
+            panel.Dispose();
+            _mainFlyoutIsland.Content = null;
+        }
     }
 
     private void EnsureFlyoutContent(double panelHeight)
