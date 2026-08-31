@@ -182,7 +182,8 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
                 var successful = new List<FeedPollResult>();
                 var subscriptions = await _feedSession.GetSubscriptionsAsync(operationToken)
                     .ConfigureAwait(false);
-                foreach (var subscription in subscriptions.Where(item => item.IsEnabled))
+                foreach (var subscription in subscriptions.Where(item =>
+                    item.IsEnabled && !IsPluginFeed(item, PluginFeedIds.Live)))
                 {
                     operationToken.ThrowIfCancellationRequested();
                     try
