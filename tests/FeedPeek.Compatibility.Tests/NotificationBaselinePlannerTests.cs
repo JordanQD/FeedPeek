@@ -1,5 +1,6 @@
 using BiliRadar.Models;
 using BiliRadar.Services;
+using FeedPeek.Core.Models;
 
 namespace FeedPeek.Compatibility.Tests;
 
@@ -84,6 +85,36 @@ public sealed class NotificationBaselinePlannerTests
         Assert.Equal("BV021", plan.KnownIds[^1]);
     }
 
+    [Fact]
+    public void FeedBatch_AllItemsWithinLimitRemainNotificationCandidates()
+    {
+        var items = Enumerable.Range(1, 8)
+            .Select(index => Feed("rss", "ithome", $"item-{index}", index))
+            .ToList();
+
+        var plan = FeedNotificationBaselinePlanner.ForFeedItems(items, [], true, 20, 80);
+
+        Assert.Equal(8, plan.NewItems.Count);
+        Assert.Equal(8, plan.KnownIds.Count);
+    }
+
+    [Fact]
+    public void FeedIdentity_DistinguishesTheSameItemIdAcrossSources()
+    {
+        var first = Feed("rss", "source-a", "shared", 2);
+        var second = Feed("rss", "source-b", "shared", 1);
+
+        var plan = FeedNotificationBaselinePlanner.ForFeedItems(
+            [first, second],
+            [],
+            true,
+            20,
+            80);
+
+        Assert.Equal(2, plan.NewItems.Count);
+        Assert.Equal(2, plan.KnownIds.Count);
+    }
+
     private static BiliVideoUpdate Video(string id, int minute)
         => new(
             id,
@@ -104,4 +135,26 @@ public sealed class NotificationBaselinePlannerTests
 
     private static BiliLiveCreator Live(long roomId, string name)
         => new(1, roomId, name, string.Empty, "直播", $"https://live.example.test/{roomId}");
+
+    private static FeedItem Feed(
+        string providerId,
+        string sourceId,
+        string itemId,
+        int minute)
+        => new(
+            providerId,
+            sourceId,
+            "updates",
+            itemId,
+            itemId,
+            null,
+            sourceId,
+            null,
+            $"https://example.test/{sourceId}/{itemId}",
+            DateTimeOffset.UnixEpoch.AddMinutes(minute),
+            null,
+            null,
+            null,
+            null,
+            null);
 }

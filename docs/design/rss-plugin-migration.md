@@ -564,7 +564,7 @@ Host.clock.now()
 - 每个订阅拥有最小刷新间隔、退避状态和最后成功时间。
 - 同一插件请求设置并发上限。
 - 支持 `ETag`、`Last-Modified` 和站点游标。
-- 应用启动后的第一次拉取只建立通知基线，不把全部历史内容作为新通知。
+- 每个订阅首次成功拉取只建立通知基线，不把全部历史内容作为新通知；已建立的基线跨应用重启保留。
 - 网络、认证、限流和解析错误分别处理。
 
 ### 11.2 通知
@@ -799,7 +799,7 @@ FeedPeek.PluginWorker.exe
 - Phase 4.4 已迁移网站历史、稍后再看分页及加入/移除 item actions；三个页面继续复用现有 `ListView`，没有引入新控件或修改卡片布局。
 - Phase 4.5 已将 WebView2 登录参数切换为 manifest 驱动，凭据按插件和 profile 存入 Windows Credential Locker；登录验证、账户资料和退出分别通过通用 auth/account 合同。
 - Phase 4.6 已迁移关注列表、直播列表和作者关注操作；网站卡片归属位显示 UP 主名称与头像，直播区域使用官方 `ItemsRepeater + StackLayout`，RSS 卡片仍显示来源。
-- Phase 4.7 已将后台更新/直播通知和自定义作者规则切换到通用 Core 与插件路径；规则使用 `ProviderId + SourceId + CreatorKey`，通知条目和“稍后再看”激活不再以站点 `mid/aid` 作为宿主主键。
+- Phase 4.7 已将后台更新/直播通知和自定义作者规则切换到通用 Core 与插件路径；规则使用 `ProviderId + SourceId + CreatorKey`，通知条目和“稍后再看”激活不再以站点 `mid/aid` 作为宿主主键。通知监控消费 Core 轮询的 `NewItems`，订阅基线跨重启保留，复合去重键使用 JSON 持久化，RSS 批量更新不再因三条上限静默丢弃后续常见批次条目。
 - 登录入口位于“来源”的网站插件卡片，不属于“通用”设置。退出登录会清除该网站来源的本地缓存并刷新已打开面板，避免账户内容在退出后继续显示。
 - `exposedCookieNames` 是插件读取 Cookie 值的显式最小权限清单；Cookie Header 仍只由 Host HTTP 代理注入 manifest 声明域，插件不能直接取得完整 Cookie。
 - 网站列表和动作成功结果是站点 saved 状态的权威来源；本地 SQLite 只缓存结果，同一逻辑条目跨 updates/history/viewLater 同步并去重。RSS saved 状态保持纯本地。

@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\FeedPeek.Core\FeedPeek.Core.csproj" />
+    <ProjectReference Include="..\..\src\FeedPeek.PluginContracts\FeedPeek.PluginContracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -31,6 +32,8 @@
     <Compile Include="..\..\BiliRadar\Services\LegacyVideoPageBuffer.cs" Link="Legacy\LegacyVideoPageBuffer.cs" />
     <Compile Include="..\..\BiliRadar\Services\MockBiliDataProvider.cs" Link="Legacy\MockBiliDataProvider.cs" />
     <Compile Include="..\..\BiliRadar\Services\NotificationBaselinePlanner.cs" Link="Legacy\NotificationBaselinePlanner.cs" />
+    <Compile Include="..\..\BiliRadar\Models\FeedLiveNotificationItem.cs" Link="FeedPeek\FeedLiveNotificationItem.cs" />
+    <Compile Include="..\..\BiliRadar\Services\FeedNotificationBaselinePlanner.cs" Link="FeedPeek\FeedNotificationBaselinePlanner.cs" />
     <None Update="Fixtures\*.json" CopyToOutputDirectory="PreserveNewest" />
     <Using Include="Xunit" />
   </ItemGroup>

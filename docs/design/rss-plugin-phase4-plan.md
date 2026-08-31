@@ -61,7 +61,9 @@
 - 4.7：后台监控改为复用通用 Core、RSS Provider 与站点插件 Runtime；更新通知以 `ProviderId + SourceId + FeedId + ItemId` 去重，直播和自定义作者规则以 `ProviderId + SourceId + CreatorKey` 匹配，不再依赖 `mid/aid` 作为宿主领域标识。
 - 通知标题使用插件返回的作者名称和头像；网站通知的“稍后再看”激活参数携带通用条目键，再由插件 item action 执行。RSS 等不支持该动作的来源不显示此按钮。
 - 通知设置中的旧 `Mid` 规则会在读取时迁移到内置网站的通用作者标识；新增规则通过 `creator.getFollowing` 验证作者。后台通知不再使用 legacy provider，也不再为其镜像新的登录 Cookie。
-- 4.7 完成时 `FeedPeek.Core.Tests` 33 项、`FeedPeek.Compatibility.Tests` 14 项通过，Debug x64 构建 0 警告、0 错误；真实通知弹出、点击打开、稍后再看和自定义作者筛选待人工验收。
+- 4.7 通知收口后，后台只消费 Core 每轮轮询返回的 `NewItems`，不再扫描全部 SQLite 条目另算新旧；订阅首次成功拉取建立基线，之后的通知基线跨应用重启保留。复合条目/直播键改用 JSON 写入 LocalSettings，避免换行分隔破坏 `ProviderId + SourceId + FeedId + ItemId`。
+- RSS 一轮批量更新最多提交 20 条通知，覆盖常见的定时批量发布；通知注册、来源刷新、规则过滤和 App Notification 提交均输出可诊断日志，不再静默吞掉平台异常。
+- 4.7 完成时 `FeedPeek.Core.Tests` 33 项、`FeedPeek.Compatibility.Tests` 16 项通过，Debug x64 构建 0 警告、0 错误；真实通知弹出、点击打开、稍后再看和自定义作者筛选待人工验收。
 
 ## 3. 4.1 结构边界
 
