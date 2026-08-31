@@ -41,6 +41,17 @@ public sealed class PluginRuntimeCatalog : IAsyncDisposable
         IReadOnlySet<string>? disabledPluginIds = null,
         IReadOnlyDictionary<string, string>? expectedPackageHashes = null,
         CancellationToken cancellationToken = default)
+        => await LoadAsync(
+            [pluginsRoot],
+            disabledPluginIds,
+            expectedPackageHashes,
+            cancellationToken).ConfigureAwait(false);
+
+    public async Task<IReadOnlyList<PluginDiscoveryResult>> LoadAsync(
+        IEnumerable<string> pluginRoots,
+        IReadOnlySet<string>? disabledPluginIds = null,
+        IReadOnlyDictionary<string, string>? expectedPackageHashes = null,
+        CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposeState) != 0, this);
         await _lifecycleGate.WaitAsync(cancellationToken);
@@ -49,7 +60,7 @@ public sealed class PluginRuntimeCatalog : IAsyncDisposable
             ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposeState) != 0, this);
             await ClearCoreAsync();
             var discovered = await _discovery.DiscoverAsync(
-                pluginsRoot,
+                pluginRoots,
                 disabledPluginIds,
                 expectedPackageHashes,
                 cancellationToken);

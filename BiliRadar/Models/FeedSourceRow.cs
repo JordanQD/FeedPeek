@@ -30,7 +30,7 @@ public sealed class FeedSourceRow : INotifyPropertyChanged
     public string Endpoint => Source.Options is not null
         && Source.Options.TryGetValue("rss.endpoint", out var endpoint)
             ? endpoint
-            : string.Empty;
+            : ProviderId;
 
     public IReadOnlyList<FeedDefinition> Feeds => Source.Feeds;
 

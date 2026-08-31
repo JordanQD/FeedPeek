@@ -42,6 +42,33 @@
           "title": { "type": "string", "minLength": 1 }
         }
       }
+    },
+    "sourceConfiguration": {
+      "type": ["object", "null"],
+      "required": ["fields", "defaultFeedIds"],
+      "properties": {
+        "fields": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "required": ["key", "label", "kind", "required"],
+            "properties": {
+              "key": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$" },
+              "label": { "type": "string", "minLength": 1, "maxLength": 100 },
+              "kind": { "enum": ["text", "url"] },
+              "required": { "type": "boolean" },
+              "placeholder": { "type": ["string", "null"], "maxLength": 200 },
+              "defaultValue": { "type": ["string", "null"], "maxLength": 2000 }
+            }
+          }
+        },
+        "defaultFeedIds": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        }
+      }
     }
   }
 }

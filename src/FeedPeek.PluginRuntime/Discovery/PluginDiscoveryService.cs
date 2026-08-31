@@ -11,12 +11,29 @@ public sealed class PluginDiscoveryService(PluginManifestLoader? manifestLoader 
         IReadOnlySet<string>? disabledPluginIds = null,
         IReadOnlyDictionary<string, string>? expectedPackageHashes = null,
         CancellationToken cancellationToken = default)
+        => await DiscoverAsync(
+            [pluginsRoot],
+            disabledPluginIds,
+            expectedPackageHashes,
+            cancellationToken).ConfigureAwait(false);
+
+    public async Task<IReadOnlyList<PluginDiscoveryResult>> DiscoverAsync(
+        IEnumerable<string> pluginRoots,
+        IReadOnlySet<string>? disabledPluginIds = null,
+        IReadOnlyDictionary<string, string>? expectedPackageHashes = null,
+        CancellationToken cancellationToken = default)
     {
-        if (!Directory.Exists(pluginsRoot))
-            return [];
+        ArgumentNullException.ThrowIfNull(pluginRoots);
 
         var results = new List<PluginDiscoveryResult>();
-        foreach (var directory in Directory.EnumerateDirectories(pluginsRoot).OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+        var directories = pluginRoots
+            .Where(root => !string.IsNullOrWhiteSpace(root) && Directory.Exists(root))
+            .Select(Path.GetFullPath)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .SelectMany(Directory.EnumerateDirectories)
+            .Where(path => !Path.GetFileName(path).StartsWith(".", StringComparison.Ordinal))
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase);
+        foreach (var directory in directories)
         {
             cancellationToken.ThrowIfCancellationRequested();
             try

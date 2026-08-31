@@ -36,7 +36,7 @@ internal sealed class FeedPeekNotificationSession : IDisposable, IAsyncDisposabl
             "feedpeek.db");
         _store = new SqliteFeedStore(databasePath);
         _pluginRuntime = new FeedPeekPluginRuntime(cookieStore);
-        _providerRegistry = new FeedProviderRegistry([_rssProvider, _pluginRuntime.FeedProvider]);
+        _providerRegistry = new FeedProviderRegistry([_rssProvider]);
         _pollingService = new FeedPollingService(_store, _providerRegistry);
         _feedSession = new FeedSession(_store, _pollingService);
     }
@@ -86,11 +86,20 @@ internal sealed class FeedPeekNotificationSession : IDisposable, IAsyncDisposabl
             async token =>
             {
                 await EnsureInitializedAsync(token).ConfigureAwait(false);
-                var subscription = await FindSiteSubscriptionAsync(PluginFeedIds.Updates, token)
-                    .ConfigureAwait(false);
-                return subscription is null
-                    ? []
-                    : await _pluginRuntime.GetFollowingCreatorsAsync(subscription, token).ConfigureAwait(false);
+                var subscriptions = await _feedSession.GetSubscriptionsAsync(token).ConfigureAwait(false);
+                var creators = new List<CreatorDescriptor>();
+                foreach (var subscription in subscriptions.Where(item =>
+                    item.IsEnabled
+                    && _pluginRuntime.IsPluginProvider(item.ProviderId)
+                    && string.Equals(item.FeedId, PluginFeedIds.Updates, StringComparison.Ordinal)))
+                {
+                    creators.AddRange(await _pluginRuntime.GetFollowingCreatorsAsync(subscription, token)
+                        .ConfigureAwait(false));
+                }
+                return (IReadOnlyList<CreatorDescriptor>)creators
+                    .GroupBy(item => (item.ProviderId, item.SourceId, item.CreatorKey))
+                    .Select(group => group.First())
+                    .ToArray();
             },
             cancellationToken);
 
@@ -100,21 +109,20 @@ internal sealed class FeedPeekNotificationSession : IDisposable, IAsyncDisposabl
             async token =>
             {
                 await EnsureInitializedAsync(token).ConfigureAwait(false);
-                var accountSubscription = await FindSiteSubscriptionAsync(PluginFeedIds.Updates, token)
-                    .ConfigureAwait(false);
-                if (accountSubscription is null)
-                    return [];
-
-                var liveSubscription = BuiltInVideoSitePlugin.CreateLiveSubscription();
-                _pluginRuntime.Register(liveSubscription);
-                var items = await _pluginRuntime.GetLiveItemsAsync(liveSubscription, token)
-                    .ConfigureAwait(false);
-                return (IReadOnlyList<FeedLiveNotificationItem>)items
-                    .Select(item => new FeedLiveNotificationItem(
-                        accountSubscription.ProviderId,
-                        accountSubscription.SourceId,
-                        item))
-                    .ToArray();
+                var subscriptions = await _feedSession.GetSubscriptionsAsync(token).ConfigureAwait(false);
+                var result = new List<FeedLiveNotificationItem>();
+                foreach (var subscription in subscriptions.Where(item =>
+                    item.IsEnabled
+                    && _pluginRuntime.IsPluginProvider(item.ProviderId)
+                    && string.Equals(item.FeedId, PluginFeedIds.Live, StringComparison.Ordinal)))
+                {
+                    var items = await _pluginRuntime.GetLiveItemsAsync(subscription, token).ConfigureAwait(false);
+                    result.AddRange(items.Select(item => new FeedLiveNotificationItem(
+                        subscription.ProviderId,
+                        subscription.SourceId,
+                        item)));
+                }
+                return (IReadOnlyList<FeedLiveNotificationItem>)result.ToArray();
             },
             cancellationToken);
 
@@ -127,7 +135,7 @@ internal sealed class FeedPeekNotificationSession : IDisposable, IAsyncDisposabl
                 await EnsureInitializedAsync(token).ConfigureAwait(false);
                 var stored = await _store.GetItemAsync(key, token).ConfigureAwait(false)
                     ?? throw new InvalidOperationException("找不到通知对应的条目。");
-                if (!string.Equals(stored.Item.ProviderId, BuiltInVideoSitePlugin.PluginId, StringComparison.Ordinal))
+                if (!_pluginRuntime.IsPluginProvider(stored.Item.ProviderId))
                     throw new InvalidOperationException("当前来源不支持稍后再看。");
 
                 var subscriptions = await _feedSession.GetSubscriptionsAsync(token).ConfigureAwait(false);
@@ -155,6 +163,8 @@ internal sealed class FeedPeekNotificationSession : IDisposable, IAsyncDisposabl
 
         await _feedSession.InitializeAsync(cancellationToken).ConfigureAwait(false);
         var pluginLoad = await _pluginRuntime.LoadAsync(cancellationToken).ConfigureAwait(false);
+        foreach (var provider in _pluginRuntime.FeedProviders)
+            _providerRegistry.Register(provider);
         var hasCredentials = pluginLoad.IsAvailable
             && await _pluginRuntime.HasCredentialsAsync(cancellationToken).ConfigureAwait(false);
         var source = BuiltInVideoSitePlugin.CreateSource();
@@ -163,6 +173,12 @@ internal sealed class FeedPeekNotificationSession : IDisposable, IAsyncDisposabl
             await _feedSession.AddSubscriptionAsync(source, subscription, cancellationToken)
                 .ConfigureAwait(false);
             _pluginRuntime.Register(subscription);
+        }
+        foreach (var subscription in await _feedSession.GetSubscriptionsAsync(cancellationToken)
+            .ConfigureAwait(false))
+        {
+            if (_pluginRuntime.IsPluginProvider(subscription.ProviderId))
+                _pluginRuntime.Register(subscription);
         }
         _initialized = true;
     }

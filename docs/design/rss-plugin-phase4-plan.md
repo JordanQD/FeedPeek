@@ -1,6 +1,6 @@
 # FeedPeek Phase 4：站点插件迁移实施计划
 
-> 状态：4.0–4.7 已完成自动验证；4.3–4.4 已人工验收，4.5–4.7 待人工验收
+> 状态：4.0–4.8 已完成自动验证；4.3–4.4 已人工验收，4.5–4.8 待人工验收
 > 基线提交：`9c6dd3e Phase3`  
 > 原则：每个检查点均保持可构建、可回滚；兼容矩阵通过前不删除 legacy 路径。
 
@@ -31,7 +31,7 @@
 - 4.0：Phase 3 基线为 `9c6dd3e`；本计划、兼容矩阵与停止规则由 `53bdc49` 固化。
 - 4.1：新增 auth/source/account/creator/live v1 DTO；新增 `FeedPeek.PluginHost`，提供强类型 `PluginClient`、Runtime Catalog invoker、授权上下文注册表和 `PluginFeedProvider`。
 - `PluginFeedProvider` 已覆盖 updates/history/viewLater 方法路由、opaque cursor、插件结果校验和 `FeedItem` 映射；瞬时直播数据保留独立 `PluginLivePage` 合同，避免丢失直播语义。
-- 默认 WinUI 运行路径尚未切换；未修改 XAML、RSS 行为或 legacy 服务。
+- 4.1 时默认 WinUI 运行路径尚未切换；未修改 XAML、RSS 行为或 legacy 服务。
 - 4.1 完成时现有测试项目共 22 项通过。
 - 4.2：新增仓库维护的内置 `plugins/feedpeek.video-site` JavaScript 插件；从项目自有 legacy 实现重新实现更新解析，没有引入第三方插件代码或品牌资产。
 - 站点插件已实现 handshake/status、更新首刷、opaque cursor 分页、archive/PGC/opus 映射、结构化站点错误和取消传播；登录等未实现能力没有提前写入 capability 列表。
@@ -64,6 +64,10 @@
 - 4.7 通知收口后，后台只消费 Core 每轮轮询返回的 `NewItems`，不再扫描全部 SQLite 条目另算新旧；订阅首次成功拉取建立基线，之后的通知基线跨应用重启保留。复合条目/直播键改用 JSON 写入 LocalSettings，避免换行分隔破坏 `ProviderId + SourceId + FeedId + ItemId`。
 - RSS 一轮批量更新最多提交 20 条通知，覆盖常见的定时批量发布；通知注册、来源刷新、规则过滤和 App Notification 提交均输出可诊断日志，不再静默吞掉平台异常。
 - 4.7 完成时 `FeedPeek.Core.Tests` 33 项、`FeedPeek.Compatibility.Tests` 16 项通过，Debug x64 构建 0 警告、0 错误；真实通知弹出、点击打开、稍后再看和自定义作者筛选待人工验收。
+- 4.8：增加应用数据目录下的用户插件安装区、安装记录、包哈希校验和持久启停状态；Runtime 同时发现内置及用户插件，并为每个启用插件动态注册一个 Provider。未经安装记录授权的目录不会运行。
+- Manifest 新增宿主渲染的 `sourceConfiguration` 字段合同；来源设置页继续复用 `SettingsCard`、`ListView`、`ContentDialog` 和系统 `FolderPicker`，支持安装、启停、卸载及一个网站插件创建多个来源，不接受插件提供 XAML。
+- 插件登录改为按 `pluginId + credentialProfileId` 参数化；每个插件当前使用一个共享 profile。可选登录插件可创建匿名来源，必须登录的插件会在创建来源前拦截；退出登录会移除绑定该 profile 的来源和缓存。
+- 内置网站插件已实现 `source.create/get/listFeeds/delete`，版本升至 1.2.0；面板、作者/直播、条目动作与后台通知按动态 Provider/Source 分发。4.8 完成时 `FeedPeek.Core.Tests` 34 项、`FeedPeek.Compatibility.Tests` 16 项均通过，Debug/Release x64 构建 0 警告、0 错误；动态安装与交互路径待人工验收。
 
 ## 3. 4.1 结构边界
 
@@ -121,6 +125,15 @@ FeedPeek.Core              FeedPeek.PluginContracts
 - 4.1 没有 UI 行为变化，不启动应用；从 4.3 开始由用户执行对应人工交互验收。
 - 任何检查点未通过时停在该检查点修复，不提前删除 legacy 代码。
 - Git 提交按检查点划分；额度不足时停在最近一个已构建通过的提交。
+
+### 6.1 Phase 4.8 人工验收
+
+1. 打开“设置 → 来源”，确认“已安装插件”中可见内置网站插件，已有 RSS 和网站来源都显示在同一个来源列表中。
+2. 对内置网站插件连续执行两次“添加来源”，确认生成两个不同来源；关闭并重新打开设置和托盘面板后，两者仍存在且更新可刷新。
+3. 登录网站插件后添加需要登录的来源；退出登录，确认绑定该账户的来源及内容被清除，RSS 和匿名来源不受影响。
+4. 用“从文件夹安装插件”选择一个合规测试插件目录；关闭并重新打开设置后确认它可添加来源，停用后重新打开托盘面板不再轮询，重新启用后恢复。
+5. 卸载用户插件，确认插件目录、安装记录以及该插件来源被移除；内置插件不显示停用和卸载按钮。
+6. 验证新网站来源的更新通知、UP 主名称/头像、直播和稍后再看动作；插件不声明相应能力时，宿主不应伪造对应操作。
 
 ## 7. 主要风险
 

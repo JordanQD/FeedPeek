@@ -22,3 +22,7 @@ public sealed record PluginFeedDefinition(
 
 public sealed record PluginSourceListResult(
     IReadOnlyList<PluginSourceDefinition> Sources);
+
+public sealed record PluginSourcePayload(PluginInvocationContext Context);
+
+public sealed record PluginSourceDeleteResult(bool Deleted);

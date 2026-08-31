@@ -148,11 +148,11 @@ dotnet build BiliRadar/BiliRadar.csproj -p:Platform=x64 --no-restore
 | Phase 1（通用项目骨架） | ✅ |
 | Phase 2（通用核心与 RSS） | ✅ 已人工验收主路径 |
 | Phase 3（插件合同与 Jint Runtime） | ✅ 18 项必要验证通过，Release x64 构建通过 |
-| Phase 4（站点插件迁移） | 🧪 4.0–4.7 自动验证通过；4.3–4.4 已人工验收，4.5–4.7 待人工验收 |
+| Phase 4（站点插件迁移） | 🧪 4.0–4.8 自动验证通过；4.3–4.4 已人工验收，4.5–4.8 待人工验收 |
 
 Phase 3 生产项目为 `src/FeedPeek.PluginContracts` 与 `src/FeedPeek.PluginRuntime`。Runtime 锁定 Jint 4.16.1；同一插件 realm 串行调用，通过 JSON `IPluginTransport` 保持 transport-neutral。插件只能使用显式 Host Bridge，不开放 CLR、文件系统、进程、注册表、COM 或 WinUI。mock JS fixture 和必要验证复用 `tests/FeedPeek.Core.Tests`，不再新增测试项目。
 
-Phase 4 详细检查点见 `docs/design/rss-plugin-phase4-plan.md`。4.1–4.4 已完成通用 Host、内置 JS、关注/历史/稍后再看和 item actions。4.5 已实现 manifest 驱动 WebView 登录、按插件/profile 隔离的 Credential Locker、auth 合同与插件账户资料；登录入口位于“来源”，退出会清除该网站来源缓存。4.6 已完成 creator/live、卡片 UP 主展示及关注/取消关注；4.7 已将后台通知、自定义作者规则和通知动作切到通用 provider/source/creator/item 标识，并改为消费 Core 轮询产生的新增条目，通知基线跨应用重启保留，复合通知键使用 JSON 持久化。4.8 新增动态插件安装、插件级可选登录和网站多来源配置，legacy 清理顺延至 4.9。当前 `FeedPeek.Core.Tests` 33 项、`FeedPeek.Compatibility.Tests` 16 项通过。
+Phase 4 详细检查点见 `docs/design/rss-plugin-phase4-plan.md`。4.1–4.4 已完成通用 Host、内置 JS、关注/历史/稍后再看和 item actions。4.5 已实现 manifest 驱动 WebView 登录、按插件/profile 隔离的 Credential Locker、auth 合同与插件账户资料；登录入口位于“来源”，退出会清除该网站来源缓存。4.6 已完成 creator/live、卡片 UP 主展示及关注/取消关注；4.7 已将后台通知、自定义作者规则和通知动作切到通用 provider/source/creator/item 标识，并改为消费 Core 轮询产生的新增条目，通知基线跨应用重启保留，复合通知键使用 JSON 持久化。4.8 已完成用户插件安装区、包哈希与启停记录、动态 Provider 注册、manifest 来源表单、插件级可选登录和网站多来源配置，legacy 清理顺延至 4.9。当前 `FeedPeek.Core.Tests` 34 项、`FeedPeek.Compatibility.Tests` 16 项通过，4.8 待人工验收。
 
 ### DesktopFlyouts 迁移
 

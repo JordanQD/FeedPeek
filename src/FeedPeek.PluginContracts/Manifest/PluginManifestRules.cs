@@ -17,6 +17,7 @@ public static class PluginManifestRules
             "creator.relation",
             "item.actions",
             "creator.actions",
+            "source.configuration",
         };
 
     public static IReadOnlySet<string> SupportedAuthKinds { get; } =
@@ -24,4 +25,7 @@ public static class PluginManifestRules
 
     public static IReadOnlySet<string> SupportedViewKinds { get; } =
         new HashSet<string>(StringComparer.Ordinal) { "feed", "collection", "live" };
+
+    public static IReadOnlySet<string> SupportedSourceFieldKinds { get; } =
+        new HashSet<string>(StringComparer.Ordinal) { "text", "url" };
 }

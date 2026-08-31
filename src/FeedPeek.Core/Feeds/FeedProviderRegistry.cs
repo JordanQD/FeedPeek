@@ -15,6 +15,18 @@ public sealed class FeedProviderRegistry : IFeedProviderResolver, IDisposable
         _providers = providers.ToDictionary(provider => provider.ProviderId, StringComparer.Ordinal);
     }
 
+    public void Register(IFeedProvider provider)
+    {
+        ArgumentNullException.ThrowIfNull(provider);
+        _providers[provider.ProviderId] = provider;
+    }
+
+    public bool Unregister(string providerId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(providerId);
+        return _providers.Remove(providerId);
+    }
+
     public IFeedProvider Resolve(string providerId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(providerId);

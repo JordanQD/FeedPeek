@@ -18,6 +18,37 @@ public sealed class VideoSitePluginTests
     private const string PluginId = "feedpeek.video-site";
 
     [Fact]
+    public async Task BuiltInPackage_CreatesMultipleSourcesWithSharedCredentialProfile()
+    {
+        var package = await new PluginManifestLoader().LoadAsync(FixturePluginRoot);
+        var registry = new PluginInvocationRegistry();
+        var first = CreateSourceManagementSubscription("source-first", "shared-profile");
+        var second = CreateSourceManagementSubscription("source-second", "shared-profile");
+        registry.Register(ToContext(first));
+        registry.Register(ToContext(second));
+        await using var runtime = await JintPluginTransport.CreateAsync(
+            package,
+            new PluginHostServices(
+                new FixtureSiteHttpBridge("{}", "{}"),
+                new InMemoryPluginCredentialStore(),
+                NullPluginLogSink.Instance,
+                registry));
+        var sources = new PluginSourceService(
+            PluginId,
+            new PluginClient(new TransportInvoker(runtime)));
+
+        var firstResult = await sources.CreateAsync(first, "第一个来源", null);
+        var secondResult = await sources.CreateAsync(second, "第二个来源", null);
+
+        Assert.Equal("source-first", firstResult.SourceId);
+        Assert.Equal("source-second", secondResult.SourceId);
+        Assert.Equal("shared-profile", firstResult.CredentialProfileId);
+        Assert.Equal("shared-profile", secondResult.CredentialProfileId);
+        Assert.Contains(firstResult.Feeds, feed => feed.FeedId == PluginFeedIds.Updates);
+        Assert.Contains(firstResult.Feeds, feed => feed.FeedId == PluginFeedIds.Live);
+    }
+
+    [Fact]
     public async Task BuiltInPackage_LoadsAndMapsUpdateKindsWithOpaquePaging()
     {
         var package = await new PluginManifestLoader().LoadAsync(FixturePluginRoot);
@@ -373,6 +404,21 @@ public sealed class VideoSitePluginTests
             "视频更新",
             null,
             "credential-default",
+            true,
+            TimeSpan.FromMinutes(15),
+            null);
+
+    private static FeedSubscription CreateSourceManagementSubscription(
+        string sourceId,
+        string credentialProfileId)
+        => new(
+            $"{PluginId}:{sourceId}:management",
+            PluginId,
+            sourceId,
+            "management",
+            "来源管理",
+            null,
+            credentialProfileId,
             true,
             TimeSpan.FromMinutes(15),
             null);

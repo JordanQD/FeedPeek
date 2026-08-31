@@ -19,6 +19,10 @@ namespace BiliRadar.Services;
 
 internal sealed record PluginLoadResult(bool IsAvailable, string? ErrorMessage);
 
+internal sealed record PluginSourceCreationResult(
+    SourceDefinition Source,
+    IReadOnlyList<FeedSubscription> Subscriptions);
+
 internal sealed record PluginLoginDescriptor(
     string PluginId,
     string CredentialProfileId,
@@ -32,10 +36,10 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
     private readonly PluginCredentialProfileStore _credentials = new();
     private readonly PluginHttpBridge _httpBridge;
     private readonly PluginRuntimeCatalog _catalog;
-    private readonly PluginAccountService _account;
-    private readonly PluginAuthService _auth;
-    private readonly PluginItemActionService _itemActions;
-    private readonly PluginCreatorService _creators;
+    private readonly PluginClient _client;
+    private readonly PluginInstallationService _installations = new();
+    private readonly Dictionary<string, PluginPackage> _packages = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, IFeedProvider> _providers = new(StringComparer.Ordinal);
     private PluginPackage? _sitePackage;
     private bool _loaded;
     private bool _disposed;
@@ -49,17 +53,35 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
             _credentials,
             NullPluginLogSink.Instance,
             _invocations));
-        var client = new PluginClient(new PluginRuntimeCatalogInvoker(_catalog));
-        FeedProvider = new PluginFeedProvider(
-            BuiltInVideoSitePlugin.PluginId,
-            client);
-        _account = new PluginAccountService(BuiltInVideoSitePlugin.PluginId, client);
-        _auth = new PluginAuthService(BuiltInVideoSitePlugin.PluginId, client);
-        _itemActions = new PluginItemActionService(BuiltInVideoSitePlugin.PluginId, client);
-        _creators = new PluginCreatorService(BuiltInVideoSitePlugin.PluginId, client);
+        _client = new PluginClient(new PluginRuntimeCatalogInvoker(_catalog));
     }
 
-    public IFeedProvider FeedProvider { get; }
+    public IReadOnlyList<IFeedProvider> FeedProviders => _providers.Values.ToArray();
+
+    public bool IsPluginProvider(string providerId) => _providers.ContainsKey(providerId);
+
+    public PluginManifest? GetManifest(string pluginId)
+        => _packages.TryGetValue(pluginId, out var package) ? package.Manifest : null;
+
+    public Task<IReadOnlyList<PluginManagementEntry>> GetPluginEntriesAsync(
+        CancellationToken cancellationToken = default)
+        => _installations.GetEntriesAsync(cancellationToken);
+
+    public Task<PluginManagementEntry> InstallPluginAsync(
+        string sourceDirectory,
+        CancellationToken cancellationToken = default)
+        => _installations.InstallAsync(sourceDirectory, cancellationToken);
+
+    public Task SetPluginEnabledAsync(
+        string pluginId,
+        bool isEnabled,
+        CancellationToken cancellationToken = default)
+        => _installations.SetEnabledAsync(pluginId, isEnabled, cancellationToken);
+
+    public Task UninstallPluginAsync(
+        string pluginId,
+        CancellationToken cancellationToken = default)
+        => _installations.UninstallAsync(pluginId, cancellationToken);
 
     public async Task<PluginLoadResult> LoadAsync(CancellationToken cancellationToken)
     {
@@ -71,11 +93,25 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
                 null);
         }
 
-        var pluginsRoot = Path.Combine(AppContext.BaseDirectory, "Plugins");
+        var configuration = await _installations.GetLoadConfigurationAsync(cancellationToken)
+            .ConfigureAwait(false);
         var results = await _catalog.LoadAsync(
-            pluginsRoot,
+            configuration.Roots,
+            configuration.DisabledPluginIds,
+            configuration.ExpectedPackageHashes,
             cancellationToken: cancellationToken).ConfigureAwait(false);
         _loaded = true;
+
+        _packages.Clear();
+        _providers.Clear();
+        foreach (var result in results.Where(result => result.IsAvailable && result.Package is not null))
+        {
+            var package = result.Package!;
+            _packages[package.Manifest.PluginId] = package;
+            _providers[package.Manifest.PluginId] = new PluginFeedProvider(
+                package.Manifest.PluginId,
+                _client);
+        }
 
         var sitePlugin = results.FirstOrDefault(result =>
             string.Equals(
@@ -99,15 +135,28 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
     }
 
     public void Register(FeedPeek.Core.Models.FeedSubscription subscription)
-        => _invocations.Register(BuiltInVideoSitePlugin.CreateInvocationContext(subscription));
+        => _invocations.Register(new PluginInvocationContext(
+            subscription.SubscriptionId,
+            subscription.ProviderId,
+            subscription.SourceId,
+            subscription.FeedId,
+            subscription.CredentialProfileId,
+            subscription.Options));
 
     public PluginLoginDescriptor GetLoginDescriptor()
+        => GetLoginDescriptor(
+            BuiltInVideoSitePlugin.PluginId,
+            BuiltInVideoSitePlugin.DefaultCredentialProfileId);
+
+    public PluginLoginDescriptor GetLoginDescriptor(
+        string pluginId,
+        string credentialProfileId)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        var package = _sitePackage
-            ?? throw new InvalidOperationException("内置站点插件尚未加载。");
+        if (!_packages.TryGetValue(pluginId, out var package))
+            throw new InvalidOperationException("网站插件尚未加载或已停用。");
         var auth = package.Manifest.Auth;
-        if (auth?.Required != true
+        if (auth is null
             || !string.Equals(auth.Kind, "webview-cookie", StringComparison.Ordinal)
             || auth.LoginFlow is null)
         {
@@ -116,12 +165,21 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
 
         return new PluginLoginDescriptor(
             package.Manifest.PluginId,
-            BuiltInVideoSitePlugin.DefaultCredentialProfileId,
+            credentialProfileId,
             package.Manifest.DisplayName,
             auth);
     }
 
     public async Task<bool> HasCredentialsAsync(CancellationToken cancellationToken = default)
+        => await HasCredentialsAsync(
+            BuiltInVideoSitePlugin.PluginId,
+            BuiltInVideoSitePlugin.DefaultCredentialProfileId,
+            cancellationToken).ConfigureAwait(false);
+
+    public async Task<bool> HasCredentialsAsync(
+        string pluginId,
+        string credentialProfileId,
+        CancellationToken cancellationToken = default)
     {
         if (!_loaded)
         {
@@ -133,8 +191,8 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
         }
 
         return await _credentials.ExistsAsync(
-            BuiltInVideoSitePlugin.PluginId,
-            BuiltInVideoSitePlugin.DefaultCredentialProfileId,
+            pluginId,
+            credentialProfileId,
             cancellationToken).ConfigureAwait(false);
     }
 
@@ -145,7 +203,7 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(descriptor);
         ArgumentNullException.ThrowIfNull(cookies);
-        if (!string.Equals(descriptor.PluginId, BuiltInVideoSitePlugin.PluginId, StringComparison.Ordinal)
+        if (!_packages.ContainsKey(descriptor.PluginId)
             || descriptor.Auth.LoginFlow is null
             || descriptor.Auth.LoginFlow.SuccessCookieNames.Any(name => !cookies.ContainsKey(name)))
         {
@@ -158,13 +216,16 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
             cookies,
             descriptor.Auth.ExposedCookieNames?.ToHashSet(StringComparer.OrdinalIgnoreCase),
             cancellationToken).ConfigureAwait(false);
-        var subscription = GetAccountSubscription();
+        var subscription = CreateManagementSubscription(
+            descriptor.PluginId,
+            descriptor.CredentialProfileId);
         Register(subscription);
         try
         {
-            var completed = await _auth.CompleteAsync(subscription, cancellationToken)
+            var auth = new PluginAuthService(descriptor.PluginId, _client);
+            var completed = await auth.CompleteAsync(subscription, cancellationToken)
                 .ConfigureAwait(false);
-            var validated = await _auth.ValidateAsync(subscription, cancellationToken)
+            var validated = await auth.ValidateAsync(subscription, cancellationToken)
                 .ConfigureAwait(false);
             if (!string.Equals(completed.State, "authenticated", StringComparison.Ordinal)
                 || !string.Equals(validated.State, "authenticated", StringComparison.Ordinal))
@@ -176,12 +237,24 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
         }
         catch
         {
-            await DeleteCredentialCopiesAsync(cancellationToken).ConfigureAwait(false);
+            await _credentials.DeleteProfileAsync(
+                descriptor.PluginId,
+                descriptor.CredentialProfileId,
+                cancellationToken).ConfigureAwait(false);
             throw;
         }
     }
 
     public async Task BeginAuthenticationAsync(CancellationToken cancellationToken = default)
+        => await BeginAuthenticationAsync(
+            BuiltInVideoSitePlugin.PluginId,
+            BuiltInVideoSitePlugin.DefaultCredentialProfileId,
+            cancellationToken).ConfigureAwait(false);
+
+    public async Task BeginAuthenticationAsync(
+        string pluginId,
+        string credentialProfileId,
+        CancellationToken cancellationToken = default)
     {
         var load = await LoadAsync(cancellationToken).ConfigureAwait(false);
         if (!load.IsAvailable)
@@ -189,9 +262,10 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
             throw new InvalidOperationException(load.ErrorMessage);
         }
 
-        var subscription = GetAccountSubscription();
+        var subscription = CreateManagementSubscription(pluginId, credentialProfileId);
         Register(subscription);
-        var result = await _auth.BeginAsync(subscription, cancellationToken).ConfigureAwait(false);
+        var result = await new PluginAuthService(pluginId, _client)
+            .BeginAsync(subscription, cancellationToken).ConfigureAwait(false);
         if (!string.Equals(result.State, "webviewRequired", StringComparison.Ordinal))
         {
             throw new InvalidOperationException("插件没有启动 WebView 登录流程。");
@@ -228,13 +302,26 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
 
     public async Task ClearCredentialsAsync(CancellationToken cancellationToken = default)
     {
-        if (await HasCredentialsAsync(cancellationToken).ConfigureAwait(false))
+        await ClearCredentialsAsync(
+            BuiltInVideoSitePlugin.PluginId,
+            BuiltInVideoSitePlugin.DefaultCredentialProfileId,
+            cancellationToken).ConfigureAwait(false);
+        await PurgeCachedSourceDataAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task ClearCredentialsAsync(
+        string pluginId,
+        string credentialProfileId,
+        CancellationToken cancellationToken = default)
+    {
+        if (await HasCredentialsAsync(pluginId, credentialProfileId, cancellationToken).ConfigureAwait(false))
         {
-            var subscription = GetAccountSubscription();
+            var subscription = CreateManagementSubscription(pluginId, credentialProfileId);
             Register(subscription);
             try
             {
-                await _auth.ClearAsync(subscription, cancellationToken).ConfigureAwait(false);
+                await new PluginAuthService(pluginId, _client)
+                    .ClearAsync(subscription, cancellationToken).ConfigureAwait(false);
             }
             catch
             {
@@ -242,15 +329,30 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
             }
         }
 
-        await DeleteCredentialCopiesAsync(cancellationToken).ConfigureAwait(false);
-        await PurgeCachedSourceDataAsync(cancellationToken).ConfigureAwait(false);
+        await _credentials.DeleteProfileAsync(pluginId, credentialProfileId, cancellationToken)
+            .ConfigureAwait(false);
+        if (string.Equals(pluginId, BuiltInVideoSitePlugin.PluginId, StringComparison.Ordinal)
+            && string.Equals(credentialProfileId, BuiltInVideoSitePlugin.DefaultCredentialProfileId, StringComparison.Ordinal))
+        {
+            using var legacyAuth = new BiliKernelAuthService(_legacyCookieStore);
+            await legacyAuth.SignOutAsync(cancellationToken).ConfigureAwait(false);
+        }
         PluginAccountEvents.RaiseChanged();
     }
 
     public async Task<PluginAccountProfile?> GetAccountProfileAsync(
         CancellationToken cancellationToken = default)
+        => await GetAccountProfileAsync(
+            BuiltInVideoSitePlugin.PluginId,
+            BuiltInVideoSitePlugin.DefaultCredentialProfileId,
+            cancellationToken).ConfigureAwait(false);
+
+    public async Task<PluginAccountProfile?> GetAccountProfileAsync(
+        string pluginId,
+        string credentialProfileId,
+        CancellationToken cancellationToken = default)
     {
-        if (!await HasCredentialsAsync(cancellationToken).ConfigureAwait(false))
+        if (!await HasCredentialsAsync(pluginId, credentialProfileId, cancellationToken).ConfigureAwait(false))
         {
             return null;
         }
@@ -261,11 +363,12 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
             throw new InvalidOperationException(load.ErrorMessage);
         }
 
-        var subscription = GetAccountSubscription();
+        var subscription = CreateManagementSubscription(pluginId, credentialProfileId);
         Register(subscription);
         try
         {
-            return await _account.GetProfileAsync(subscription, cancellationToken).ConfigureAwait(false);
+            return await new PluginAccountService(pluginId, _client)
+                .GetProfileAsync(subscription, cancellationToken).ConfigureAwait(false);
         }
         catch (PluginInvocationException exception) when (
             string.Equals(exception.Code, "AUTH_EXPIRED", StringComparison.Ordinal))
@@ -281,24 +384,27 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
         CancellationToken cancellationToken)
     {
         var actionId = isSaved ? "viewLater.add" : "viewLater.remove";
-        var actions = await _itemActions.GetActionsAsync(subscription, item, cancellationToken)
+        var itemActions = new PluginItemActionService(subscription.ProviderId, _client);
+        var actions = await itemActions.GetActionsAsync(subscription, item, cancellationToken)
             .ConfigureAwait(false);
         var action = actions.FirstOrDefault(candidate =>
             string.Equals(candidate.ActionId, actionId, StringComparison.Ordinal))
             ?? throw new InvalidOperationException("站点插件没有为当前条目提供稍后再看操作。");
-        await _itemActions.ExecuteAsync(subscription, action, cancellationToken)
+        await itemActions.ExecuteAsync(subscription, action, cancellationToken)
             .ConfigureAwait(false);
     }
 
     public Task<IReadOnlyList<CreatorDescriptor>> GetFollowingCreatorsAsync(
         FeedSubscription subscription,
         CancellationToken cancellationToken = default)
-        => _creators.GetFollowingAsync(subscription, cancellationToken);
+        => new PluginCreatorService(subscription.ProviderId, _client)
+            .GetFollowingAsync(subscription, cancellationToken);
 
     public Task<IReadOnlyList<PluginLiveItem>> GetLiveItemsAsync(
         FeedSubscription subscription,
         CancellationToken cancellationToken = default)
-        => _creators.GetLiveAsync(subscription, cancellationToken);
+        => new PluginCreatorService(subscription.ProviderId, _client)
+            .GetLiveAsync(subscription, cancellationToken);
 
     public Task<ActionDescriptor[]> GetCreatorActionsAsync(
         FeedSubscription subscription,
@@ -307,7 +413,7 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
     {
         if (string.IsNullOrWhiteSpace(item.CreatorKey))
             return Task.FromResult(Array.Empty<ActionDescriptor>());
-        return _creators.GetActionsAsync(
+        return new PluginCreatorService(subscription.ProviderId, _client).GetActionsAsync(
             subscription,
             item.CreatorKey,
             item.Metadata,
@@ -322,11 +428,90 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
     {
         if (string.IsNullOrWhiteSpace(item.CreatorKey))
             throw new InvalidOperationException("当前条目没有可操作的作者标识。");
-        return _creators.ExecuteAsync(
+        return new PluginCreatorService(subscription.ProviderId, _client).ExecuteAsync(
             subscription,
             item.CreatorKey,
             action,
             cancellationToken);
+    }
+
+    public async Task<PluginSourceCreationResult> CreateSourceAsync(
+        string pluginId,
+        string displayName,
+        IReadOnlyDictionary<string, string>? options,
+        string? credentialProfileId,
+        IReadOnlyCollection<string>? selectedFeedIds = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(pluginId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
+        if (!_packages.TryGetValue(pluginId, out var package))
+            throw new InvalidOperationException("网站插件尚未加载或已停用。");
+        if (package.Manifest.Auth?.Required == true
+            && (string.IsNullOrWhiteSpace(credentialProfileId)
+                || !await HasCredentialsAsync(pluginId, credentialProfileId, cancellationToken).ConfigureAwait(false)))
+        {
+            throw new InvalidOperationException("此网站来源需要先登录。");
+        }
+
+        var sourceId = $"source-{Guid.NewGuid():N}";
+        var management = CreateManagementSubscription(
+            pluginId,
+            credentialProfileId,
+            sourceId,
+            options);
+        Register(management);
+        var definition = await new PluginSourceService(pluginId, _client)
+            .CreateAsync(management, displayName.Trim(), options, cancellationToken)
+            .ConfigureAwait(false);
+        ValidateSourceDefinition(pluginId, sourceId, credentialProfileId, definition);
+
+        var feeds = definition.Feeds.Select(feed => new FeedDefinition(
+            feed.FeedId,
+            feed.DisplayName,
+            feed.Kind,
+            feed.SupportsPaging,
+            feed.SupportsNotifications)).ToArray();
+        var selected = selectedFeedIds is { Count: > 0 }
+            ? selectedFeedIds.ToHashSet(StringComparer.Ordinal)
+            : package.Manifest.SourceConfiguration?.DefaultFeedIds?.ToHashSet(StringComparer.Ordinal)
+                ?? feeds.Select(feed => feed.FeedId).ToHashSet(StringComparer.Ordinal);
+        var source = new SourceDefinition(
+            pluginId,
+            sourceId,
+            definition.DisplayName,
+            credentialProfileId,
+            feeds,
+            definition.Options);
+        var subscriptions = feeds.Where(feed => selected.Contains(feed.FeedId))
+            .Select(feed => new FeedSubscription(
+                $"{pluginId}:{sourceId}:{feed.FeedId}",
+                pluginId,
+                sourceId,
+                feed.FeedId,
+                $"{definition.DisplayName} · {feed.DisplayName}",
+                Endpoint: null,
+                credentialProfileId,
+                IsEnabled: true,
+                TimeSpan.FromMinutes(15),
+                definition.Options))
+            .ToArray();
+        if (subscriptions.Length == 0)
+            throw new InvalidOperationException("至少要选择一个来源视图。");
+        foreach (var subscription in subscriptions)
+            Register(subscription);
+        return new PluginSourceCreationResult(source, subscriptions);
+    }
+
+    public async Task DeleteSourceAsync(
+        FeedSubscription subscription,
+        CancellationToken cancellationToken = default)
+    {
+        if (!IsPluginProvider(subscription.ProviderId))
+            return;
+        Register(subscription);
+        await new PluginSourceService(subscription.ProviderId, _client)
+            .DeleteAsync(subscription, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task MigrateLegacyCredentialAsync(CancellationToken cancellationToken)
@@ -354,6 +539,40 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
 
     private static FeedSubscription GetAccountSubscription()
         => BuiltInVideoSitePlugin.CreateSubscriptions(isEnabled: true)[0];
+
+    private static FeedSubscription CreateManagementSubscription(
+        string pluginId,
+        string? credentialProfileId,
+        string sourceId = "account-default",
+        IReadOnlyDictionary<string, string>? options = null)
+        => new(
+            $"{pluginId}:{sourceId}:management",
+            pluginId,
+            sourceId,
+            "management",
+            "插件管理",
+            Endpoint: null,
+            credentialProfileId,
+            IsEnabled: true,
+            TimeSpan.FromMinutes(15),
+            options);
+
+    private static void ValidateSourceDefinition(
+        string pluginId,
+        string sourceId,
+        string? credentialProfileId,
+        PluginSourceDefinition definition)
+    {
+        if (!string.Equals(definition.ProviderId, pluginId, StringComparison.Ordinal)
+            || !string.Equals(definition.SourceId, sourceId, StringComparison.Ordinal)
+            || !string.Equals(definition.CredentialProfileId, credentialProfileId, StringComparison.Ordinal)
+            || string.IsNullOrWhiteSpace(definition.DisplayName)
+            || definition.Feeds.Count == 0
+            || definition.Feeds.Any(feed => string.IsNullOrWhiteSpace(feed.FeedId)))
+        {
+            throw new InvalidOperationException("插件返回了无效的来源定义。");
+        }
+    }
 
     private async Task DeleteCredentialCopiesAsync(CancellationToken cancellationToken)
     {

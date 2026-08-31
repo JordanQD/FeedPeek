@@ -131,10 +131,55 @@ public sealed partial class PluginManifestLoader
                 throw new PluginManifestException("VIEW_TITLE_INVALID", $"View {view.Id} has no title.");
         }
 
+        ValidateSourceConfiguration(manifest);
+
         foreach (var file in EnumeratePackageFiles(root))
         {
             if (ForbiddenExtensions.Contains(Path.GetExtension(file)))
                 throw new PluginManifestException("EXECUTABLE_CONTENT_FORBIDDEN", $"Executable content is not allowed: {Path.GetFileName(file)}");
+        }
+    }
+
+    private static void ValidateSourceConfiguration(PluginManifest manifest)
+    {
+        var configuration = manifest.SourceConfiguration;
+        if (configuration is null)
+            return;
+        if (!manifest.Capabilities.Contains("source.configuration", StringComparer.Ordinal))
+            throw new PluginManifestException("SOURCE_CONFIGURATION_CAPABILITY_MISSING", "sourceConfiguration requires the source.configuration capability.");
+        if (configuration.Fields is null || configuration.Fields.Count > 20)
+            throw new PluginManifestException("SOURCE_CONFIGURATION_INVALID", "sourceConfiguration.fields is required and may contain at most 20 fields.");
+
+        var keys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var field in configuration.Fields)
+        {
+            if (string.IsNullOrWhiteSpace(field.Key)
+                || field.Key.Length > 64
+                || !char.IsLetter(field.Key[0])
+                || field.Key.Any(character => !char.IsLetterOrDigit(character) && character is not ('.' or '_' or '-'))
+                || !keys.Add(field.Key))
+            {
+                throw new PluginManifestException("SOURCE_FIELD_KEY_INVALID", "Source field keys must be unique safe identifiers.");
+            }
+            if (string.IsNullOrWhiteSpace(field.Label) || field.Label.Length > 100)
+                throw new PluginManifestException("SOURCE_FIELD_LABEL_INVALID", $"Source field {field.Key} has an invalid label.");
+            if (!PluginManifestRules.SupportedSourceFieldKinds.Contains(field.Kind))
+                throw new PluginManifestException("SOURCE_FIELD_KIND_UNSUPPORTED", $"Unsupported source field kind: {field.Kind}");
+            if (field.Placeholder?.Length > 200 || field.DefaultValue?.Length > 2000)
+                throw new PluginManifestException("SOURCE_FIELD_VALUE_TOO_LONG", $"Source field {field.Key} contains an oversized default or placeholder.");
+            if (string.Equals(field.Kind, "url", StringComparison.Ordinal)
+                && !string.IsNullOrWhiteSpace(field.DefaultValue))
+            {
+                ValidateHttpsUrl(field.DefaultValue, $"sourceConfiguration.fields.{field.Key}.defaultValue");
+            }
+        }
+
+        EnsureUnique(configuration.DefaultFeedIds, "sourceConfiguration.defaultFeedIds");
+        var viewIds = manifest.Views.Select(view => view.Id).ToHashSet(StringComparer.Ordinal);
+        foreach (var feedId in configuration.DefaultFeedIds)
+        {
+            if (!viewIds.Contains(feedId))
+                throw new PluginManifestException("SOURCE_DEFAULT_FEED_INVALID", $"Unknown default feed id: {feedId}");
         }
     }
 

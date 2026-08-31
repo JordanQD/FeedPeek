@@ -62,6 +62,7 @@ internal static class BuiltInVideoSitePlugin
             CreateSubscription(UpdatesSubscriptionId, PluginFeedIds.Updates, "哔哩哔哩关注更新", isEnabled),
             CreateSubscription(HistorySubscriptionId, PluginFeedIds.History, "哔哩哔哩历史记录", isEnabled),
             CreateSubscription(ViewLaterSubscriptionId, PluginFeedIds.ViewLater, "哔哩哔哩稍后再看", isEnabled),
+            CreateSubscription(LiveSubscriptionId, PluginFeedIds.Live, "哔哩哔哩正在直播", isEnabled),
         ];
 
     public static FeedSubscription CreateLiveSubscription()

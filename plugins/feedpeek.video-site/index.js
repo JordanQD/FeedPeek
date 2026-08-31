@@ -14,15 +14,83 @@
   const modifyRelationEndpoint = 'https://api.bilibili.com/x/relation/modify';
   const browserUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
+  const feedDefinitions = Object.freeze([
+    Object.freeze({ feedId: 'updates', displayName: '更新', kind: 'feed', supportsPaging: true, supportsNotifications: true }),
+    Object.freeze({ feedId: 'history', displayName: '历史记录', kind: 'feed', supportsPaging: true, supportsNotifications: false }),
+    Object.freeze({ feedId: 'viewLater', displayName: '稍后再看', kind: 'collection', supportsPaging: true, supportsNotifications: false }),
+    Object.freeze({ feedId: 'live', displayName: '正在直播', kind: 'live', supportsPaging: false, supportsNotifications: true })
+  ]);
+
+  // Source state belongs to this plugin realm. Each source keeps its own
+  // identity/options, while all sources may share the context credential profile.
+  const sourceDefinitions = new Map();
+
   const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
   const objectOrEmpty = value => isObject(value) ? value : {};
   const arrayOrEmpty = value => Array.isArray(value) ? value : [];
-
   const text = value => {
     if (typeof value === 'string') return value.trim();
     if (typeof value === 'number' && Number.isFinite(value)) return String(value);
     return '';
   };
+
+  const sourceContext = payload => {
+    const context = objectOrEmpty(payload?.context);
+    if (context.providerId !== pluginId || !text(context.sourceId)) {
+      Host.raise('REQUEST_CONTEXT_INVALID', '来源上下文无效，必须包含非空 sourceId。');
+    }
+    return context;
+  };
+
+  const copyOptions = value => {
+    if (!isObject(value)) return null;
+    const options = {};
+    for (const key of Object.keys(value)) {
+      const option = text(value[key]);
+      if (key && option) options[key] = option;
+    }
+    return Object.keys(options).length > 0 ? options : null;
+  };
+
+  const createSourceDefinition = (context, displayName, options) => ({
+    providerId: pluginId,
+    sourceId: text(context.sourceId),
+    displayName: text(displayName) || `视频站点 · ${text(context.sourceId)}`,
+    credentialProfileId: text(context.credentialProfileId) || null,
+    feeds: feedDefinitions.map(feed => ({ ...feed })),
+    options: copyOptions(options) || copyOptions(context.options)
+  });
+
+  const getSourceDefinition = context => {
+    const source = sourceDefinitions.get(text(context.sourceId));
+    if (!source) Host.raise('SOURCE_NOT_FOUND', `来源不存在：${text(context.sourceId)}`);
+    return source;
+  };
+
+  const createSource = payload => {
+    const context = sourceContext(payload);
+    const source = createSourceDefinition(context, payload?.displayName, payload?.options);
+    sourceDefinitions.set(source.sourceId, source);
+    return source;
+  };
+
+  const getSource = payload => getSourceDefinition(sourceContext(payload));
+
+  const listSourceFeeds = payload => ({
+    sources: [getSourceDefinition(sourceContext(payload))]
+  });
+
+  const deleteSource = payload => {
+    const context = sourceContext(payload);
+    return { deleted: sourceDefinitions.delete(text(context.sourceId)) };
+  };
+
+  // Keep the original built-in source addressable for existing subscriptions.
+  sourceDefinitions.set('account-default', createSourceDefinition({
+    sourceId: 'account-default',
+    credentialProfileId: 'account-default',
+    options: null
+  }, '视频站点', null));
 
   const integer = value => {
     if (typeof value === 'number' && Number.isFinite(value)) return Math.trunc(value);
@@ -611,7 +679,7 @@
           return {
             providerId: pluginId,
             apiVersion: 1,
-            capabilities: ['feed.updates', 'account.auth', 'account.profile', 'account.history', 'collection.viewLater', 'item.actions', 'creator.following', 'creator.actions', 'feed.live']
+            capabilities: ['feed.updates', 'account.auth', 'account.profile', 'account.history', 'collection.viewLater', 'item.actions', 'creator.following', 'creator.actions', 'feed.live', 'source.configuration']
           };
         case 'plugin.getStatus':
           return { state: 'ready', message: null, details: null };
@@ -623,6 +691,14 @@
           return validateAuthentication(request.payload);
         case 'auth.clear':
           return { state: 'signedOut', profile: null, message: null };
+        case 'source.create':
+          return createSource(request.payload);
+        case 'source.get':
+          return getSource(request.payload);
+        case 'source.listFeeds':
+          return listSourceFeeds(request.payload);
+        case 'source.delete':
+          return deleteSource(request.payload);
         case 'feed.getUpdates':
           if (text(request.payload?.cursor)) Host.raise('CURSOR_UNEXPECTED', '首次更新请求不能携带游标。');
           return loadUpdates(request.payload);

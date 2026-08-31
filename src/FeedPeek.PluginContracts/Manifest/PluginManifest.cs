@@ -10,7 +10,8 @@ public sealed record PluginManifest(
     IReadOnlyList<string> Capabilities,
     PluginAuthManifest? Auth,
     PluginNetworkManifest Network,
-    IReadOnlyList<PluginViewManifest> Views);
+    IReadOnlyList<PluginViewManifest> Views,
+    PluginSourceConfigurationManifest? SourceConfiguration = null);
 
 public sealed record PluginAuthManifest(
     bool Required,
@@ -33,3 +34,15 @@ public sealed record PluginViewManifest(
     string Id,
     string Kind,
     string Title);
+
+public sealed record PluginSourceConfigurationManifest(
+    IReadOnlyList<PluginSourceFieldManifest> Fields,
+    IReadOnlyList<string> DefaultFeedIds);
+
+public sealed record PluginSourceFieldManifest(
+    string Key,
+    string Label,
+    string Kind,
+    bool Required,
+    string? Placeholder,
+    string? DefaultValue);

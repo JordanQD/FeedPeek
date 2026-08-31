@@ -20,11 +20,26 @@ public sealed partial class WebSignInWindow : Window
 
     private readonly FeedPeekPluginRuntime _pluginRuntime;
     private readonly AppWindow _appWindow;
+    private readonly string _pluginId;
+    private readonly string _credentialProfileId;
     private PluginLoginDescriptor? _login;
     private bool _isCookieSaved;
 
     public WebSignInWindow(CookieStore cookieStore)
+        : this(
+            cookieStore,
+            BuiltInVideoSitePlugin.PluginId,
+            BuiltInVideoSitePlugin.DefaultCredentialProfileId)
     {
+    }
+
+    internal WebSignInWindow(
+        CookieStore cookieStore,
+        string pluginId,
+        string credentialProfileId)
+    {
+        _pluginId = pluginId;
+        _credentialProfileId = credentialProfileId;
         _pluginRuntime = new FeedPeekPluginRuntime(cookieStore);
         InitializeComponent();
 
@@ -53,8 +68,8 @@ public sealed partial class WebSignInWindow : Window
                 throw new InvalidOperationException(load.ErrorMessage);
             }
 
-            _login = _pluginRuntime.GetLoginDescriptor();
-            await _pluginRuntime.BeginAuthenticationAsync();
+            _login = _pluginRuntime.GetLoginDescriptor(_pluginId, _credentialProfileId);
+            await _pluginRuntime.BeginAuthenticationAsync(_pluginId, _credentialProfileId);
             _appWindow.Title = $"{_login.DisplayName} 登录";
             titleBar.Title = _appWindow.Title;
             foreach (var domain in _login.Auth.CookieDomains)

@@ -37,48 +37,50 @@
 
             <TextBlock Style="{StaticResource SettingsSectionHeaderTextBlockStyle}" Text="网站插件" />
             <controls:SettingsCard
-                x:Name="VideoSitePluginCard"
-                Description="登录为此网站插件下需要账户权限的来源授权；无需登录的来源不受影响。"
-                Header="哔哩哔哩"
+                Description="每个插件对应一个网站；同一网站可以添加多个来源，并共享该插件的登录状态。"
+                Header="已安装插件"
                 HorizontalContentAlignment="Stretch">
                 <controls:SettingsCard.HeaderIcon>
-                    <FontIcon Glyph="&#xE774;" />
+                    <FontIcon Glyph="&#xE74C;" />
                 </controls:SettingsCard.HeaderIcon>
-                <Grid ColumnSpacing="16">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <PersonPicture
-                        x:Name="SiteAccountAvatar"
-                        Width="32"
-                        Height="32"
-                        VerticalAlignment="Center" />
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
-                        <TextBlock
-                            x:Name="SiteAccountNameText"
-                            Style="{ThemeResource BodyStrongTextBlockStyle}"
-                            Text="未登录" />
-                        <TextBlock
-                            x:Name="SiteAccountDetailText"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                            Text="登录状态由此网站下需要账户权限的来源共享。"
-                            TextWrapping="Wrap" />
-                    </StackPanel>
-                    <Button
-                        x:Name="SiteLoginActionButton"
-                        Grid.Column="2"
-                        Width="40"
-                        Height="40"
-                        Padding="0"
-                        VerticalAlignment="Center"
-                        AutomationProperties.Name="网站插件登录操作"
-                        Click="SiteLoginActionButton_Click"
-                        ToolTipService.ToolTip="网页登录">
-                        <FontIcon x:Name="SiteLoginActionIcon" Glyph="&#xE77B;" />
-                    </Button>
-                </Grid>
+                <StackPanel Spacing="8">
+                    <ListView
+                        x:Name="PluginsListView"
+                        IsItemClickEnabled="False"
+                        IsSwipeEnabled="False"
+                        SelectionMode="None">
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem">
+                                <Setter Property="Padding" Value="0" />
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="IsTabStop" Value="False" />
+                            </Style>
+                        </ListView.ItemContainerStyle>
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="models:PluginSettingsRow">
+                                <Grid Padding="8" ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="2">
+                                        <TextBlock FontWeight="SemiBold" Text="{x:Bind DisplayName}" />
+                                        <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="{x:Bind Detail}" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                                        <Button Click="PluginLoginButton_Click" Content="账户" DataContext="{x:Bind}" IsEnabled="{x:Bind HasLogin}" />
+                                        <Button Click="AddPluginSourceButton_Click" Content="添加来源" DataContext="{x:Bind}" IsEnabled="{x:Bind CanConfigureSource}" />
+                                        <Button Click="TogglePluginButton_Click" Content="{x:Bind ToggleLabel}" DataContext="{x:Bind}" Visibility="{x:Bind UserManagementVisibility}" />
+                                        <Button Click="UninstallPluginButton_Click" DataContext="{x:Bind}" Style="{StaticResource SubtleButtonStyle}" ToolTipService.ToolTip="卸载插件" Visibility="{x:Bind UserManagementVisibility}">
+                                            <FontIcon Glyph="&#xE74D;" />
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                    <Button x:Name="InstallPluginButton" HorizontalAlignment="Left" Click="InstallPluginButton_Click" Content="从文件夹安装插件" />
+                </StackPanel>
             </controls:SettingsCard>
 
             <TextBlock Style="{StaticResource SettingsSectionHeaderTextBlockStyle}" Text="添加 RSS 来源" />
@@ -111,7 +113,7 @@
                 IsClosable="True"
                 IsOpen="False" />
 
-            <TextBlock Margin="0,12,0,0" Style="{StaticResource SettingsSectionHeaderTextBlockStyle}" Text="已添加的 RSS 来源" />
+            <TextBlock Margin="0,12,0,0" Style="{StaticResource SettingsSectionHeaderTextBlockStyle}" Text="已添加的来源" />
             <controls:SettingsCard HorizontalContentAlignment="Stretch">
                 <Grid MinHeight="180">
                     <ListView
@@ -169,7 +171,7 @@
                         VerticalAlignment="Center"
                         Spacing="8">
                         <FontIcon HorizontalAlignment="Center" FontSize="28" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Glyph="&#xE774;" />
-                        <TextBlock FontWeight="SemiBold" Text="还没有 RSS 来源" />
+                        <TextBlock FontWeight="SemiBold" Text="还没有来源" />
                     </StackPanel>
                 </Grid>
             </controls:SettingsCard>
