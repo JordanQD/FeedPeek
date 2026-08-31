@@ -1,9 +1,9 @@
 {
   "profiles": {
-    "FeedPeek Preview (Package)": {
+    "FeedPeek (Package)": {
       "commandName": "MsixPackage"
     },
-    "FeedPeek Preview (Unpackaged)": {
+    "FeedPeek (Unpackaged)": {
       "commandName": "Project"
     }
   }

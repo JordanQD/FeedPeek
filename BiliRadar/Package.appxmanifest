@@ -17,7 +17,7 @@
   <mp:PhoneIdentity PhoneProductId="23003471-ae17-4749-9f8d-70d18b9c50c5" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
   <Properties>
-    <DisplayName>FeedPeek Preview</DisplayName>
+    <DisplayName>FeedPeek</DisplayName>
     <PublisherDisplayName>Jordan_QD</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
@@ -37,8 +37,8 @@
       Executable="BiliRadar.exe"
       EntryPoint="$targetentrypoint$">
       <uap:VisualElements
-        DisplayName="FeedPeek Preview"
-        Description="通用更新查看器（预览版）"
+        DisplayName="FeedPeek"
+        Description="通用更新查看器"
         BackgroundColor="#000000"
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png">
@@ -50,11 +50,11 @@
           <desktop:ToastNotificationActivation ToastActivatorCLSID="B3236FC5-4B54-46E5-AC8C-5538956807C5" />
         </desktop:Extension>
         <desktop:Extension Category="windows.startupTask" Executable="BiliRadar.exe" EntryPoint="Windows.FullTrustApplication">
-          <desktop:StartupTask TaskId="FeedPeekPreviewStartupTask" Enabled="false" DisplayName="FeedPeek Preview" />
+          <desktop:StartupTask TaskId="FeedPeekPreviewStartupTask" Enabled="false" DisplayName="FeedPeek" />
         </desktop:Extension>
         <com:Extension Category="windows.comServer">
           <com:ComServer>
-            <com:ExeServer Executable="BiliRadar.exe" DisplayName="FeedPeek Preview" Arguments="----AppNotificationActivated:">
+            <com:ExeServer Executable="BiliRadar.exe" DisplayName="FeedPeek" Arguments="----AppNotificationActivated:">
               <com:Class Id="B3236FC5-4B54-46E5-AC8C-5538956807C5" />
             </com:ExeServer>
           </com:ComServer>

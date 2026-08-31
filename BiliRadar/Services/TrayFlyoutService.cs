@@ -82,7 +82,7 @@ internal sealed class TrayFlyoutService : IDisposable
         _mainFlyoutShowRetryTimer.IsRepeating = false;
         _mainFlyoutShowRetryTimer.Tick += MainFlyoutShowRetryTimer_Tick;
 
-        _trayIcon = new SystemTrayIcon(GetIconPath(), "FeedPeek Preview", TrayIconGuid);
+        _trayIcon = new SystemTrayIcon(GetIconPath(), "FeedPeek", TrayIconGuid);
         _trayIcon.LeftClicked += OnTrayIconLeftClicked;
         _trayIcon.RightClicked += OnTrayIconRightClicked;
         _trayIcon.Show();

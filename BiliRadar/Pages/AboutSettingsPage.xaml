@@ -47,8 +47,8 @@
                 x:Name="AboutExpander"
                 x:Uid="AboutExpander"
                 Margin="0,0,0,12"
-                Description="一个放在任务栏托盘里的 B 站动态雷达。"
-                Header="FeedPeek Preview"
+                Description="一个驻留在任务栏托盘中的通用更新查看器。"
+                Header="FeedPeek"
                 IsExpanded="True">
                 <controls:SettingsExpander.HeaderIcon>
                     <BitmapIcon
@@ -71,7 +71,7 @@
                             FontFamily="Consolas"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                             IsTextSelectionEnabled="True"
-                            Text="git clone https://github.com/JordanQD/BiliRadar.git" />
+                            Text="git clone https://github.com/JordanQD/FeedPeek.git" />
                         <controls:SettingsCard.ActionIcon>
                             <FontIcon Glyph="&#xE8C8;" />
                         </controls:SettingsCard.ActionIcon>
@@ -84,7 +84,7 @@
                         IsClickEnabled="True">
                         <TextBlock
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                            Text="JordanQD/BiliRadar" />
+                            Text="JordanQD/FeedPeek" />
                         <controls:SettingsCard.ActionIcon>
                             <FontIcon Glyph="&#xE8A7;" />
                         </controls:SettingsCard.ActionIcon>

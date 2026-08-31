@@ -106,7 +106,7 @@
                     AutomationProperties.AutomationId="CustomLaunchWebPageUrlBox"
                     AutomationProperties.Name="自定义网页"
                     LostFocus="CustomLaunchWebPageUrlBox_LostFocus"
-                    PlaceholderText="https://www.bilibili.com/"
+                    PlaceholderText="https://github.com/JordanQD/FeedPeek"
                     TextChanged="CustomLaunchWebPageUrlBox_TextChanged" />
             </controls:SettingsCard>
             <controls:SettingsCard

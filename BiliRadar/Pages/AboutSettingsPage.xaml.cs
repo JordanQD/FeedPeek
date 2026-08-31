@@ -10,7 +10,7 @@ namespace BiliRadar.Pages;
 
 public sealed partial class AboutSettingsPage : Page
 {
-    private const string IssuesUrl = "https://github.com/JordanQD/BiliRadar/issues";
+    private const string IssuesUrl = "https://github.com/JordanQD/FeedPeek/issues";
 
     public string Version => GetVersionText();
 

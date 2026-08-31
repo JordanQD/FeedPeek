@@ -28,6 +28,7 @@ public partial class App : Application
     public App()
     {
         _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
+        AppDataMigrationService.Run();
         LocalizationHelper.SetLanguage(AppSettings.AppLanguage);
         InitializeComponent();
         InitializeNotifications();
@@ -140,7 +141,7 @@ public partial class App : Application
             else
             {
                 var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "Square44x44Logo.targetsize-24_altform-unplated.png");
-                _notificationManager.Register("FeedPeek Preview", new Uri(iconPath));
+                _notificationManager.Register("FeedPeek", new Uri(iconPath));
                 NotificationService.TraceNotification("Unpackaged app notification manager registered");
             }
         }

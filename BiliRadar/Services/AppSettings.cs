@@ -29,7 +29,7 @@ public static class AppSettings
     private const string MainPanelHeightKey = "MainPanelHeight";
     private const string CustomNotificationCreatorsKey = "CustomNotificationCreators";
     private const string AppLanguageKey = "AppLanguage";
-    private const string DefaultCustomLaunchWebPageUrl = "https://www.bilibili.com/";
+    private const string DefaultCustomLaunchWebPageUrl = "https://github.com/JordanQD/FeedPeek";
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,

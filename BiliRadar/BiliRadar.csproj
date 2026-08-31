@@ -34,6 +34,8 @@
     <Configurations>Debug;Release;ReleaseFull</Configurations>
     <UseProductionPackageIdentity Condition="'$(UseProductionPackageIdentity)' == ''">false</UseProductionPackageIdentity>
     <DevelopmentPackageIdentityName Condition="'$(DevelopmentPackageIdentityName)' == ''">JordanQD.FeedPeek.Preview</DevelopmentPackageIdentityName>
+    <!-- Store submission must override this with the exact identity reserved in Partner Center. -->
+    <ProductionPackageIdentityName Condition="'$(ProductionPackageIdentityName)' == ''">JordanQD.FeedPeek</ProductionPackageIdentityName>
     <OutputPath Condition="'$(UseProductionPackageIdentity)' != 'true'">bin\dev\$(Platform)\$(Configuration)\</OutputPath>
     <IntermediateOutputPath Condition="'$(UseProductionPackageIdentity)' != 'true'">obj\dev\$(Platform)\$(Configuration)\</IntermediateOutputPath>
   </PropertyGroup>
@@ -152,6 +154,7 @@
       <_GeneratedAppxManifest>$(OutDir)AppxManifest.xml</_GeneratedAppxManifest>
       <_GeneratedAppxManifest Condition="!Exists('$(_GeneratedAppxManifest)')">$(OutDir)AppX\AppxManifest.xml</_GeneratedAppxManifest>
       <_GeneratedPackageIdentityName Condition="'$(UseProductionPackageIdentity)' != 'true'">$(DevelopmentPackageIdentityName)</_GeneratedPackageIdentityName>
+      <_GeneratedPackageIdentityName Condition="'$(UseProductionPackageIdentity)' == 'true'">$(ProductionPackageIdentityName)</_GeneratedPackageIdentityName>
       <_GeneratedPackageIdentityName Condition="'$(_GeneratedPackageIdentityName)' == ''">JordanQD.FeedPeek.Preview</_GeneratedPackageIdentityName>
     </PropertyGroup>
     <ItemGroup Condition="Exists('$(_GeneratedAppxManifest)')">

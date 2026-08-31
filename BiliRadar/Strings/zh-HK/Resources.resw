@@ -18,7 +18,7 @@
   <data name="SettingsGeneralNavItem.Content" xml:space="preserve"><value>通用</value></data>
   <data name="SettingsNotificationNavItem.Content" xml:space="preserve"><value>通知</value></data>
   <data name="SettingsAboutNavItem.Content" xml:space="preserve"><value>關於</value></data>
-  <data name="WebSignInTitleBar.Title" xml:space="preserve"><value>FeedPeek Preview 登錄</value></data>
+  <data name="WebSignInTitleBar.Title" xml:space="preserve"><value>FeedPeek 登錄</value></data>
 
   <data name="GeneralPageTitle.Text" xml:space="preserve"><value>通用</value></data>
   <data name="GeneralStartupSectionHeader.Text" xml:space="preserve"><value>啟動</value></data>
@@ -115,8 +115,8 @@
   <data name="NotificationSettings.LiveNotifyCard.Header" xml:space="preserve"><value>開播通知</value></data>
 
   <data name="AboutPageTitle.Text" xml:space="preserve"><value>關於</value></data>
-  <data name="AboutExpander.Header" xml:space="preserve"><value>FeedPeek Preview</value></data>
-  <data name="AboutExpander.Description" xml:space="preserve"><value>一個放在任務欄托盤裡的 B 站動態雷達。</value></data>
+  <data name="AboutExpander.Header" xml:space="preserve"><value>FeedPeek</value></data>
+  <data name="AboutExpander.Description" xml:space="preserve"><value>一個常駐在工作列通知區域中的通用更新檢視器。</value></data>
   <data name="AboutCloneRepositoryCard.Header" xml:space="preserve"><value>克隆此倉庫</value></data>
   <data name="AboutIssueRequestCard.Header" xml:space="preserve"><value>提交問題或功能建議</value></data>
   <data name="AboutDependenciesCard.Header" xml:space="preserve"><value>依賴與參考</value></data>
@@ -124,7 +124,7 @@
   <data name="VideoLoadFailed" xml:space="preserve"><value>影片動態載入失敗：{0}</value></data>
   <data name="NoVideoUpdates" xml:space="preserve"><value>暫無影片動態。</value></data>
   <data name="AddedToViewLater" xml:space="preserve"><value>已添加到稍後再看</value></data>
-  <data name="AddedToViewLaterDetail" xml:space="preserve"><value>可以稍後在 B 站繼續觀看。</value></data>
+  <data name="AddedToViewLaterDetail" xml:space="preserve"><value>可以稍後在對應網站繼續檢視。</value></data>
   <data name="AddToViewLaterFailed" xml:space="preserve"><value>添加到稍後再看失敗</value></data>
   <data name="LoadEarlierFailed" xml:space="preserve"><value>載入更早內容失敗：{0}</value></data>
   <data name="NoHistory" xml:space="preserve"><value>暫無歷史記錄。</value></data>
@@ -206,9 +206,9 @@
   <data name="LiveNotificationTitle" xml:space="preserve"><value>{0} 開播了</value></data>
   <data name="CloneCommandCopied" xml:space="preserve"><value>已複製克隆命令。</value></data>
   <data name="LanguageRestartMessage" xml:space="preserve"><value>語言已切換為 {0}，重新啟動應用後生效。</value></data>
-  <data name="MainWindow.Title" xml:space="preserve"><value>FeedPeek Preview</value></data>
-  <data name="SettingsWindow.Title" xml:space="preserve"><value>FeedPeek Preview 設定</value></data>
-  <data name="WebSignInWindow.Title" xml:space="preserve"><value>FeedPeek Preview 登錄</value></data>
+  <data name="MainWindow.Title" xml:space="preserve"><value>FeedPeek</value></data>
+  <data name="SettingsWindow.Title" xml:space="preserve"><value>FeedPeek 設定</value></data>
+  <data name="WebSignInWindow.Title" xml:space="preserve"><value>FeedPeek 登錄</value></data>
   <data name="AddCreatorDialogVideoLabel" xml:space="preserve"><value>影片更新通知</value></data>
   <data name="AddCreatorDialogLiveLabel" xml:space="preserve"><value>開播通知</value></data>
   <data name="AddToNotificationListMenuItem" xml:space="preserve"><value>添加到通知列表</value></data>
@@ -217,6 +217,6 @@
   <data name="RemovedFromNotificationList" xml:space="preserve"><value>已從通知列表移除：{0}</value></data>
   <data name="CreatorNotFollowed" xml:space="preserve"><value>該 UP 不在你的關注列表中</value></data>
   <data name="CreatorNotFollowedDetail" xml:space="preserve"><value>僅能對已關注的 UP 添加通知。</value></data>
-  <data name="SignInNotificationTitle" xml:space="preserve"><value>歡迎使用 FeedPeek Preview</value></data>
+  <data name="SignInNotificationTitle" xml:space="preserve"><value>歡迎使用 FeedPeek</value></data>
   <data name="SignInNotificationBody" xml:space="preserve"><value>點擊登錄 Bilibili 賬號以獲取關注動態</value></data>
 </root>

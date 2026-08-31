@@ -19,7 +19,7 @@ namespace BiliRadar.Pages;
 public sealed partial class GeneralSettingsPage : Page
 {
     private const string StartupTaskId = "FeedPeekPreviewStartupTask";
-    private const string StartupRegistryName = "FeedPeek Preview";
+    private const string StartupRegistryName = "FeedPeek";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -243,7 +243,7 @@ public sealed partial class GeneralSettingsPage : Page
         var picker = new FileSavePicker(((FrameworkElement)sender).XamlRoot.ContentIslandEnvironment.AppWindowId)
         {
             SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
-            SuggestedFileName = $"BiliRadar-config-{DateTime.Now:yyyyMMdd-HHmmss}",
+            SuggestedFileName = $"FeedPeek-config-{DateTime.Now:yyyyMMdd-HHmmss}",
         };
         picker.FileTypeChoices.Add(LocalizationHelper.GetString("FilePickerJsonLabel"), [".json"]);
 
@@ -458,7 +458,7 @@ public sealed partial class GeneralSettingsPage : Page
         [JsonPropertyName("RunningLaunchAction")]
         public string RunningLaunchActionValue { get; set; } = nameof(Services.RunningLaunchAction.OpenSettings);
 
-        public string CustomLaunchWebPageUrl { get; set; } = "https://www.bilibili.com/";
+        public string CustomLaunchWebPageUrl { get; set; } = "https://github.com/JordanQD/FeedPeek";
 
         [JsonPropertyName("DefaultOpenPage")]
         public string DefaultOpenPageValue { get; set; } = nameof(Services.DefaultOpenPage.Following);

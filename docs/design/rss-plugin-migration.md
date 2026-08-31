@@ -813,6 +813,8 @@ FeedPeek.PluginWorker.exe
 
 ### Phase 5：FeedPeek 品牌、包身份与用户数据迁移
 
+详细检查点与身份决策见 [`rss-plugin-phase5-plan.md`](rss-plugin-phase5-plan.md)。
+
 - 将 DisplayName、应用图标、资源文本、程序集/项目名和默认命名空间分成可审阅的小批次改为 FeedPeek。
 - 包身份单独决策：若目标是给现有安装原位升级，优先保留既有 MSIX identity，仅改变用户可见品牌；若必须使用新的 Store 产品/identity，则按独立应用处理并提供显式数据迁移。
 - 在改变任何 identity 或数据目录之前，先验证现有 `ApplicationData`、通知激活、开机启动和单实例键的影响。
@@ -822,6 +824,13 @@ FeedPeek.PluginWorker.exe
 - 迁移成功后清理临时明文和旧兼容键。
 
 退出条件：用户可见品牌为 FeedPeek，升级/新装路径已明确，用户状态一致，失败可安全回滚或重试。
+
+实施记录（2026-08-31）：
+
+- 5.0 已完成身份与持久化边界盘点。FeedPeek 采用独立应用发布：开发包保留 `JordanQD.FeedPeek.Preview`，正式包使用独立 production identity；旧 `JordanQD.BiliRadar` 不原位升级，也不自动跨包搬迁数据。
+- 5.1 已将用户可见名称、窗口、托盘、通知注册、启动项显示和通用文案统一为 FeedPeek，同时保留部署兼容标识。
+- 5.2 已增加版本化、幂等的 LocalSettings v1 迁移；SQLite 和 Credential Locker 继续使用独立迁移/安全边界。
+- 5.3 的项目、程序集、可执行文件和默认命名空间机械重命名，以及 5.4 的兼容键清理和人工升级验收待完成。
 
 ### Phase 6：打包与发布验收
 

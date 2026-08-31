@@ -140,8 +140,11 @@ dotnet build BiliRadar/BiliRadar.csproj -p:Platform=x64 --no-restore
 | Phase 2（通用核心与 RSS） | ✅ 已人工验收主路径 |
 | Phase 3（插件合同与 Jint Runtime） | ✅ 18 项必要验证通过，Release x64 构建通过 |
 | Phase 4（站点插件迁移） | 🧪 4.0–4.9 自动验证通过；4.3–4.4 已人工验收，4.5–4.9 待人工验收 |
+| Phase 5（品牌、独立包身份与数据迁移） | 🚧 5.0–5.2 已完成；5.3–5.4 待完成 |
 
 Phase 3 生产项目为 `src/FeedPeek.PluginContracts` 与 `src/FeedPeek.PluginRuntime`。Runtime 锁定 Jint 4.16.1；同一插件 realm 串行调用，通过 JSON `IPluginTransport` 保持 transport-neutral。插件只能使用显式 Host Bridge，不开放 CLR、文件系统、进程、注册表、COM 或 WinUI。mock JS fixture 和必要验证复用 `tests/FeedPeek.Core.Tests`，不再新增测试项目。
+
+Phase 5 采用独立应用发布路径，不把 FeedPeek 作为旧 BiliRadar identity 的原位升级。开发包使用 `JordanQD.FeedPeek.Preview`，正式包通过 `UseProductionPackageIdentity=true` 选择独立 production identity；Microsoft Store 发布时必须使用 Partner Center 分配的精确 identity。用户可见品牌已统一为 FeedPeek，LocalSettings 已增加版本化幂等迁移。项目/程序集/可执行文件/默认命名空间重命名和正式包人工验收仍待完成，详见 `docs/design/rss-plugin-phase5-plan.md`。
 
 Phase 4 详细检查点见 `docs/design/rss-plugin-phase4-plan.md`。4.1–4.8 已完成通用 Host、仓库维护的网站 JS 插件、三页数据、登录、作者/直播、通知和用户插件管理。4.9 已删除 legacy provider、旧模型、旧 adapter、旧快照和孤立卡片；视频网站插件不再随应用发布，停用插件不会继续刷新旧订阅，通知动作按 manifest capability 显示，插件升级/卸载使用可回滚目录切换。仅保留旧 Cookie 与通知规则的一次性兼容迁移。
 
