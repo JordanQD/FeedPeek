@@ -17,7 +17,8 @@ public sealed class FeedItemRow : INotifyPropertyChanged
     public FeedItemRow(
         StoredFeedItem storedItem,
         string? sourceName = null,
-        string? sourceIconUrl = null)
+        string? sourceIconUrl = null,
+        bool preferAuthorAttribution = false)
     {
         ArgumentNullException.ThrowIfNull(storedItem);
         Item = storedItem.Item;
@@ -29,6 +30,10 @@ public sealed class FeedItemRow : INotifyPropertyChanged
         SourceName = string.IsNullOrWhiteSpace(sourceName) ? Item.SourceId : sourceName;
         ImageSource = CreateImageSource(Item.ImageUrl);
         SourceIconSource = CreateImageSource(sourceIconUrl);
+        AttributionName = preferAuthorAttribution ? Item.AuthorName : SourceName;
+        AttributionIconSource = preferAuthorAttribution
+            ? CreateImageSource(Item.AuthorImageUrl)
+            : SourceIconSource;
     }
 
     public FeedItem Item { get; }
@@ -68,6 +73,10 @@ public sealed class FeedItemRow : INotifyPropertyChanged
     public ImageSource? ImageSource { get; }
 
     public ImageSource? SourceIconSource { get; }
+
+    public string AttributionName { get; }
+
+    public ImageSource? AttributionIconSource { get; }
 
     public string AuthorImageUrl => Item.AuthorImageUrl ?? string.Empty;
 

@@ -1,6 +1,6 @@
 # FeedPeek Phase 4：站点插件迁移实施计划
 
-> 状态：4.0–4.5 已完成自动验证；4.3–4.4 已人工验收，4.5 待人工验收
+> 状态：4.0–4.7 已完成自动验证；4.3–4.4 已人工验收，4.5–4.7 待人工验收
 > 基线提交：`9c6dd3e Phase3`  
 > 原则：每个检查点均保持可构建、可回滚；兼容矩阵通过前不删除 legacy 路径。
 
@@ -54,6 +54,14 @@
 - 登录入口已从“通用”移到“来源”的网站插件卡片。退出登录会删除该网站来源的 SQLite 缓存并通知已打开的托盘面板刷新；RSS 与其他网站数据不受影响。
 - 当前内置网站实现为“一个插件 + 一个可选凭据 profile + 一个聚合来源”；4.8 将来源数量动态化。来源可不绑定凭据；需要账户权限的多个来源共享该插件的凭据。
 - 4.5 完成时现有测试项目共 32 项通过，Debug/Release x64 构建均为 0 警告、0 错误；WebView 登录、重启保留、失效与退出待人工验收。
+- 4.6：内置站点插件新增 `creator.getFollowing`、`feed.getLive`、`creator.getActions` 与 `creator.executeAction`；关注列表、直播列表和关注/取消关注不再依赖主面板 legacy provider。
+- 网站条目的卡片归属位显示 UP 主名称和头像，RSS 条目仍显示 RSS 来源；三个页面均可通过官方 `MenuFlyout` 执行作者主页及关注关系操作。
+- 关注页恢复官方 `ItemsRepeater + StackLayout` 横向直播区域，并沿用现有直播区域显示设置；后台通知与自定义作者通知规则仍严格留在 4.7。
+- 4.6 完成时现有测试项目共 33 项通过，Debug/Release x64 构建均为 0 警告、0 错误；真实账号关注列表、直播、作者菜单和关注/取消关注待人工验收。
+- 4.7：后台监控改为复用通用 Core、RSS Provider 与站点插件 Runtime；更新通知以 `ProviderId + SourceId + FeedId + ItemId` 去重，直播和自定义作者规则以 `ProviderId + SourceId + CreatorKey` 匹配，不再依赖 `mid/aid` 作为宿主领域标识。
+- 通知标题使用插件返回的作者名称和头像；网站通知的“稍后再看”激活参数携带通用条目键，再由插件 item action 执行。RSS 等不支持该动作的来源不显示此按钮。
+- 通知设置中的旧 `Mid` 规则会在读取时迁移到内置网站的通用作者标识；新增规则通过 `creator.getFollowing` 验证作者。后台通知不再使用 legacy provider，也不再为其镜像新的登录 Cookie。
+- 4.7 完成时 `FeedPeek.Core.Tests` 33 项、`FeedPeek.Compatibility.Tests` 14 项通过，Debug x64 构建 0 警告、0 错误；真实通知弹出、点击打开、稍后再看和自定义作者筛选待人工验收。
 
 ## 3. 4.1 结构边界
 
@@ -87,7 +95,7 @@ FeedPeek.Core              FeedPeek.PluginContracts
 | 账户资料 | `account.getProfile` | 4.5 | legacy 可用 |
 | 站点条目显示 UP 主 | `creatorKey/authorName/authorImageUrl` + 通用卡片展示策略 | 4.6 | legacy 可用 |
 | 关注列表 | `creator.getFollowing` | 4.6 | legacy 可用 |
-| 后台与按 UP 主更新通知 | 通用 provider/source/creator identity | 4.7 | legacy 可用 |
+| 后台与按 UP 主更新通知 | 通用 provider/source/creator identity | 4.7 | 已切换通用路径 |
 | 用户插件发现、安装、启停和升级 | 用户插件目录 + 持久插件记录 | 4.8 | 无 |
 | 动态 Provider/Source、可选登录与多来源 | manifest source schema + plugin credential profile + 设置向导 | 4.8 | 无 |
 | 通用 item/creator action 分发 | capability + action descriptor dispatcher | 4.6–4.8 | 内置站点分支可用 |
@@ -117,4 +125,4 @@ FeedPeek.Core              FeedPeek.PluginContracts
 - 站点接口和风控可能变化；解析测试应使用脱敏 fixture，不依赖实时网络作为唯一证据。
 - 当前全局 Cookie 与通用 credential profile 的迁移必须延后到 4.5，并保持可回滚；不得静默复制或导出明文凭据。
 - 远端“稍后再看”与本地 saved 状态必须在 4.4 明确定义一致性，避免按钮成功但列表状态回滚。
-- 后台通知直到 4.7 仍保留 legacy 实现，不能误判为站点插件已完成全量切换。
+- 后台通知已在 4.7 切换到通用实现；4.9 删除 legacy 类型前仍需保留旧设置规则的单向迁移兼容。

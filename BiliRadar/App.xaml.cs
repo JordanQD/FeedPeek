@@ -74,6 +74,13 @@ public partial class App : Application
 
     private void InitializeTrayAndData()
     {
+        if (_backgroundNotificationMonitor is null)
+        {
+            _backgroundNotificationMonitor = new BackgroundNotificationMonitor(_cookieStore);
+            _ = _backgroundNotificationMonitor.StartAsync();
+            HandlePendingNotificationRequest();
+        }
+
         if (_trayFlyoutService is null)
         {
             _trayFlyoutService = new TrayFlyoutService(

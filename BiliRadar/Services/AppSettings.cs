@@ -211,8 +211,9 @@ public static class AppSettings
         set
         {
             var creators = value
-                .Where(item => item.Mid > 0)
-                .GroupBy(item => item.Mid)
+                .Select(NormalizeCreatorSubscription)
+                .Where(IsValidCreatorSubscription)
+                .GroupBy(item => item.IdentityKey, StringComparer.Ordinal)
                 .Select(group => group.First())
                 .ToList();
 
@@ -321,8 +322,9 @@ public static class AppSettings
         try
         {
             return JsonSerializer.Deserialize<List<NotificationCreatorSubscription>>(text, JsonOptions)?
-                .Where(item => item.Mid > 0)
-                .GroupBy(item => item.Mid)
+                .Select(NormalizeCreatorSubscription)
+                .Where(IsValidCreatorSubscription)
+                .GroupBy(item => item.IdentityKey, StringComparer.Ordinal)
                 .Select(group => group.First())
                 .ToList() ?? [];
         }
@@ -331,6 +333,28 @@ public static class AppSettings
             return [];
         }
     }
+
+    private static NotificationCreatorSubscription NormalizeCreatorSubscription(
+        NotificationCreatorSubscription item)
+    {
+        if (string.IsNullOrWhiteSpace(item.CreatorKey) && item.Mid > 0)
+        {
+            item.ProviderId = BuiltInVideoSitePlugin.PluginId;
+            item.SourceId = BuiltInVideoSitePlugin.SourceId;
+            item.CreatorKey = item.Mid.ToString();
+        }
+
+        item.ProviderId = item.ProviderId?.Trim() ?? string.Empty;
+        item.SourceId = item.SourceId?.Trim() ?? string.Empty;
+        item.CreatorKey = item.CreatorKey?.Trim() ?? string.Empty;
+        item.Name = item.Name?.Trim() ?? string.Empty;
+        return item;
+    }
+
+    private static bool IsValidCreatorSubscription(NotificationCreatorSubscription item)
+        => !string.IsNullOrWhiteSpace(item.ProviderId)
+            && !string.IsNullOrWhiteSpace(item.SourceId)
+            && !string.IsNullOrWhiteSpace(item.CreatorKey);
 }
 
 public enum NotificationTargetMode

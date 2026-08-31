@@ -1,5 +1,6 @@
 using BiliRadar.Helpers;
 using BiliRadar.Models;
+using FeedPeek.Core.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,153 +10,95 @@ namespace BiliRadar.Services;
 
 internal sealed class BackgroundNotificationMonitor : IDisposable
 {
-    private readonly UpdateMonitorService _updateMonitorService;
+    private readonly FeedPeekNotificationSession _session;
     private readonly NotificationService _notificationService = new();
-    private readonly object _snapshotLock = new();
-    private MainWindowSnapshot? _snapshot;
 
     public BackgroundNotificationMonitor(CookieStore cookieStore)
     {
-        _updateMonitorService = new UpdateMonitorService(
-            FeedPeekCompositionRoot.CreateDefaultLegacyDataProvider(cookieStore));
+        _session = new FeedPeekNotificationSession(cookieStore);
     }
 
     public Task StartAsync()
-    {
-        return _notificationService.TryStartAsync(RefreshNotificationDataAsync);
-    }
+        => _notificationService.TryStartAsync(RefreshNotificationDataAsync);
 
-    public MainWindowSnapshot? GetSnapshot()
-    {
-        lock (_snapshotLock)
-        {
-            return _snapshot;
-        }
-    }
+    public MainWindowSnapshot? GetSnapshot() => null;
 
     public async Task HandleActivationAsync(NotificationService.NotificationActivationRequest request)
     {
-        if (string.Equals(request.Action, NotificationService.WatchLaterAction, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(request.Action, NotificationService.WatchLaterAction, StringComparison.OrdinalIgnoreCase)
+            && request.ItemKey is FeedItemKey itemKey)
         {
-            await AddToViewLaterFromNotificationAsync(request.Aid);
+            await AddToViewLaterFromNotificationAsync(itemKey);
             return;
         }
 
         if (request.Uri is not null)
-        {
             await NotificationService.LaunchUriAsync(request.Uri);
-        }
     }
 
     public void Dispose()
     {
         _notificationService.Stop();
-        _updateMonitorService.Dispose();
+        _session.Dispose();
     }
 
     private async Task RefreshNotificationDataAsync()
     {
+        IReadOnlyList<FeedItem> updates;
+        try
+        {
+            updates = await _session.RefreshUpdatesAsync();
+        }
+        catch
+        {
+            updates = [];
+        }
+
+        IReadOnlyList<FeedLiveNotificationItem> liveItems;
+        try
+        {
+            liveItems = await _session.GetLiveItemsAsync();
+        }
+        catch
+        {
+            liveItems = [];
+        }
+
         if (AppSettings.NotificationTargetMode == NotificationTargetMode.CustomCreators)
         {
-            await RefreshCustomNotificationDataAsync();
-            return;
+            var rules = AppSettings.CustomNotificationCreators;
+            updates = updates.Where(item => MatchesRule(item, rules)).ToArray();
+            liveItems = liveItems.Where(item => MatchesRule(item, rules)).ToArray();
         }
 
-        IReadOnlyList<BiliVideoUpdate> updates = [];
-        try
-        {
-            updates = await _updateMonitorService.GetRecentVideoUpdatesForNotificationAsync();
-        }
-        catch
-        {
-        }
-
-        var filteredUpdates = updates
-            .Where(update => update.PublishedAt > _notificationService.ServiceStartedAt)
-            .ToList();
-        await _notificationService.NotifyVideoUpdatesAsync(filteredUpdates);
-
-        IReadOnlyList<BiliLiveCreator> liveCreators = [];
-        try
-        {
-            liveCreators = await _updateMonitorService.GetFollowingLiveCreatorsAsync();
-        }
-        catch
-        {
-        }
-
-        await _notificationService.NotifyLiveStartsAsync(liveCreators);
-        SaveSnapshot(updates, liveCreators);
+        await _notificationService.NotifyFeedUpdatesAsync(updates);
+        await _notificationService.NotifyLiveStartsAsync(liveItems);
     }
 
-    private async Task RefreshCustomNotificationDataAsync()
+    private static bool MatchesRule(
+        FeedItem item,
+        IReadOnlyList<NotificationCreatorSubscription> rules)
+        => !string.IsNullOrWhiteSpace(item.CreatorKey)
+            && rules.Any(rule =>
+                rule.VideoNotificationsEnabled
+                && string.Equals(rule.ProviderId, item.ProviderId, StringComparison.Ordinal)
+                && string.Equals(rule.SourceId, item.SourceId, StringComparison.Ordinal)
+                && string.Equals(rule.CreatorKey, item.CreatorKey, StringComparison.Ordinal));
+
+    private static bool MatchesRule(
+        FeedLiveNotificationItem item,
+        IReadOnlyList<NotificationCreatorSubscription> rules)
+        => rules.Any(rule =>
+            rule.LiveNotificationsEnabled
+            && string.Equals(rule.ProviderId, item.ProviderId, StringComparison.Ordinal)
+            && string.Equals(rule.SourceId, item.SourceId, StringComparison.Ordinal)
+            && string.Equals(rule.CreatorKey, item.Item.CreatorKey, StringComparison.Ordinal));
+
+    private async Task AddToViewLaterFromNotificationAsync(FeedItemKey itemKey)
     {
-        var subscriptions = AppSettings.CustomNotificationCreators;
-        IReadOnlyList<BiliVideoUpdate> allUpdates = [];
         try
         {
-            allUpdates = await _updateMonitorService.GetRecentVideoUpdatesForNotificationAsync();
-        }
-        catch
-        {
-        }
-
-        var cutoff = _updateMonitorService.LastCheckedAt > _notificationService.ServiceStartedAt
-            ? _updateMonitorService.LastCheckedAt
-            : _notificationService.ServiceStartedAt;
-        var subscribedMids = subscriptions
-            .Where(item => item.VideoNotificationsEnabled)
-            .Select(item => item.Mid)
-            .ToHashSet();
-        var videoUpdates = allUpdates
-            .Where(update => update.PublishedAt > cutoff && subscribedMids.Contains(update.CreatorMid))
-            .ToList();
-
-        await _notificationService.NotifyVideoUpdatesAsync(videoUpdates);
-
-        IReadOnlyList<BiliLiveCreator> allLiveCreators = [];
-        try
-        {
-            allLiveCreators = await _updateMonitorService.GetFollowingLiveCreatorsAsync();
-        }
-        catch
-        {
-        }
-
-        var subscribedLiveMids = subscriptions
-            .Where(item => item.LiveNotificationsEnabled)
-            .Select(item => item.Mid)
-            .ToHashSet();
-        var liveCreators = allLiveCreators
-            .Where(creator => subscribedLiveMids.Contains(creator.Mid))
-            .ToList();
-
-        await _notificationService.NotifyLiveStartsAsync(liveCreators);
-        SaveSnapshot(allUpdates, allLiveCreators);
-    }
-
-    private void SaveSnapshot(
-        IReadOnlyList<BiliVideoUpdate> updates,
-        IReadOnlyList<BiliLiveCreator> liveCreators)
-    {
-        lock (_snapshotLock)
-        {
-            _snapshot = new MainWindowSnapshot(
-                updates.OrderByDescending(update => update.PublishedAt).ToList(),
-                liveCreators.ToList());
-        }
-    }
-
-    private async Task AddToViewLaterFromNotificationAsync(long aid)
-    {
-        if (aid <= 0)
-        {
-            return;
-        }
-
-        try
-        {
-            await _updateMonitorService.AddToViewLaterAsync(aid);
+            await _session.AddToViewLaterAsync(itemKey);
             NotificationService.ShowStatusNotification(
                 LocalizationHelper.GetString("AddedToViewLater"),
                 LocalizationHelper.GetString("AddedToViewLaterDetail"));

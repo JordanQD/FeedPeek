@@ -92,18 +92,18 @@
   <data name="NotificationTargetCard.Description" xml:space="preserve"><value>選擇通知所有關注 UP，僅通知自選 UP，或完全關閉通知。</value></data>
   <data name="NotificationTargetModeBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>通知對象</value></data>
   <data name="NotificationTargetNoneItem.Content" xml:space="preserve"><value>不通知</value></data>
-  <data name="NotificationTargetAllFollowingItem.Content" xml:space="preserve"><value>所有 UP 更新</value></data>
-  <data name="NotificationTargetCustomCreatorsItem.Content" xml:space="preserve"><value>自訂 UP 通知</value></data>
-  <data name="NotificationVideoNotifyCard.Header" xml:space="preserve"><value>影片更新通知</value></data>
-  <data name="NotificationVideoNotifyCard.Description" xml:space="preserve"><value>關注 UP 發布新影片時提醒。</value></data>
+  <data name="NotificationTargetAllFollowingItem.Content" xml:space="preserve"><value>所有來源更新</value></data>
+  <data name="NotificationTargetCustomCreatorsItem.Content" xml:space="preserve"><value>自訂作者通知</value></data>
+  <data name="NotificationVideoNotifyCard.Header" xml:space="preserve"><value>內容更新通知</value></data>
+  <data name="NotificationVideoNotifyCard.Description" xml:space="preserve"><value>來源出現新內容時提醒。</value></data>
   <data name="NotificationVideoNotificationSwitch.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>影片更新通知</value></data>
   <data name="NotificationLiveNotifyCard.Header" xml:space="preserve"><value>開播通知</value></data>
   <data name="NotificationLiveNotifyCard.Description" xml:space="preserve"><value>關注 UP 開始直播時提醒。</value></data>
   <data name="NotificationLiveNotificationSwitch.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>開播通知</value></data>
   <data name="NotificationCustomSectionHeader.Text" xml:space="preserve"><value>自訂通知</value></data>
   <data name="NotificationCustomSectionDescription.Text" xml:space="preserve"><value>自訂 UP 的通知通過關注動態流檢測，因此僅對你已關注的 UP 生效。開播通知不受此限制。</value></data>
-  <data name="NotificationAddCustomCreatorCard.Header" xml:space="preserve"><value>自訂 UP</value></data>
-  <data name="NotificationAddCustomCreatorCard.Description" xml:space="preserve"><value>通知通過關注動態流檢測，因此僅對你已關注的 UP 生效。</value></data>
+  <data name="NotificationAddCustomCreatorCard.Header" xml:space="preserve"><value>自訂作者</value></data>
+  <data name="NotificationAddCustomCreatorCard.Description" xml:space="preserve"><value>作者由網站插件的關注列表提供。</value></data>
   <data name="NotificationAddCreatorButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>添加自訂 UP</value></data>
   <data name="NotificationAddCreatorButtonText.Text" xml:space="preserve"><value>添加 UP</value></data>
   <data name="NotificationCustomVideoLabel.Text" xml:space="preserve"><value>影片</value></data>
@@ -184,8 +184,8 @@
   <data name="Off" xml:space="preserve"><value>關</value></data>
   <data name="SaveButton" xml:space="preserve"><value>保存</value></data>
   <data name="CancelButton" xml:space="preserve"><value>取消</value></data>
-  <data name="CreatorLinkPlaceholder" xml:space="preserve"><value>空間連結、UID、AV號、AV號連結、BV號、BV號連結、直播連結</value></data>
-  <data name="CreatorLinkAutomationName" xml:space="preserve"><value>UP 空間連結、UID、AV號、BV號或直播連結</value></data>
+  <data name="CreatorLinkPlaceholder" xml:space="preserve"><value>作者主頁連結或作者 ID</value></data>
+  <data name="CreatorLinkAutomationName" xml:space="preserve"><value>作者主頁連結或作者 ID</value></data>
   <data name="FilePickerJsonLabel" xml:space="preserve"><value>JSON 配置</value></data>
   <data name="NoFollowingData" xml:space="preserve"><value>暫無關注數據</value></data>
   <data name="LastCheckedNotYet" xml:space="preserve"><value>尚未檢查</value></data>
@@ -198,8 +198,10 @@
   <data name="TraySettings" xml:space="preserve"><value>設定</value></data>
   <data name="TrayExit" xml:space="preserve"><value>退出</value></data>
   <data name="VideoNotificationTitle" xml:space="preserve"><value>{0} 發布了新影片</value></data>
+  <data name="UpdateNotificationTitle" xml:space="preserve"><value>{0} 有新更新</value></data>
   <data name="AddToViewLaterButton" xml:space="preserve"><value>添加到稍後再看</value></data>
   <data name="OpenVideoButton" xml:space="preserve"><value>打開影片</value></data>
+  <data name="OpenItemButton" xml:space="preserve"><value>打開</value></data>
   <data name="LiveNotificationFallbackTitle" xml:space="preserve"><value>正在直播</value></data>
   <data name="LiveNotificationTitle" xml:space="preserve"><value>{0} 開播了</value></data>
   <data name="CloneCommandCopied" xml:space="preserve"><value>已複製克隆命令。</value></data>

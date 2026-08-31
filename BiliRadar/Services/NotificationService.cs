@@ -1,5 +1,6 @@
 using BiliRadar.Helpers;
 using BiliRadar.Models;
+using FeedPeek.Core.Models;
 using Microsoft.UI.Xaml;
 using Microsoft.Windows.AppNotifications;
 using Microsoft.Windows.AppNotifications.Builder;
@@ -119,6 +120,60 @@ public sealed class NotificationService
         }
     }
 
+    public async Task NotifyFeedUpdatesAsync(
+        IReadOnlyList<FeedItem> items,
+        bool showNotifications = true)
+    {
+        var plan = FeedNotificationBaselinePlanner.ForFeedItems(
+            items,
+            AppSettings.KnownVideoUpdateIds,
+            AppSettings.VideoNotificationBaselineInitialized,
+            MaxNotificationsPerRefresh,
+            MaxStoredVideoUpdateIds);
+        AppSettings.KnownVideoUpdateIds = plan.KnownIds;
+        if (plan.InitializesBaseline)
+        {
+            AppSettings.VideoNotificationBaselineInitialized = true;
+            return;
+        }
+
+        if (!showNotifications || !IsVideoNotificationEnabled() || plan.NewItems.Count == 0)
+            return;
+
+        foreach (var item in plan.NewItems.OrderBy(item => item.PublishedAt))
+        {
+            ShowFeedNotification(item);
+            await Task.Delay(NotificationSpacing);
+        }
+    }
+
+    public async Task NotifyLiveStartsAsync(
+        IReadOnlyList<FeedLiveNotificationItem> liveItems,
+        bool showNotifications = true)
+    {
+        var plan = FeedNotificationBaselinePlanner.ForLiveItems(
+            liveItems,
+            AppSettings.KnownLiveRoomIds,
+            AppSettings.LiveNotificationBaselineInitialized,
+            MaxNotificationsPerRefresh,
+            MaxStoredLiveRoomIds);
+        AppSettings.KnownLiveRoomIds = plan.KnownIds;
+        if (plan.InitializesBaseline)
+        {
+            AppSettings.LiveNotificationBaselineInitialized = true;
+            return;
+        }
+
+        if (!showNotifications || !IsLiveNotificationEnabled() || plan.NewItems.Count == 0)
+            return;
+
+        foreach (var item in plan.NewItems)
+        {
+            ShowLiveNotification(item);
+            await Task.Delay(NotificationSpacing);
+        }
+    }
+
     public static bool TryGetActivationRequest(
         AppNotificationActivatedEventArgs args,
         [NotNullWhen(true)] out NotificationActivationRequest? request)
@@ -130,9 +185,14 @@ public sealed class NotificationService
 
         if (string.Equals(action, WatchLaterAction, StringComparison.OrdinalIgnoreCase))
         {
+            if (TryReadFeedItemKey(args.Arguments, out var itemKey))
+            {
+                request = NotificationActivationRequest.ForWatchLater(itemKey);
+                return true;
+            }
+
             if (!args.Arguments.TryGetValue("aid", out var aidText)
-                || !long.TryParse(aidText, out var aid)
-                || aid <= 0)
+                || !long.TryParse(aidText, out var aid) || aid <= 0)
             {
                 return false;
             }
@@ -261,6 +321,84 @@ public sealed class NotificationService
         TryShow(builder.BuildNotification());
     }
 
+    private static void ShowFeedNotification(FeedItem item)
+    {
+        var isVideoSite = string.Equals(
+            item.ProviderId,
+            BuiltInVideoSitePlugin.PluginId,
+            StringComparison.Ordinal);
+        var builder = new AppNotificationBuilder()
+            .AddArgument("kind", "update")
+            .AddArgument("action", OpenAction)
+            .AddArgument("url", item.Url)
+            .AddText(LocalizationHelper.Format(
+                isVideoSite ? "VideoNotificationTitle" : "UpdateNotificationTitle",
+                item.AuthorName))
+            .AddText(item.Title);
+
+        if (isVideoSite)
+        {
+            var watchLaterButton = new AppNotificationButton(LocalizationHelper.GetString("AddToViewLaterButton"))
+                .AddArgument("kind", "update")
+                .AddArgument("action", WatchLaterAction);
+            AddFeedItemKey(watchLaterButton, item.Key);
+            builder.AddButton(watchLaterButton);
+        }
+
+        builder.AddButton(new AppNotificationButton(LocalizationHelper.GetString(
+                isVideoSite ? "OpenVideoButton" : "OpenItemButton"))
+            .AddArgument("kind", "update")
+            .AddArgument("action", OpenAction)
+            .AddArgument("url", item.Url));
+        AddImages(builder, item.AuthorImageUrl ?? string.Empty, item.ImageUrl ?? string.Empty);
+        TryShow(builder.BuildNotification());
+    }
+
+    private static void ShowLiveNotification(FeedLiveNotificationItem liveItem)
+    {
+        var item = liveItem.Item;
+        var title = string.IsNullOrWhiteSpace(item.Title)
+            ? LocalizationHelper.GetString("LiveNotificationFallbackTitle")
+            : item.Title;
+        var builder = new AppNotificationBuilder()
+            .AddArgument("kind", "live")
+            .AddArgument("action", OpenAction)
+            .AddArgument("url", item.Url)
+            .AddText(LocalizationHelper.Format("LiveNotificationTitle", item.DisplayName))
+            .AddText(title);
+        AddImages(builder, item.AvatarUrl ?? string.Empty, item.CoverUrl ?? string.Empty);
+        TryShow(builder.BuildNotification());
+    }
+
+    private static void AddFeedItemKey(AppNotificationButton button, FeedItemKey key)
+    {
+        button.AddArgument("providerId", key.ProviderId)
+            .AddArgument("sourceId", key.SourceId)
+            .AddArgument("feedId", key.FeedId)
+            .AddArgument("itemId", key.ItemId);
+    }
+
+    private static bool TryReadFeedItemKey(
+        IDictionary<string, string> arguments,
+        out FeedItemKey key)
+    {
+        key = default;
+        if (!arguments.TryGetValue("providerId", out var providerId)
+            || !arguments.TryGetValue("sourceId", out var sourceId)
+            || !arguments.TryGetValue("feedId", out var feedId)
+            || !arguments.TryGetValue("itemId", out var itemId)
+            || string.IsNullOrWhiteSpace(providerId)
+            || string.IsNullOrWhiteSpace(sourceId)
+            || string.IsNullOrWhiteSpace(feedId)
+            || string.IsNullOrWhiteSpace(itemId))
+        {
+            return false;
+        }
+
+        key = new FeedItemKey(providerId, sourceId, feedId, itemId);
+        return true;
+    }
+
     private static void AddImages(AppNotificationBuilder builder, string avatarUrl, string coverUrl)
     {
         if (Uri.TryCreate(avatarUrl, UriKind.Absolute, out var avatarUri))
@@ -331,12 +469,19 @@ public sealed class NotificationService
         return AppSettings.LiveNotificationsEnabled;
     }
 
-    public sealed record NotificationActivationRequest(string Action, Uri? Uri, long Aid)
+    public sealed record NotificationActivationRequest(
+        string Action,
+        Uri? Uri,
+        FeedItemKey? ItemKey,
+        long Aid)
     {
         public static NotificationActivationRequest ForOpen(Uri uri)
-            => new(OpenAction, uri, 0);
+            => new(OpenAction, uri, null, 0);
+
+        public static NotificationActivationRequest ForWatchLater(FeedItemKey itemKey)
+            => new(WatchLaterAction, null, itemKey, 0);
 
         public static NotificationActivationRequest ForWatchLater(long aid)
-            => new(WatchLaterAction, null, aid);
+            => new(WatchLaterAction, null, null, aid);
     }
 }

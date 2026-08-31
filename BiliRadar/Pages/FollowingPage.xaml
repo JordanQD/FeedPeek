@@ -14,6 +14,83 @@
             IsSwipeEnabled="False"
             ItemClick="ItemsListView_ItemClick"
             SelectionMode="None">
+            <ListView.Header>
+                <StackPanel
+                    x:Name="LiveCreatorsSection"
+                    Margin="10,4,10,10"
+                    Spacing="6"
+                    Visibility="Collapsed">
+                    <Button
+                        x:Name="LiveSectionToggleButton"
+                        Padding="0"
+                        BorderThickness="0"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Stretch"
+                        Click="LiveSectionToggleButton_Click"
+                        Style="{StaticResource SubtleButtonStyle}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock
+                                FontSize="12"
+                                FontWeight="SemiBold"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="正在直播" />
+                            <FontIcon
+                                x:Name="LiveSectionChevron"
+                                Grid.Column="1"
+                                FontSize="10"
+                                Glyph="&#xE70D;" />
+                        </Grid>
+                    </Button>
+                    <ScrollViewer
+                        x:Name="LiveItemsScrollViewer"
+                        Height="96"
+                        HorizontalScrollBarVisibility="Auto"
+                        HorizontalScrollMode="Enabled"
+                        VerticalScrollBarVisibility="Disabled"
+                        VerticalScrollMode="Disabled"
+                        ZoomMode="Disabled">
+                        <ItemsRepeater x:Name="LiveItemsRepeater">
+                            <ItemsRepeater.Layout>
+                                <StackLayout Orientation="Horizontal" Spacing="6" />
+                            </ItemsRepeater.Layout>
+                            <ItemsRepeater.ItemTemplate>
+                                <DataTemplate x:DataType="models:FeedLiveItemRow">
+                                    <Button
+                                        Width="68"
+                                        Height="92"
+                                        MinWidth="0"
+                                        Padding="4,4,4,8"
+                                        VerticalContentAlignment="Top"
+                                        Click="LiveItem_Click"
+                                        DataContext="{x:Bind}"
+                                        Style="{StaticResource SubtleButtonStyle}"
+                                        ToolTipService.ToolTip="{x:Bind ToolTipText}">
+                                        <StackPanel HorizontalAlignment="Center" Spacing="4">
+                                            <PersonPicture
+                                                Width="44"
+                                                Height="44"
+                                                ProfilePicture="{x:Bind AvatarSource}" />
+                                            <TextBlock
+                                                Width="60"
+                                                FontSize="11"
+                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                MaxLines="2"
+                                                Text="{x:Bind DisplayName}"
+                                                TextAlignment="Center"
+                                                TextTrimming="CharacterEllipsis"
+                                                TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsRepeater.ItemTemplate>
+                        </ItemsRepeater>
+                    </ScrollViewer>
+                </StackPanel>
+            </ListView.Header>
             <ListView.ItemContainerStyle>
                 <Style BasedOn="{StaticResource DefaultListViewItemStyle}" TargetType="ListViewItem">
                     <Setter Property="Padding" Value="0" />
@@ -22,7 +99,7 @@
             </ListView.ItemContainerStyle>
             <ListView.ItemTemplate>
                 <DataTemplate x:DataType="models:FeedItemRow">
-                    <Grid Padding="10,8" ColumnSpacing="12" MinHeight="92" AutomationProperties.Name="{x:Bind Title}">
+                    <Grid Padding="10,8" ColumnSpacing="12" MinHeight="92" AutomationProperties.Name="{x:Bind Title}" DataContext="{x:Bind}" RightTapped="ItemRoot_RightTapped">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="128" />
@@ -55,7 +132,7 @@
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <PersonPicture Width="20" Height="20" ProfilePicture="{x:Bind SourceIconSource}" />
+                                <PersonPicture Width="20" Height="20" ProfilePicture="{x:Bind AttributionIconSource}" />
                                 <TextBlock
                                     Grid.Column="1"
                                     HorizontalAlignment="Left"
@@ -64,7 +141,7 @@
                                     FontWeight="SemiBold"
                                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                     MaxWidth="120"
-                                    Text="{x:Bind SourceName}"
+                                    Text="{x:Bind AttributionName}"
                                     TextTrimming="CharacterEllipsis" />
                                 <TextBlock
                                     Grid.Column="2"

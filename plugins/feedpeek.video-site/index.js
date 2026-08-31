@@ -8,6 +8,10 @@
   const accountProfileEndpoint = 'https://api.bilibili.com/x/web-interface/nav';
   const addViewLaterEndpoint = 'https://api.bilibili.com/x/v2/history/toview/add';
   const removeViewLaterEndpoint = 'https://api.bilibili.com/x/v2/history/toview/del';
+  const followingsEndpoint = 'https://api.bilibili.com/x/relation/followings';
+  const followingLiveEndpoint = 'https://api.live.bilibili.com/xlive/web-ucenter/v1/xfetter/GetWebList';
+  const relationEndpoint = 'https://api.bilibili.com/x/relation';
+  const modifyRelationEndpoint = 'https://api.bilibili.com/x/relation/modify';
   const browserUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
   const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -406,6 +410,137 @@
     };
   };
 
+  const loadFollowing = async payload => {
+    const context = objectOrEmpty(payload?.context || payload);
+    if (context.providerId !== pluginId || !text(context.credentialProfileId)) {
+      Host.raise('REQUEST_CONTEXT_INVALID', '关注列表上下文无效。');
+    }
+    const profile = await getAccountProfile(context);
+    const root = await requestJson({
+      url: `${followingsEndpoint}?vmid=${encodeURIComponent(profile.accountId)}&pn=1&ps=50&order=desc&order_type=attention`,
+      method: 'GET'
+    });
+    const creators = [];
+    const keys = new Set();
+    for (const raw of arrayOrEmpty(objectOrEmpty(root.data).list)) {
+      const item = objectOrEmpty(raw);
+      const creatorKey = text(item.mid);
+      const displayName = text(item.uname);
+      if (!creatorKey || !displayName || keys.has(creatorKey)) continue;
+      keys.add(creatorKey);
+      creators.push({
+        creatorKey,
+        displayName,
+        profileUrl: `https://space.bilibili.com/${creatorKey}`,
+        avatarUrl: normalizeUrl(item.face),
+        supportedNotificationKinds: ['video', 'live'],
+        metadata: null
+      });
+    }
+    return { creators };
+  };
+
+  const loadLive = async payload => {
+    const context = objectOrEmpty(payload?.context || payload);
+    if (context.providerId !== pluginId || context.feedId !== 'live' || !text(context.credentialProfileId)) {
+      Host.raise('REQUEST_CONTEXT_INVALID', '直播列表上下文无效。');
+    }
+    const root = await requestJson({
+      url: `${followingLiveEndpoint}?page=1&page_size=50`,
+      method: 'GET'
+    });
+    const data = objectOrEmpty(root.data);
+    const rawItems = arrayOrEmpty(data.rooms).length > 0
+      ? data.rooms
+      : arrayOrEmpty(data.list).length > 0 ? data.list : data.items;
+    const items = [];
+    const keys = new Set();
+    for (const raw of arrayOrEmpty(rawItems)) {
+      const item = objectOrEmpty(raw);
+      const room = objectOrEmpty(item.room_info);
+      const user = isObject(item.uinfo) ? item.uinfo : objectOrEmpty(item.user);
+      const liveStatus = integer(item.live_status) || integer(room.live_status) || integer(item.status) || integer(room.status);
+      const hasLiveStatus = Object.prototype.hasOwnProperty.call(item, 'live_status')
+        || Object.prototype.hasOwnProperty.call(room, 'live_status')
+        || Object.prototype.hasOwnProperty.call(item, 'status')
+        || Object.prototype.hasOwnProperty.call(room, 'status');
+      if (hasLiveStatus && liveStatus !== 1) continue;
+      if (item.is_live === false || item.is_living === false || room.is_live === false || room.is_living === false) continue;
+      const roomId = integer(item.room_id) || integer(room.room_id) || integer(item.roomid) || integer(room.roomid) || integer(item.id) || integer(room.id);
+      const creatorKey = text(item.uid) || text(user.uid) || text(item.mid) || text(user.mid) || text(item.uname_mid);
+      const displayName = text(item.uname) || text(user.uname) || text(item.name) || text(user.name) || text(item.username);
+      if (roomId <= 0 || !creatorKey || !displayName || keys.has(creatorKey)) continue;
+      keys.add(creatorKey);
+      items.push({
+        creatorKey,
+        displayName,
+        url: `https://live.bilibili.com/${roomId}`,
+        title: text(item.title) || text(room.title) || text(item.room_title) || text(room.room_title) || null,
+        avatarUrl: normalizeUrl(item.face) || normalizeUrl(user.face) || normalizeUrl(item.uface) || normalizeUrl(user.uface) || normalizeUrl(item.avatar) || normalizeUrl(user.avatar),
+        coverUrl: normalizeUrl(item.cover) || normalizeUrl(room.cover) || normalizeUrl(item.room_cover) || normalizeUrl(room.room_cover),
+        viewerCount: integer(item.online) || integer(room.online) || null,
+        startedAt: null,
+        metadata: { roomId: String(roomId) }
+      });
+    }
+    return { items };
+  };
+
+  const isFollowed = data => {
+    const relation = objectOrEmpty(data);
+    const attribute = integer(relation.attribute);
+    return integer(relation.special) === 1 || attribute === 2 || attribute === 6;
+  };
+
+  const getCreatorActions = async payload => {
+    const context = objectOrEmpty(payload?.context);
+    const creatorKey = text(payload?.creatorKey);
+    if (context.providerId !== pluginId || !text(context.credentialProfileId) || !creatorKey) {
+      Host.raise('REQUEST_CONTEXT_INVALID', '作者操作上下文无效。');
+    }
+    const root = await requestJson({
+      url: `${relationEndpoint}?fid=${encodeURIComponent(creatorKey)}`,
+      method: 'GET'
+    });
+    const followed = isFollowed(root.data);
+    return [{
+      actionId: followed ? 'creator.unfollow' : 'creator.follow',
+      localizationKey: null,
+      fallbackText: followed ? '取消关注' : '关注',
+      iconSemantic: followed ? 'unfollow' : 'follow',
+      dangerLevel: 'none',
+      requiresConfirmation: false,
+      isRepeatable: false,
+      payload: null
+    }];
+  };
+
+  const executeCreatorAction = async payload => {
+    const context = objectOrEmpty(payload?.context);
+    const creatorKey = text(payload?.creatorKey);
+    const actionId = text(payload?.actionId);
+    if (context.providerId !== pluginId || !text(context.credentialProfileId) || !creatorKey) {
+      Host.raise('REQUEST_CONTEXT_INVALID', '作者操作上下文无效。');
+    }
+    if (actionId !== 'creator.follow' && actionId !== 'creator.unfollow') {
+      Host.raise('ACTION_UNSUPPORTED', '不支持的作者操作。');
+    }
+    const secret = await Host.credentials.getOpaqueSecret({
+      credentialProfileId: context.credentialProfileId,
+      name: 'bili_jct'
+    });
+    const csrf = text(secret?.value);
+    if (!csrf) Host.raise('CSRF_MISSING', '登录状态中缺少 bili_jct。');
+    await requestJson({
+      url: modifyRelationEndpoint,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `fid=${encodeURIComponent(creatorKey)}&act=${actionId === 'creator.follow' ? '1' : '2'}&csrf=${encodeURIComponent(csrf)}`,
+      bodyEncoding: 'utf8'
+    });
+    return { completed: 'true', isFollowed: actionId === 'creator.follow' ? 'true' : 'false' };
+  };
+
   const validateAuthentication = async payload => {
     const context = objectOrEmpty(payload?.context || payload);
     const profile = await getAccountProfile(context);
@@ -476,7 +611,7 @@
           return {
             providerId: pluginId,
             apiVersion: 1,
-            capabilities: ['feed.updates', 'account.auth', 'account.profile', 'account.history', 'collection.viewLater', 'item.actions']
+            capabilities: ['feed.updates', 'account.auth', 'account.profile', 'account.history', 'collection.viewLater', 'item.actions', 'creator.following', 'creator.actions', 'feed.live']
           };
         case 'plugin.getStatus':
           return { state: 'ready', message: null, details: null };
@@ -512,6 +647,14 @@
           return getItemActions(request.payload);
         case 'item.executeAction':
           return executeItemAction(request.payload);
+        case 'creator.getFollowing':
+          return loadFollowing(request.payload);
+        case 'feed.getLive':
+          return loadLive(request.payload);
+        case 'creator.getActions':
+          return getCreatorActions(request.payload);
+        case 'creator.executeAction':
+          return executeCreatorAction(request.payload);
         default:
           Host.raise('UNSUPPORTED', `Unsupported method: ${request.method}`, {
             context: { method: request.method }

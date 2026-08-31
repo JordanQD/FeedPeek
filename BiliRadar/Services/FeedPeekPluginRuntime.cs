@@ -1,4 +1,5 @@
 using FeedPeek.Core.Feeds;
+using FeedPeek.Core.Models;
 using FeedPeek.Core.Persistence;
 using FeedPeek.PluginContracts.Dtos;
 using FeedPeek.PluginContracts.Manifest;
@@ -34,6 +35,7 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
     private readonly PluginAccountService _account;
     private readonly PluginAuthService _auth;
     private readonly PluginItemActionService _itemActions;
+    private readonly PluginCreatorService _creators;
     private PluginPackage? _sitePackage;
     private bool _loaded;
     private bool _disposed;
@@ -54,6 +56,7 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
         _account = new PluginAccountService(BuiltInVideoSitePlugin.PluginId, client);
         _auth = new PluginAuthService(BuiltInVideoSitePlugin.PluginId, client);
         _itemActions = new PluginItemActionService(BuiltInVideoSitePlugin.PluginId, client);
+        _creators = new PluginCreatorService(BuiltInVideoSitePlugin.PluginId, client);
     }
 
     public IFeedProvider FeedProvider { get; }
@@ -155,15 +158,6 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
             cookies,
             descriptor.Auth.ExposedCookieNames?.ToHashSet(StringComparer.OrdinalIgnoreCase),
             cancellationToken).ConfigureAwait(false);
-        var cookieHeader = await _credentials.ExportCookieHeaderAsync(
-            descriptor.PluginId,
-            descriptor.CredentialProfileId,
-            cancellationToken).ConfigureAwait(false);
-        if (!string.IsNullOrWhiteSpace(cookieHeader))
-        {
-            _legacyCookieStore.SaveCookieString(cookieHeader);
-        }
-
         var subscription = GetAccountSubscription();
         Register(subscription);
         try
@@ -220,7 +214,6 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
             cookieHeader,
             descriptor.Auth.ExposedCookieNames?.ToHashSet(StringComparer.OrdinalIgnoreCase),
             cancellationToken).ConfigureAwait(false);
-        _legacyCookieStore.SaveCookieString(cookieHeader);
         PluginAccountEvents.RaiseChanged();
     }
 
@@ -282,8 +275,8 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
     }
 
     public async Task ExecuteViewLaterActionAsync(
-        FeedPeek.Core.Models.FeedSubscription subscription,
-        FeedPeek.Core.Models.FeedItem item,
+        FeedSubscription subscription,
+        FeedItem item,
         bool isSaved,
         CancellationToken cancellationToken)
     {
@@ -295,6 +288,45 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
             ?? throw new InvalidOperationException("站点插件没有为当前条目提供稍后再看操作。");
         await _itemActions.ExecuteAsync(subscription, action, cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    public Task<IReadOnlyList<CreatorDescriptor>> GetFollowingCreatorsAsync(
+        FeedSubscription subscription,
+        CancellationToken cancellationToken = default)
+        => _creators.GetFollowingAsync(subscription, cancellationToken);
+
+    public Task<IReadOnlyList<PluginLiveItem>> GetLiveItemsAsync(
+        FeedSubscription subscription,
+        CancellationToken cancellationToken = default)
+        => _creators.GetLiveAsync(subscription, cancellationToken);
+
+    public Task<ActionDescriptor[]> GetCreatorActionsAsync(
+        FeedSubscription subscription,
+        FeedItem item,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(item.CreatorKey))
+            return Task.FromResult(Array.Empty<ActionDescriptor>());
+        return _creators.GetActionsAsync(
+            subscription,
+            item.CreatorKey,
+            item.Metadata,
+            cancellationToken);
+    }
+
+    public Task<IReadOnlyDictionary<string, string>> ExecuteCreatorActionAsync(
+        FeedSubscription subscription,
+        FeedItem item,
+        ActionDescriptor action,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(item.CreatorKey))
+            throw new InvalidOperationException("当前条目没有可操作的作者标识。");
+        return _creators.ExecuteAsync(
+            subscription,
+            item.CreatorKey,
+            action,
+            cancellationToken);
     }
 
     private async Task MigrateLegacyCredentialAsync(CancellationToken cancellationToken)
@@ -320,7 +352,7 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
         }
     }
 
-    private static FeedPeek.Core.Models.FeedSubscription GetAccountSubscription()
+    private static FeedSubscription GetAccountSubscription()
         => BuiltInVideoSitePlugin.CreateSubscriptions(isEnabled: true)[0];
 
     private async Task DeleteCredentialCopiesAsync(CancellationToken cancellationToken)

@@ -1,6 +1,7 @@
 using BiliRadar.Helpers;
 using BiliRadar.Models;
 using BiliRadar.Services;
+using FeedPeek.Core.Models;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
@@ -11,7 +12,6 @@ using Microsoft.UI.Xaml.Media.Imaging;
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace BiliRadar.Pages;
@@ -20,13 +20,11 @@ public sealed partial class NotificationSettingsPage : Page
 {
     private const string PersonAddIconData = "M17.5 12C20.5375661 12 23 14.4624339 23 17.5C23 20.5375661 20.5375661 23 17.5 23C14.4624339 23 12 20.5375661 12 17.5C12 14.4624339 14.4624339 12 17.5 12ZM12.0222607 13.9993086C11.7255613 14.4626083 11.4860296 14.9660345 11.3136172 15.4996352L4.25354153 15.499921C3.83932796 15.499921 3.50354153 15.8357075 3.50354153 16.249921L3.50354153 17.1572408C3.50354153 17.8128951 3.78953221 18.4359296 4.28670709 18.8633654C5.5447918 19.9450082 7.44080155 20.5010712 10 20.5010712C10.598839 20.5010712 11.1614445 20.4706245 11.6881394 20.4101192C11.9370538 20.9102887 12.2508544 21.3740111 12.6170965 21.7904935C11.8149076 21.9312924 10.9419626 22.0010712 10 22.0010712C7.11050247 22.0010712 4.87168436 21.3444691 3.30881727 20.0007885C2.48019625 19.2883988 2.00354153 18.2500002 2.00354153 17.1572408L2.00354153 16.249921C2.00354153 15.0072804 3.01090084 13.999921 4.25354153 13.999921L12.0222607 13.9993086ZM17.5 14.25C17.9142 14.25 18.25 14.5858 18.25 15V16.75H20C20.4142 16.75 20.75 17.0858 20.75 17.5C20.75 17.9142 20.4142 18.25 20 18.25H18.25V20C18.25 20.4142 17.9142 20.75 17.5 20.75C17.0858 20.75 16.75 20.4142 16.75 20V18.25H15C14.5858 18.25 14.25 17.9142 14.25 17.5C14.25 17.0858 14.5858 16.75 15 16.75H16.75V15C16.75 14.5858 17.0858 14.25 17.5 14.25ZM10 2.0046246C12.7614237 2.0046246 15 4.24320085 15 7.0046246C15 9.76604835 12.7614237 12.0046246 10 12.0046246C7.23857625 12.0046246 5 9.76604835 5 7.0046246C5 4.24320085 7.23857625 2.0046246 10 2.0046246ZM10 3.5046246C8.06700338 3.5046246 6.5 5.07162798 6.5 7.0046246C6.5 8.93762123 8.06700338 10.5046246 10 10.5046246C11.9329966 10.5046246 13.5 8.93762123 13.5 7.0046246C13.5 5.07162798 11.9329966 3.5046246 10 3.5046246Z";
 
-    private BiliWebDataProvider? _dataProvider;
-    private UpdateMonitorService? _updateMonitorService;
+    private FeedPeekNotificationSession? _notificationSession;
     private bool _isLoadingSettings;
 
-    private BiliWebDataProvider DataProvider
-        => _dataProvider ??= FeedPeekCompositionRoot.CreateLegacyWebDataProvider(new CookieStore());
-    private UpdateMonitorService UpdateMonitorService => _updateMonitorService ??= new(DataProvider);
+    private FeedPeekNotificationSession NotificationSession
+        => _notificationSession ??= new FeedPeekNotificationSession(new CookieStore());
 
     public ObservableCollection<NotificationCreatorSubscription> CustomNotificationCreators { get; } = [];
 
@@ -59,7 +57,8 @@ public sealed partial class NotificationSettingsPage : Page
 
     private void NotificationSettingsPage_Unloaded(object sender, RoutedEventArgs e)
     {
-        _dataProvider?.Dispose();
+        _notificationSession?.Dispose();
+        _notificationSession = null;
     }
 
     private void VideoNotificationSwitch_Toggled(object sender, RoutedEventArgs e)
@@ -243,7 +242,7 @@ public sealed partial class NotificationSettingsPage : Page
             IsPrimaryButtonEnabled = false,
         };
 
-        BiliCreator? resolvedCreator = null;
+        CreatorDescriptor? resolvedCreator = null;
 
         // --- reset to placeholder ---
         void ResetToPlaceholder()
@@ -280,68 +279,15 @@ public sealed partial class NotificationSettingsPage : Page
             }
         }
 
-        // --- resolve mid from video / live url ---
-        async Task<long> ResolveMidFromUrlAsync(string url)
-        {
-            try
-            {
-                if (Regex.IsMatch(url, @"(?:bilibili\.com/video/|b23\.tv/|bilibili\.com/av\d+|^BV\w+$|^av\d+$)", RegexOptions.IgnoreCase))
-                {
-                    return await DataProvider.ResolveCreatorMidFromVideoUrlAsync(url);
-                }
-
-                if (Regex.IsMatch(url, @"live\.bilibili\.com/\d+", RegexOptions.IgnoreCase))
-                {
-                    return await DataProvider.ResolveCreatorMidFromLiveUrlAsync(url);
-                }
-            }
-            catch
-            {
-            }
-
-            return 0;
-        }
-
         // --- resolve creator ---
         async Task ResolveCreatorForDialogAsync()
         {
-            long mid;
             var input = linkBox.Text.Trim();
-            var isVideoOrLive = Regex.IsMatch(input, @"bilibili\.com/video/|b23\.tv/|bilibili\.com/av\d+|live\.bilibili\.com/", RegexOptions.IgnoreCase)
-                || Regex.IsMatch(input, @"^BV\w+$")
-                || Regex.IsMatch(input, @"^av\d+$", RegexOptions.IgnoreCase);
-            if (isVideoOrLive)
-            {
-                mid = await ResolveMidFromUrlAsync(input);
-            }
-            else
-            {
-                mid = TryParseCreatorMid(input);
-            }
-
-            if (mid <= 0)
+            var creatorKey = ExtractCreatorKey(input);
+            if (string.IsNullOrWhiteSpace(creatorKey))
             {
                 ShowError(InfoBarSeverity.Warning, LocalizationHelper.GetString("InputInvalid"), LocalizationHelper.GetString("InputInvalidDetail"));
                 return;
-            }
-
-            if (CustomNotificationCreators.Any(item => item.Mid == mid))
-            {
-                ShowError(InfoBarSeverity.Warning, LocalizationHelper.GetString("AlreadyExists"), LocalizationHelper.GetString("AlreadyExistsDetail"));
-                return;
-            }
-
-            try
-            {
-                var isFollowed = await UpdateMonitorService.IsCreatorFollowedAsync(mid);
-                if (!isFollowed)
-                {
-                    ShowError(InfoBarSeverity.Warning, LocalizationHelper.GetString("CreatorNotFollowed"), LocalizationHelper.GetString("CreatorNotFollowedDetail"));
-                    return;
-                }
-            }
-            catch
-            {
             }
 
             linkBox.IsEnabled = false;
@@ -349,13 +295,31 @@ public sealed partial class NotificationSettingsPage : Page
             DismissInfoBar();
             try
             {
-                resolvedCreator = await TryResolveCreatorAsync(mid);
-                avatarPicture.Initials = string.IsNullOrWhiteSpace(resolvedCreator.Name) ? "UP" : resolvedCreator.Name[..1];
+                var creators = await NotificationSession.GetFollowingCreatorsAsync();
+                resolvedCreator = creators.FirstOrDefault(item =>
+                    string.Equals(item.CreatorKey, creatorKey, StringComparison.Ordinal));
+                if (resolvedCreator is null)
+                {
+                    ShowError(InfoBarSeverity.Warning, LocalizationHelper.GetString("CreatorNotFollowed"), LocalizationHelper.GetString("CreatorNotFollowedDetail"));
+                    return;
+                }
+
+                if (CustomNotificationCreators.Any(item =>
+                    string.Equals(item.ProviderId, resolvedCreator.ProviderId, StringComparison.Ordinal)
+                    && string.Equals(item.SourceId, resolvedCreator.SourceId, StringComparison.Ordinal)
+                    && string.Equals(item.CreatorKey, resolvedCreator.CreatorKey, StringComparison.Ordinal)))
+                {
+                    ShowError(InfoBarSeverity.Warning, LocalizationHelper.GetString("AlreadyExists"), LocalizationHelper.GetString("AlreadyExistsDetail"));
+                    resolvedCreator = null;
+                    return;
+                }
+
+                avatarPicture.Initials = string.IsNullOrWhiteSpace(resolvedCreator.DisplayName) ? "UP" : resolvedCreator.DisplayName[..1];
                 avatarPicture.ProfilePicture = string.IsNullOrWhiteSpace(resolvedCreator.AvatarUrl)
                     ? null
                     : new BitmapImage(new Uri(resolvedCreator.AvatarUrl));
-                creatorNameText.Text = resolvedCreator.Name;
-                creatorDetailText.Text = $"UID {resolvedCreator.Mid}";
+                creatorNameText.Text = resolvedCreator.DisplayName;
+                creatorDetailText.Text = $"{resolvedCreator.ProviderId} · {resolvedCreator.CreatorKey}";
                 dialog.IsPrimaryButtonEnabled = true;
             }
             catch (Exception ex)
@@ -390,7 +354,10 @@ public sealed partial class NotificationSettingsPage : Page
                 return;
             }
 
-            if (CustomNotificationCreators.Any(item => item.Mid == resolvedCreator.Mid))
+            if (CustomNotificationCreators.Any(item =>
+                string.Equals(item.ProviderId, resolvedCreator.ProviderId, StringComparison.Ordinal)
+                && string.Equals(item.SourceId, resolvedCreator.SourceId, StringComparison.Ordinal)
+                && string.Equals(item.CreatorKey, resolvedCreator.CreatorKey, StringComparison.Ordinal)))
             {
                 ShowError(InfoBarSeverity.Warning, LocalizationHelper.GetString("AlreadyExists"), LocalizationHelper.GetString("AlreadyExistsDetail"));
                 return;
@@ -398,9 +365,11 @@ public sealed partial class NotificationSettingsPage : Page
 
             var subscription = new NotificationCreatorSubscription
             {
-                Mid = resolvedCreator.Mid,
-                Name = resolvedCreator.Name,
-                AvatarUrl = resolvedCreator.AvatarUrl,
+                ProviderId = resolvedCreator.ProviderId,
+                SourceId = resolvedCreator.SourceId,
+                CreatorKey = resolvedCreator.CreatorKey,
+                Name = resolvedCreator.DisplayName,
+                AvatarUrl = resolvedCreator.AvatarUrl ?? string.Empty,
                 VideoNotificationsEnabled = videoSwitch.IsOn,
                 LiveNotificationsEnabled = liveSwitch.IsOn,
             };
@@ -473,19 +442,6 @@ public sealed partial class NotificationSettingsPage : Page
             """);
     }
 
-    private async Task<BiliCreator> TryResolveCreatorAsync(long mid)
-    {
-        try
-        {
-            return await UpdateMonitorService.GetCreatorAsync(mid)
-                ?? new BiliCreator(mid, $"UID {mid}", string.Empty);
-        }
-        catch
-        {
-            return new BiliCreator(mid, $"UID {mid}", string.Empty);
-        }
-    }
-
     private void CustomVideoNotificationSwitch_Toggled(object sender, RoutedEventArgs e)
     {
         if (_isLoadingSettings || sender is not ToggleSwitch { Tag: NotificationCreatorSubscription subscription })
@@ -547,31 +503,20 @@ public sealed partial class NotificationSettingsPage : Page
 
     private async Task SeedNotificationBaselineAsync(NotificationCreatorSubscription subscription)
     {
-        try
-        {
-            var allUpdates = await UpdateMonitorService.GetCreatorVideoUpdatesAsync(subscription.Mid);
-            AppSettings.KnownVideoUpdateIds = allUpdates
-                .Select(item => item.Id)
-                .Concat(AppSettings.KnownVideoUpdateIds)
-                .Where(item => !string.IsNullOrWhiteSpace(item))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-            AppSettings.VideoNotificationBaselineInitialized = true;
-        }
-        catch
-        {
-        }
+        AppSettings.VideoNotificationBaselineInitialized = false;
 
         try
         {
-            var liveCreator = await UpdateMonitorService.GetCreatorLiveAsync(subscription.Mid);
-            if (liveCreator is not null)
-            {
-                AppSettings.KnownLiveRoomIds = new[] { liveCreator.RoomId.ToString() }
-                    .Concat(AppSettings.KnownLiveRoomIds)
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToList();
-            }
+            var liveKeys = (await NotificationSession.GetLiveItemsAsync())
+                .Where(item =>
+                    string.Equals(item.ProviderId, subscription.ProviderId, StringComparison.Ordinal)
+                    && string.Equals(item.SourceId, subscription.SourceId, StringComparison.Ordinal)
+                    && string.Equals(item.Item.CreatorKey, subscription.CreatorKey, StringComparison.Ordinal))
+                .Select(item => item.StableKey);
+            AppSettings.KnownLiveRoomIds = liveKeys
+                .Concat(AppSettings.KnownLiveRoomIds)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
 
             AppSettings.LiveNotificationBaselineInitialized = true;
         }
@@ -580,20 +525,14 @@ public sealed partial class NotificationSettingsPage : Page
         }
     }
 
-    private static long TryParseCreatorMid(string text)
+    private static string ExtractCreatorKey(string text)
     {
         if (string.IsNullOrWhiteSpace(text))
-        {
-            return 0;
-        }
+            return string.Empty;
 
-        var match = Regex.Match(text, @"space\.bilibili\.com/(\d+)", RegexOptions.IgnoreCase);
-        if (match.Success && long.TryParse(match.Groups[1].Value, out var urlMid))
-        {
-            return urlMid;
-        }
-
-        match = Regex.Match(text, @"\d+");
-        return match.Success && long.TryParse(match.Value, out var mid) ? mid : 0;
+        var trimmed = text.Trim();
+        if (Uri.TryCreate(trimmed, UriKind.Absolute, out var uri))
+            return uri.Segments.LastOrDefault()?.Trim('/') ?? string.Empty;
+        return trimmed;
     }
 }

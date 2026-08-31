@@ -28,6 +28,9 @@ public sealed class VideoSitePluginTests
         Assert.Contains("account.history", package.Manifest.Capabilities);
         Assert.Contains("collection.viewLater", package.Manifest.Capabilities);
         Assert.Contains("item.actions", package.Manifest.Capabilities);
+        Assert.Contains("creator.following", package.Manifest.Capabilities);
+        Assert.Contains("creator.actions", package.Manifest.Capabilities);
+        Assert.Contains("feed.live", package.Manifest.Capabilities);
         Assert.DoesNotContain(package.RootPath, package.Scripts.Values);
 
         var bridge = new FixtureSiteHttpBridge(
@@ -295,6 +298,57 @@ public sealed class VideoSitePluginTests
         }
     }
 
+    [Fact]
+    public async Task CreatorFollowingLiveAndRelationActions_AreProvidedByPlugin()
+    {
+        var package = await new PluginManifestLoader().LoadAsync(FixturePluginRoot);
+        var subscription = CreateSubscription();
+        var liveSubscription = CreateSubscription(PluginFeedIds.Live);
+        var registry = new PluginInvocationRegistry();
+        registry.Register(ToContext(subscription));
+        registry.Register(ToContext(liveSubscription));
+        var credentials = new InMemoryPluginCredentialStore();
+        await credentials.SetOpaqueSecretAsync(
+            PluginId,
+            subscription.CredentialProfileId!,
+            "bili_jct",
+            "csrf-token",
+            CancellationToken.None);
+        var bridge = new CreatorSiteHttpBridge();
+        await using var runtime = await JintPluginTransport.CreateAsync(
+            package,
+            new PluginHostServices(
+                bridge,
+                credentials,
+                NullPluginLogSink.Instance,
+                registry));
+        var creators = new PluginCreatorService(
+            PluginId,
+            new PluginClient(new TransportInvoker(runtime)));
+
+        var following = await creators.GetFollowingAsync(subscription);
+        var creator = Assert.Single(following);
+        Assert.Equal("123", creator.CreatorKey);
+        Assert.Equal("测试 UP", creator.DisplayName);
+        Assert.Equal("https://img.example/up.jpg", creator.AvatarUrl);
+
+        var liveItems = await creators.GetLiveAsync(liveSubscription);
+        var live = Assert.Single(liveItems);
+        Assert.Equal("123", live.CreatorKey);
+        Assert.Equal("https://live.bilibili.com/456", live.Url);
+        Assert.Equal("直播标题", live.Title);
+
+        var actions = await creators.GetActionsAsync(subscription, creator.CreatorKey, null);
+        var action = Assert.Single(actions);
+        Assert.Equal("creator.unfollow", action.ActionId);
+        await creators.ExecuteAsync(subscription, creator.CreatorKey, action);
+
+        var request = Assert.Single(bridge.Requests, candidate =>
+            candidate.Url.EndsWith("/x/relation/modify", StringComparison.Ordinal));
+        Assert.Equal("POST", request.Method);
+        Assert.Equal("fid=123&act=2&csrf=csrf-token", request.Body);
+    }
+
     private static string FixturePluginRoot
         => Path.Combine(AppContext.BaseDirectory, "Fixtures", "Plugins", "feedpeek.video-site");
 
@@ -407,6 +461,41 @@ public sealed class VideoSitePluginTests
                 request.Url,
                 new Dictionary<string, string>(),
                 Body,
+                "utf8"));
+        }
+    }
+
+    private sealed class CreatorSiteHttpBridge : IPluginHttpBridge
+    {
+        public List<HostHttpRequest> Requests { get; } = [];
+
+        public Task<HostHttpResponse> SendAsync(
+            PluginManifest manifest,
+            PluginHostContext context,
+            HostHttpRequest request,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Requests.Add(request);
+            var body = request.Url switch
+            {
+                var url when url.EndsWith("/x/web-interface/nav", StringComparison.Ordinal) =>
+                    """{"code":0,"data":{"isLogin":true,"mid":42,"uname":"账号","face":"//img.example/account.jpg"}}""",
+                var url when url.Contains("/x/relation/followings", StringComparison.Ordinal) =>
+                    """{"code":0,"data":{"list":[{"mid":123,"uname":"测试 UP","face":"//img.example/up.jpg"}]}}""",
+                var url when url.Contains("GetWebList", StringComparison.Ordinal) =>
+                    """{"code":0,"data":{"rooms":[{"room_info":{"room_id":456,"live_status":1,"title":"直播标题"},"uinfo":{"uid":123,"uname":"测试 UP","face":"//img.example/up.jpg"}}]}}""",
+                var url when url.EndsWith("/x/relation/modify", StringComparison.Ordinal) =>
+                    """{"code":0}""",
+                var url when url.Contains("/x/relation?", StringComparison.Ordinal) =>
+                    """{"code":0,"data":{"attribute":2,"special":0}}""",
+                _ => throw new InvalidOperationException(request.Url),
+            };
+            return Task.FromResult(new HostHttpResponse(
+                200,
+                request.Url,
+                new Dictionary<string, string>(),
+                body,
                 "utf8"));
         }
     }

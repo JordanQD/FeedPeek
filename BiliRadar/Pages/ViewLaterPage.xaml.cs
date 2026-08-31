@@ -1,5 +1,6 @@
 using BiliRadar.Models;
 using BiliRadar.Services;
+using BiliRadar.Helpers;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using System;
@@ -72,6 +73,14 @@ public sealed partial class ViewLaterPage : Page, IMainPanelPage, IDisposable
         catch
         {
             // The session already reports the actionable error through its status notification.
+        }
+    }
+
+    private async void ItemRoot_RightTapped(object sender, Microsoft.UI.Xaml.Input.RightTappedRoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: FeedItemRow item } target && _session is not null)
+        {
+            await FeedItemMenuHelper.ShowCreatorMenuAsync(target, e, item, _session);
         }
     }
 

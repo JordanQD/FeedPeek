@@ -3,6 +3,7 @@ using FeedPeek.Core.Feeds;
 using FeedPeek.Core.Models;
 using FeedPeek.Core.Persistence;
 using FeedPeek.PluginContracts.Protocol;
+using FeedPeek.PluginContracts.Dtos;
 using FeedPeek.Rss;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml.Controls;
@@ -29,6 +30,10 @@ public sealed class FeedPeekStatus(string message, InfoBarSeverity severity) : E
 public sealed record FeedItemLoadResult(
     IReadOnlyList<FeedItemRow> Items,
     bool HasMore);
+
+public sealed record FeedFollowingExtras(
+    IReadOnlyList<CreatorDescriptor> FollowingCreators,
+    IReadOnlyList<PluginLiveItem> LiveItems);
 
 public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, IAsyncDisposable
 {
@@ -95,6 +100,8 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public event EventHandler<FeedPeekStatus>? StatusRaised;
+
+    public IReadOnlyList<CreatorDescriptor> FollowingCreators { get; private set; } = [];
 
     public Task InitializeAsync(CancellationToken cancellationToken = default)
         => RunExclusiveAsync(
@@ -225,6 +232,77 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
     public Task<IReadOnlyList<FeedItemRow>> GetFollowingItemsAsync(
         CancellationToken cancellationToken = default)
         => GetItemsAsync(new FeedQuery(FeedId: PluginFeedIds.Updates), cancellationToken);
+
+    public async Task<FeedFollowingExtras> GetFollowingExtrasAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var result = new FeedFollowingExtras([], []);
+        await RunExclusiveAsync(
+            async operationToken =>
+            {
+                await EnsureInitializedAsync(operationToken).ConfigureAwait(false);
+                var subscriptions = await _feedSession.GetSubscriptionsAsync(operationToken)
+                    .ConfigureAwait(false);
+                var subscription = subscriptions.FirstOrDefault(item =>
+                    IsPluginFeed(item, PluginFeedIds.Updates));
+                if (subscription is null)
+                {
+                    FollowingCreators = [];
+                    return;
+                }
+
+                IReadOnlyList<CreatorDescriptor> following = [];
+                IReadOnlyList<PluginLiveItem> liveItems = [];
+                try
+                {
+                    following = await _pluginRuntime.GetFollowingCreatorsAsync(
+                        subscription,
+                        operationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (operationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception exception)
+                {
+                    RaiseStatus($"关注列表：{exception.Message}", InfoBarSeverity.Error);
+                }
+
+                try
+                {
+                    var liveSubscription = BuiltInVideoSitePlugin.CreateLiveSubscription();
+                    _pluginRuntime.Register(liveSubscription);
+                    liveItems = await _pluginRuntime.GetLiveItemsAsync(
+                        liveSubscription,
+                        operationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (operationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception exception)
+                {
+                    RaiseStatus($"直播列表：{DescribeError(exception)}", InfoBarSeverity.Error);
+                }
+
+                FollowingCreators = following;
+                result = new FeedFollowingExtras(following, liveItems);
+            },
+            cancellationToken);
+        return result;
+    }
+
+    private static string DescribeError(Exception exception)
+    {
+        if (!string.IsNullOrWhiteSpace(exception.Message))
+            return exception.Message;
+        if (exception is FeedPeek.PluginHost.PluginInvocationException pluginException
+            && !string.IsNullOrWhiteSpace(pluginException.Code))
+        {
+            return pluginException.Code;
+        }
+        return exception.GetType().Name;
+    }
 
     public async Task<FeedItemLoadResult> GetFollowingPageAsync(
         CancellationToken cancellationToken = default)
@@ -361,6 +439,62 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
             cancellationToken);
     }
 
+    public async Task<ActionDescriptor?> GetCreatorRelationActionAsync(
+        FeedItemRow item,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        ActionDescriptor? result = null;
+        await RunExclusiveAsync(
+            async operationToken =>
+            {
+                await EnsureInitializedAsync(operationToken).ConfigureAwait(false);
+                if (!string.Equals(item.ProviderId, BuiltInVideoSitePlugin.PluginId, StringComparison.Ordinal)
+                    || string.IsNullOrWhiteSpace(item.Item.CreatorKey))
+                {
+                    return;
+                }
+
+                var subscription = await FindItemSubscriptionAsync(item, operationToken)
+                    .ConfigureAwait(false);
+                var actions = await _pluginRuntime.GetCreatorActionsAsync(
+                    subscription,
+                    item.Item,
+                    operationToken).ConfigureAwait(false);
+                result = actions.FirstOrDefault(action =>
+                    action.ActionId is "creator.follow" or "creator.unfollow");
+            },
+            cancellationToken);
+        return result;
+    }
+
+    public Task ExecuteCreatorActionAsync(
+        FeedItemRow item,
+        ActionDescriptor action,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        ArgumentNullException.ThrowIfNull(action);
+        return RunExclusiveAsync(
+            async operationToken =>
+            {
+                await EnsureInitializedAsync(operationToken).ConfigureAwait(false);
+                var subscription = await FindItemSubscriptionAsync(item, operationToken)
+                    .ConfigureAwait(false);
+                await _pluginRuntime.ExecuteCreatorActionAsync(
+                    subscription,
+                    item.Item,
+                    action,
+                    operationToken).ConfigureAwait(false);
+                RaiseStatus(
+                    action.ActionId == "creator.follow"
+                        ? $"已关注 {item.AuthorName}"
+                        : $"已取消关注 {item.AuthorName}",
+                    InfoBarSeverity.Success);
+            },
+            cancellationToken);
+    }
+
     public async Task<IReadOnlyList<FeedSourceRow>> GetSourcesAsync(
         CancellationToken cancellationToken = default)
     {
@@ -431,6 +565,7 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
                     .ConfigureAwait(false);
                 if (!hasCredentials)
                 {
+                    FollowingCreators = [];
                     await _feedSession.DeleteSourceAsync(
                         BuiltInVideoSitePlugin.PluginId,
                         BuiltInVideoSitePlugin.SourceId,
@@ -526,11 +661,28 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
         return storedItems.Select(item =>
         {
             sources.TryGetValue((item.Item.ProviderId, item.Item.SourceId), out var source);
+            var showCreator = string.Equals(
+                item.Item.ProviderId,
+                BuiltInVideoSitePlugin.PluginId,
+                StringComparison.Ordinal)
+                && !string.IsNullOrWhiteSpace(item.Item.CreatorKey);
             return new FeedItemRow(
                 item,
                 source?.DisplayName,
-                GetSourceIconUrl(source));
+                GetSourceIconUrl(source),
+                preferAuthorAttribution: showCreator);
         }).ToList();
+    }
+
+    private async Task<FeedSubscription> FindItemSubscriptionAsync(
+        FeedItemRow item,
+        CancellationToken cancellationToken)
+    {
+        var subscriptions = await _feedSession.GetSubscriptionsAsync(cancellationToken)
+            .ConfigureAwait(false);
+        return subscriptions.FirstOrDefault(candidate =>
+            string.Equals(candidate.SubscriptionId, item.SubscriptionId, StringComparison.Ordinal))
+            ?? throw new InvalidOperationException("找不到当前条目对应的站点订阅。");
     }
 
     private async Task<FeedItemLoadResult> GetSectionPageAsync(

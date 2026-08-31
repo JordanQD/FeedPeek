@@ -13,6 +13,7 @@ internal static class BuiltInVideoSitePlugin
     public const string UpdatesSubscriptionId = "feedpeek.video-site:account-default:updates";
     public const string HistorySubscriptionId = "feedpeek.video-site:account-default:history";
     public const string ViewLaterSubscriptionId = "feedpeek.video-site:account-default:viewLater";
+    public const string LiveSubscriptionId = "feedpeek.video-site:account-default:live";
     public const string DefaultCredentialProfileId = "account-default";
     public const string SourceIconOption = "source.icon";
 
@@ -43,6 +44,12 @@ internal static class BuiltInVideoSitePlugin
                     "collection",
                     SupportsPaging: true,
                     SupportsNotifications: false),
+                new FeedDefinition(
+                    PluginFeedIds.Live,
+                    "正在直播",
+                    "live",
+                    SupportsPaging: false,
+                    SupportsNotifications: true),
             ],
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
@@ -56,6 +63,9 @@ internal static class BuiltInVideoSitePlugin
             CreateSubscription(HistorySubscriptionId, PluginFeedIds.History, "哔哩哔哩历史记录", isEnabled),
             CreateSubscription(ViewLaterSubscriptionId, PluginFeedIds.ViewLater, "哔哩哔哩稍后再看", isEnabled),
         ];
+
+    public static FeedSubscription CreateLiveSubscription()
+        => CreateSubscription(LiveSubscriptionId, PluginFeedIds.Live, "哔哩哔哩正在直播", isEnabled: true);
 
     private static FeedSubscription CreateSubscription(
         string subscriptionId,
