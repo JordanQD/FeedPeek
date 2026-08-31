@@ -28,15 +28,12 @@ public sealed partial class GeneralSettingsPage : Page
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
-    private readonly CookieStore _cookieStore = new();
-    private readonly FeedPeekPluginRuntime _accountService;
     private bool _isLoadingSettings;
     private bool _useRegistryStartup;
     private StartupTask? _startupTask;
 
     public GeneralSettingsPage()
     {
-        _accountService = new FeedPeekPluginRuntime(_cookieStore);
         InitializeComponent();
         Loaded += GeneralSettingsPage_Loaded;
         Unloaded += GeneralSettingsPage_Unloaded;
@@ -68,7 +65,6 @@ public sealed partial class GeneralSettingsPage : Page
     {
         Loaded -= GeneralSettingsPage_Loaded;
         Unloaded -= GeneralSettingsPage_Unloaded;
-        _accountService.Dispose();
     }
 
     private async System.Threading.Tasks.Task LoadStartupStateAsync()
@@ -299,10 +295,9 @@ public sealed partial class GeneralSettingsPage : Page
         }
     }
 
-    private async System.Threading.Tasks.Task<SettingsExport> CreateSettingsExportAsync()
+    private System.Threading.Tasks.Task<SettingsExport> CreateSettingsExportAsync()
     {
-        var cookie = await _accountService.ExportCookieHeaderAsync();
-        return new SettingsExport
+        return System.Threading.Tasks.Task.FromResult(new SettingsExport
         {
             ExportedAt = DateTimeOffset.Now,
             AutoStartEnabled = AutoStartSwitch.IsOn,
@@ -317,12 +312,7 @@ public sealed partial class GeneralSettingsPage : Page
             VideoNotificationsEnabled = AppSettings.VideoNotificationsEnabled,
             LiveNotificationsEnabled = AppSettings.LiveNotificationsEnabled,
             CustomNotificationCreators = AppSettings.CustomNotificationCreators.ToList(),
-            Login = new LoginExport
-            {
-                HasCookie = !string.IsNullOrWhiteSpace(cookie),
-                Cookie = cookie ?? string.Empty,
-            },
-        };
+        });
     }
 
     private async System.Threading.Tasks.Task ApplySettingsExportAsync(SettingsExport import)
@@ -338,15 +328,6 @@ public sealed partial class GeneralSettingsPage : Page
         AppSettings.LiveNotificationsEnabled = import.LiveNotificationsEnabled;
         AppSettings.LiveSectionDisplayMode = ParseEnum(import.LiveSectionDisplayMode, LiveSectionDisplayMode.Expanded);
         AppSettings.CustomNotificationCreators = import.CustomNotificationCreators ?? [];
-
-        if (import.Login?.HasCookie == true && !string.IsNullOrWhiteSpace(import.Login.Cookie))
-        {
-            await _accountService.ImportCookieHeaderAsync(import.Login.Cookie);
-        }
-        else
-        {
-            await _accountService.ClearCredentialsAsync();
-        }
 
         _isLoadingSettings = true;
         RunningLaunchActionBox.SelectedIndex = AppSettings.RunningLaunchAction == RunningLaunchAction.OpenCustomWebPage ? 1 : 0;
@@ -468,13 +449,6 @@ public sealed partial class GeneralSettingsPage : Page
         ConfigStatusText.Visibility = string.IsNullOrWhiteSpace(message) ? Visibility.Collapsed : Visibility.Visible;
     }
 
-    private sealed class LoginExport
-    {
-        public bool HasCookie { get; set; }
-
-        public string Cookie { get; set; } = string.Empty;
-    }
-
     private sealed class SettingsExport
     {
         public DateTimeOffset ExportedAt { get; set; }
@@ -504,7 +478,5 @@ public sealed partial class GeneralSettingsPage : Page
         public bool LiveNotificationsEnabled { get; set; } = true;
 
         public List<NotificationCreatorSubscription> CustomNotificationCreators { get; set; } = [];
-
-        public LoginExport? Login { get; set; }
     }
 }

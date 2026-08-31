@@ -1,6 +1,5 @@
 using FeedPeek.Core.Feeds;
 using FeedPeek.Core.Models;
-using FeedPeek.Core.Persistence;
 using FeedPeek.PluginContracts.Dtos;
 using FeedPeek.PluginContracts.Manifest;
 using FeedPeek.PluginHost;
@@ -13,7 +12,6 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Windows.Storage;
 
 namespace BiliRadar.Services;
 
@@ -92,9 +90,7 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (_loaded)
         {
-            return new PluginLoadResult(
-                _catalog.LoadedPluginIds.Contains(BuiltInVideoSitePlugin.PluginId, StringComparer.Ordinal),
-                null);
+            return new PluginLoadResult(true, null);
         }
 
         var configuration = await _installations.GetLoadConfigurationAsync(cancellationToken)
@@ -120,22 +116,18 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
         var sitePlugin = results.FirstOrDefault(result =>
             string.Equals(
                 result.Package?.Manifest.PluginId,
-                BuiltInVideoSitePlugin.PluginId,
+                LegacyVideoSiteCompatibility.PluginId,
                 StringComparison.Ordinal)
             || string.Equals(
                 Path.GetFileName(result.DirectoryPath),
-                BuiltInVideoSitePlugin.PluginId,
+                LegacyVideoSiteCompatibility.PluginId,
                 StringComparison.Ordinal));
         if (sitePlugin?.IsAvailable == true)
         {
             _sitePackage = sitePlugin.Package;
             await MigrateLegacyCredentialAsync(cancellationToken).ConfigureAwait(false);
-            return new PluginLoadResult(true, null);
         }
-
-        return new PluginLoadResult(
-            false,
-            sitePlugin?.ErrorMessage ?? "没有找到内置视频站点插件。");
+        return new PluginLoadResult(true, null);
     }
 
     public void Register(FeedPeek.Core.Models.FeedSubscription subscription)
@@ -146,11 +138,6 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
             subscription.FeedId,
             subscription.CredentialProfileId,
             subscription.Options));
-
-    public PluginLoginDescriptor GetLoginDescriptor()
-        => GetLoginDescriptor(
-            BuiltInVideoSitePlugin.PluginId,
-            BuiltInVideoSitePlugin.DefaultCredentialProfileId);
 
     public PluginLoginDescriptor GetLoginDescriptor(
         string pluginId,
@@ -173,12 +160,6 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
             package.Manifest.DisplayName,
             auth);
     }
-
-    public async Task<bool> HasCredentialsAsync(CancellationToken cancellationToken = default)
-        => await HasCredentialsAsync(
-            BuiltInVideoSitePlugin.PluginId,
-            BuiltInVideoSitePlugin.DefaultCredentialProfileId,
-            cancellationToken).ConfigureAwait(false);
 
     public async Task<bool> HasCredentialsAsync(
         string pluginId,
@@ -249,12 +230,6 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
         }
     }
 
-    public async Task BeginAuthenticationAsync(CancellationToken cancellationToken = default)
-        => await BeginAuthenticationAsync(
-            BuiltInVideoSitePlugin.PluginId,
-            BuiltInVideoSitePlugin.DefaultCredentialProfileId,
-            cancellationToken).ConfigureAwait(false);
-
     public async Task BeginAuthenticationAsync(
         string pluginId,
         string credentialProfileId,
@@ -274,43 +249,6 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
         {
             throw new InvalidOperationException("插件没有启动 WebView 登录流程。");
         }
-    }
-
-    public async Task ImportCookieHeaderAsync(
-        string cookieHeader,
-        CancellationToken cancellationToken = default)
-    {
-        var load = await LoadAsync(cancellationToken).ConfigureAwait(false);
-        if (!load.IsAvailable)
-        {
-            throw new InvalidOperationException(load.ErrorMessage);
-        }
-        var descriptor = GetLoginDescriptor();
-        await _credentials.ImportCookieHeaderAsync(
-            BuiltInVideoSitePlugin.PluginId,
-            BuiltInVideoSitePlugin.DefaultCredentialProfileId,
-            cookieHeader,
-            descriptor.Auth.ExposedCookieNames?.ToHashSet(StringComparer.OrdinalIgnoreCase),
-            cancellationToken).ConfigureAwait(false);
-        PluginAccountEvents.RaiseChanged();
-    }
-
-    public async Task<string?> ExportCookieHeaderAsync(CancellationToken cancellationToken = default)
-    {
-        await HasCredentialsAsync(cancellationToken).ConfigureAwait(false);
-        return await _credentials.ExportCookieHeaderAsync(
-            BuiltInVideoSitePlugin.PluginId,
-            BuiltInVideoSitePlugin.DefaultCredentialProfileId,
-            cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task ClearCredentialsAsync(CancellationToken cancellationToken = default)
-    {
-        await ClearCredentialsAsync(
-            BuiltInVideoSitePlugin.PluginId,
-            BuiltInVideoSitePlugin.DefaultCredentialProfileId,
-            cancellationToken).ConfigureAwait(false);
-        await PurgeCachedSourceDataAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task ClearCredentialsAsync(
@@ -335,20 +273,13 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
 
         await _credentials.DeleteProfileAsync(pluginId, credentialProfileId, cancellationToken)
             .ConfigureAwait(false);
-        if (string.Equals(pluginId, BuiltInVideoSitePlugin.PluginId, StringComparison.Ordinal)
-            && string.Equals(credentialProfileId, BuiltInVideoSitePlugin.DefaultCredentialProfileId, StringComparison.Ordinal))
+        if (string.Equals(pluginId, LegacyVideoSiteCompatibility.PluginId, StringComparison.Ordinal)
+            && string.Equals(credentialProfileId, LegacyVideoSiteCompatibility.DefaultCredentialProfileId, StringComparison.Ordinal))
         {
             _legacyCookieStore.Clear();
         }
         PluginAccountEvents.RaiseChanged();
     }
-
-    public async Task<PluginAccountProfile?> GetAccountProfileAsync(
-        CancellationToken cancellationToken = default)
-        => await GetAccountProfileAsync(
-            BuiltInVideoSitePlugin.PluginId,
-            BuiltInVideoSitePlugin.DefaultCredentialProfileId,
-            cancellationToken).ConfigureAwait(false);
 
     public async Task<PluginAccountProfile?> GetAccountProfileAsync(
         string pluginId,
@@ -520,8 +451,8 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
     private async Task MigrateLegacyCredentialAsync(CancellationToken cancellationToken)
     {
         if (await _credentials.ExistsAsync(
-            BuiltInVideoSitePlugin.PluginId,
-            BuiltInVideoSitePlugin.DefaultCredentialProfileId,
+            LegacyVideoSiteCompatibility.PluginId,
+            LegacyVideoSiteCompatibility.DefaultCredentialProfileId,
             cancellationToken).ConfigureAwait(false))
         {
             return;
@@ -531,17 +462,14 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
         if (!string.IsNullOrWhiteSpace(cookie))
         {
             await _credentials.ImportCookieHeaderAsync(
-                BuiltInVideoSitePlugin.PluginId,
-                BuiltInVideoSitePlugin.DefaultCredentialProfileId,
+                LegacyVideoSiteCompatibility.PluginId,
+                LegacyVideoSiteCompatibility.DefaultCredentialProfileId,
                 cookie,
                 _sitePackage?.Manifest.Auth?.ExposedCookieNames?
                     .ToHashSet(StringComparer.OrdinalIgnoreCase),
                 cancellationToken).ConfigureAwait(false);
         }
     }
-
-    private static FeedSubscription GetAccountSubscription()
-        => BuiltInVideoSitePlugin.CreateSubscriptions(isEnabled: true)[0];
 
     private static FeedSubscription CreateManagementSubscription(
         string pluginId,
@@ -575,28 +503,6 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
         {
             throw new InvalidOperationException("插件返回了无效的来源定义。");
         }
-    }
-
-    private async Task DeleteCredentialCopiesAsync(CancellationToken cancellationToken)
-    {
-        await _credentials.DeleteProfileAsync(
-            BuiltInVideoSitePlugin.PluginId,
-            BuiltInVideoSitePlugin.DefaultCredentialProfileId,
-            cancellationToken).ConfigureAwait(false);
-        _legacyCookieStore.Clear();
-    }
-
-    private static async Task PurgeCachedSourceDataAsync(CancellationToken cancellationToken)
-    {
-        var databasePath = Path.Combine(
-            ApplicationData.Current.LocalFolder.Path,
-            "FeedPeek",
-            "feedpeek.db");
-        await using var store = new SqliteFeedStore(databasePath);
-        await store.DeleteSourceAsync(
-            BuiltInVideoSitePlugin.PluginId,
-            BuiltInVideoSitePlugin.SourceId,
-            cancellationToken).ConfigureAwait(false);
     }
 
     public async ValueTask DisposeAsync()

@@ -62,7 +62,7 @@ Services/
 2. **直播横向区域使用 ItemsRepeater** — 关注页直播 UP 主区域使用官方 `ItemsRepeater + StackLayout(Orientation=Horizontal)`，外层仍由横向 `ScrollViewer` 承载。
 3. **页面不缓存 UI 树** — `Frame.CacheSize=0`，三个 Page 不使用 `NavigationCacheMode="Required"`。切页前主动 Dispose 当前页，避免已访问页面的 UI 内存叠加。
 4. **数据由 Core 持久化** — 页面 UI 可销毁，`FeedPeekPanelSession` 从 SQLite 和动态 Provider 恢复数据。
-5. **VideoCard 适配虚拟化复用** — `Item` 是依赖属性，`Loaded` 幂等，`Unloaded` 释放当前图片引用，异步图片回写有版本校验；右键菜单通过 `CardMenuFlyoutFactory` 按当前 item 重建。
+5. **插件与来源分离** — 应用包不发布视频网站插件；哔哩哔哩与其他网站插件都必须手动安装、登录和添加来源。安装、启用或登录不自动创建来源，所有网站插件均可停用和卸载。
 6. **切页后延迟资源回收** — 页面切换后延迟、低优先级执行 GC + working set trim，用于提前触发 WinUI/图片资源释放后的工作集回落。
 7. **Flyout 内容按需创建** — `MainPanelControl` 在托盘左键打开时创建，关闭后 Dispose 面板与会话并低优先级修剪 working set。
 8. **右键菜单不提供“打开”** — 左键托盘图标负责打开/关闭主 Flyout；右键菜单只保留“设置”和“退出”。不要重新加入右键“打开”，之前尝试在 MenuFlyout 命令中主动 `ShowAt(...)` 会造成状态重入和卡死风险。

@@ -168,18 +168,9 @@ internal sealed class FeedPeekNotificationSession : IDisposable, IAsyncDisposabl
             return;
 
         await _feedSession.InitializeAsync(cancellationToken).ConfigureAwait(false);
-        var pluginLoad = await _pluginRuntime.LoadAsync(cancellationToken).ConfigureAwait(false);
+        await _pluginRuntime.LoadAsync(cancellationToken).ConfigureAwait(false);
         foreach (var provider in _pluginRuntime.FeedProviders)
             _providerRegistry.Register(provider);
-        var hasCredentials = pluginLoad.IsAvailable
-            && await _pluginRuntime.HasCredentialsAsync(cancellationToken).ConfigureAwait(false);
-        var source = BuiltInVideoSitePlugin.CreateSource();
-        foreach (var subscription in BuiltInVideoSitePlugin.CreateSubscriptions(hasCredentials))
-        {
-            await _feedSession.AddSubscriptionAsync(source, subscription, cancellationToken)
-                .ConfigureAwait(false);
-            _pluginRuntime.Register(subscription);
-        }
         foreach (var subscription in await _feedSession.GetSubscriptionsAsync(cancellationToken)
             .ConfigureAwait(false))
         {

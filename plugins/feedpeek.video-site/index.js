@@ -85,13 +85,6 @@
     return { deleted: sourceDefinitions.delete(text(context.sourceId)) };
   };
 
-  // Keep the original built-in source addressable for existing subscriptions.
-  sourceDefinitions.set('account-default', createSourceDefinition({
-    sourceId: 'account-default',
-    credentialProfileId: 'account-default',
-    options: null
-  }, '视频站点', null));
-
   const integer = value => {
     if (typeof value === 'number' && Number.isFinite(value)) return Math.trunc(value);
     if (typeof value === 'string' && /^-?\d+$/.test(value.trim())) return Number.parseInt(value, 10);

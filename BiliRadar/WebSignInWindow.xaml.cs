@@ -25,14 +25,6 @@ public sealed partial class WebSignInWindow : Window
     private PluginLoginDescriptor? _login;
     private bool _isCookieSaved;
 
-    public WebSignInWindow(CookieStore cookieStore)
-        : this(
-            cookieStore,
-            BuiltInVideoSitePlugin.PluginId,
-            BuiltInVideoSitePlugin.DefaultCredentialProfileId)
-    {
-    }
-
     internal WebSignInWindow(
         CookieStore cookieStore,
         string pluginId,

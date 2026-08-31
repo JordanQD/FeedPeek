@@ -4,7 +4,6 @@ using BiliRadar.Services;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.Windows.AppNotifications;
-using Microsoft.Windows.AppNotifications.Builder;
 using System;
 using System.IO;
 using System.Threading.Tasks;
@@ -18,10 +17,7 @@ namespace BiliRadar;
 public partial class App : Application
 {
     private const string MainInstanceKey = "FeedPeek.Preview.Main";
-    private const string SignInAction = "signIn";
-
     private SettingsWindow? _settingsWindow;
-    private WebSignInWindow? _signInWindow;
     private TrayFlyoutService? _trayFlyoutService;
     private BackgroundNotificationMonitor? _backgroundNotificationMonitor;
     private AppNotificationManager? _notificationManager;
@@ -127,14 +123,6 @@ public partial class App : Application
         _notificationManager = null;
         _settingsWindow?.Close();
         _settingsWindow = null;
-        if (_signInWindow is not null)
-        {
-            _signInWindow.SignInSucceeded -= OnSignInSucceeded;
-            _signInWindow.Closed -= OnSignInWindowClosed;
-            _signInWindow.Close();
-            _signInWindow = null;
-        }
-
         Exit();
     }
 
@@ -166,12 +154,6 @@ public partial class App : Application
 
     private void AppNotificationManager_NotificationInvoked(AppNotificationManager sender, AppNotificationActivatedEventArgs args)
     {
-        if (args.Arguments.TryGetValue("action", out var action) && action == SignInAction)
-        {
-            _dispatcherQueue.TryEnqueue(OpenSignInWindow);
-            return;
-        }
-
         HandleNotificationActivation(args);
     }
 
@@ -198,12 +180,6 @@ public partial class App : Application
 
     private void HandleNotificationActivation(AppNotificationActivatedEventArgs args)
     {
-        if (args.Arguments.TryGetValue("action", out var action) && action == SignInAction)
-        {
-            _dispatcherQueue.TryEnqueue(OpenSignInWindow);
-            return;
-        }
-
         if (!NotificationService.TryGetActivationRequest(args, out var request))
         {
             return;
@@ -244,58 +220,6 @@ public partial class App : Application
         }
     }
 
-    private static void ShowSignInNotification()
-    {
-        try
-        {
-            var builder = new AppNotificationBuilder()
-                .AddArgument("action", SignInAction)
-                .AddText(LocalizationHelper.GetString("SignInNotificationTitle"))
-                .AddText(LocalizationHelper.GetString("SignInNotificationBody"));
-
-            AppNotificationManager.Default.Show(builder.BuildNotification());
-        }
-        catch
-        {
-        }
-    }
-
-    private void OpenSignInWindow()
-    {
-        if (_signInWindow is not null)
-        {
-            _signInWindow.Activate();
-            return;
-        }
-
-        _signInWindow = new WebSignInWindow(_cookieStore);
-        _signInWindow.SignInSucceeded += OnSignInSucceeded;
-        _signInWindow.Closed += OnSignInWindowClosed;
-        _signInWindow.Activate();
-    }
-
-    private async void OnSignInSucceeded(object? sender, EventArgs e)
-    {
-        if (_backgroundNotificationMonitor is null)
-        {
-            InitializeTrayAndData();
-        }
-
-        if (_trayFlyoutService is not null)
-        {
-            await _trayFlyoutService.RefreshCurrentPanelPageAsync();
-        }
-    }
-
-    private void OnSignInWindowClosed(object sender, WindowEventArgs args)
-    {
-        if (_signInWindow is not null)
-        {
-            _signInWindow.SignInSucceeded -= OnSignInSucceeded;
-            _signInWindow.Closed -= OnSignInWindowClosed;
-            _signInWindow = null;
-        }
-    }
 
     private void SettingsWindow_Closed(object sender, WindowEventArgs args)
     {

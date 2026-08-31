@@ -54,7 +54,7 @@ public sealed partial class SourcesSettingsPage : Page, IDisposable
             await _accountRuntime.LoadAsync(default);
             var entries = await _session.GetPluginsAsync();
             _plugins.Clear();
-            foreach (var entry in entries.OrderByDescending(item => item.IsBuiltIn).ThenBy(item => item.DisplayName))
+            foreach (var entry in entries.OrderBy(item => item.DisplayName))
                 _plugins.Add(new PluginSettingsRow(entry));
             await ReloadSourcesAsync();
         }
@@ -104,7 +104,7 @@ public sealed partial class SourcesSettingsPage : Page, IDisposable
 
     private async void TogglePluginButton_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not Button { DataContext: PluginSettingsRow plugin } || plugin.IsBuiltIn) return;
+        if (sender is not Button { DataContext: PluginSettingsRow plugin }) return;
         await RunBusyAsync(async () =>
         {
             await _installations.SetEnabledAsync(plugin.PluginId, !plugin.IsEnabled);
@@ -114,7 +114,7 @@ public sealed partial class SourcesSettingsPage : Page, IDisposable
 
     private async void UninstallPluginButton_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not Button { DataContext: PluginSettingsRow plugin } || plugin.IsBuiltIn) return;
+        if (sender is not Button { DataContext: PluginSettingsRow plugin }) return;
         var dialog = new ContentDialog
         {
             XamlRoot = XamlRoot,
@@ -277,8 +277,8 @@ public sealed partial class SourcesSettingsPage : Page, IDisposable
     }
 
     private static string GetSharedCredentialProfileId(string pluginId)
-        => string.Equals(pluginId, BuiltInVideoSitePlugin.PluginId, StringComparison.Ordinal)
-            ? BuiltInVideoSitePlugin.DefaultCredentialProfileId
+        => string.Equals(pluginId, LegacyVideoSiteCompatibility.PluginId, StringComparison.Ordinal)
+            ? LegacyVideoSiteCompatibility.DefaultCredentialProfileId
             : "default";
 
     private void Session_StatusRaised(object? sender, FeedPeekStatus status)

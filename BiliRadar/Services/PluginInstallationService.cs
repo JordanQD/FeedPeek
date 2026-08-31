@@ -25,7 +25,6 @@ internal sealed record PluginManagementEntry(
     string DisplayName,
     string Version,
     string DirectoryPath,
-    bool IsBuiltIn,
     bool IsEnabled,
     PluginManifest? Manifest,
     string? ErrorCode,
@@ -44,8 +43,6 @@ internal sealed class PluginInstallationService
     };
     private readonly PluginManifestLoader _loader = new();
     private readonly SemaphoreSlim _gate = new(1, 1);
-
-    public string BuiltInRoot { get; } = Path.Combine(AppContext.BaseDirectory, "Plugins");
 
     public string UserRoot { get; } = Path.Combine(
         ApplicationData.Current.LocalFolder.Path,
@@ -84,7 +81,7 @@ internal sealed class PluginInstallationService
             }
         }
         return new PluginLoadConfiguration(
-            [BuiltInRoot, UserRoot],
+            [UserRoot],
             disabledIds,
             records.ToDictionary(
                 record => record.PluginId,
@@ -97,12 +94,13 @@ internal sealed class PluginInstallationService
     {
         var records = await ReadRecordsAsync(cancellationToken).ConfigureAwait(false);
         var recordMap = records.ToDictionary(record => record.PluginId, StringComparer.Ordinal);
+        var disabledIds = records.Where(record => !record.IsEnabled)
+            .Select(record => record.PluginId)
+            .ToHashSet(StringComparer.Ordinal);
         var discovery = new PluginDiscoveryService(_loader);
         var results = await discovery.DiscoverAsync(
-            [BuiltInRoot, UserRoot],
-            records.Where(record => !record.IsEnabled)
-                .Select(record => record.PluginId)
-                .ToHashSet(StringComparer.Ordinal),
+            [UserRoot],
+            disabledIds,
             records.ToDictionary(record => record.PluginId, record => record.PackageHash, StringComparer.Ordinal),
             cancellationToken).ConfigureAwait(false);
 
@@ -112,14 +110,12 @@ internal sealed class PluginInstallationService
             var pluginId = package?.Manifest.PluginId
                 ?? Path.GetFileName(result.DirectoryPath);
             recordMap.TryGetValue(pluginId, out var record);
-            var isBuiltIn = IsContainedBy(BuiltInRoot, result.DirectoryPath);
             return new PluginManagementEntry(
                 pluginId,
                 package?.Manifest.DisplayName ?? pluginId,
                 package?.Manifest.Version ?? record?.Version ?? string.Empty,
                 result.DirectoryPath,
-                isBuiltIn,
-                isBuiltIn || record?.IsEnabled == true,
+                !disabledIds.Contains(pluginId) && record?.IsEnabled == true,
                 package?.Manifest,
                 result.ErrorCode,
                 result.ErrorMessage);
@@ -133,10 +129,6 @@ internal sealed class PluginInstallationService
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceDirectory);
         var sourcePackage = await _loader.LoadAsync(sourceDirectory, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
-        var builtInIds = await GetBuiltInPluginIdsAsync(cancellationToken).ConfigureAwait(false);
-        if (builtInIds.Contains(sourcePackage.Manifest.PluginId))
-            throw new InvalidOperationException("不能用用户插件覆盖随应用发布的内置插件。");
-
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -192,7 +184,6 @@ internal sealed class PluginInstallationService
                     stagedPackage.Manifest.DisplayName,
                     stagedPackage.Manifest.Version,
                     targetPath,
-                    IsBuiltIn: false,
                     IsEnabled: true,
                     stagedPackage.Manifest,
                     null,
@@ -276,16 +267,6 @@ internal sealed class PluginInstallationService
         {
             _gate.Release();
         }
-    }
-
-    private async Task<HashSet<string>> GetBuiltInPluginIdsAsync(CancellationToken cancellationToken)
-    {
-        var results = await new PluginDiscoveryService(_loader)
-            .DiscoverAsync(BuiltInRoot, cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
-        return results.Where(result => result.Package is not null)
-            .Select(result => result.Package!.Manifest.PluginId)
-            .ToHashSet(StringComparer.Ordinal);
     }
 
     private async Task<List<PluginInstallationRecord>> ReadRecordsAsync(CancellationToken cancellationToken)

@@ -230,8 +230,6 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
             if (_isDisposed) return;
             try
             {
-                var cancellationToken = _flyoutCts?.Token ?? CancellationToken.None;
-                await Session.ReconcileBuiltInPluginSourceAsync(cancellationToken);
                 if (_isFlyoutOpen)
                 {
                     await RefreshCurrentPageAsync();

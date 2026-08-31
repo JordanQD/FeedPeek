@@ -659,34 +659,6 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
             cancellationToken);
     }
 
-    internal Task ReconcileBuiltInPluginSourceAsync(
-        CancellationToken cancellationToken = default)
-        => RunExclusiveAsync(
-            async operationToken =>
-            {
-                await EnsureInitializedAsync(operationToken).ConfigureAwait(false);
-                var hasCredentials = await _pluginRuntime.HasCredentialsAsync(operationToken)
-                    .ConfigureAwait(false);
-                if (!hasCredentials)
-                {
-                    FollowingCreators = [];
-                    await _feedSession.DeleteSourceAsync(
-                        BuiltInVideoSitePlugin.PluginId,
-                        BuiltInVideoSitePlugin.SourceId,
-                        operationToken).ConfigureAwait(false);
-                    return;
-                }
-
-                var source = BuiltInVideoSitePlugin.CreateSource();
-                foreach (var subscription in BuiltInVideoSitePlugin.CreateSubscriptions(isEnabled: true))
-                {
-                    await _feedSession.AddSubscriptionAsync(source, subscription, operationToken)
-                        .ConfigureAwait(false);
-                    _pluginRuntime.Register(subscription);
-                }
-            },
-            cancellationToken);
-
     public async ValueTask DisposeAsync()
     {
         if (_disposed)
@@ -729,20 +701,15 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
         }
 
         await _feedSession.InitializeAsync(cancellationToken).ConfigureAwait(false);
-        var pluginLoad = await _pluginRuntime.LoadAsync(cancellationToken).ConfigureAwait(false);
+        // Phase 4.3 created this source automatically. It is not a user-created
+        // source, and must not spring back to life when the plugin is installed.
+        await _feedSession.DeleteSourceAsync(
+            LegacyVideoSiteCompatibility.PluginId,
+            LegacyVideoSiteCompatibility.SourceId,
+            cancellationToken).ConfigureAwait(false);
+        await _pluginRuntime.LoadAsync(cancellationToken).ConfigureAwait(false);
         foreach (var provider in _pluginRuntime.FeedProviders)
             _providerRegistry.Register(provider);
-        var hasPluginCredentials = pluginLoad.IsAvailable
-            && await _pluginRuntime.HasCredentialsAsync(cancellationToken).ConfigureAwait(false);
-        var source = BuiltInVideoSitePlugin.CreateSource();
-        var siteSubscriptions = BuiltInVideoSitePlugin.CreateSubscriptions(
-            hasPluginCredentials);
-        foreach (var subscription in siteSubscriptions)
-        {
-            await _feedSession.AddSubscriptionAsync(source, subscription, cancellationToken)
-                .ConfigureAwait(false);
-            _pluginRuntime.Register(subscription);
-        }
         foreach (var subscription in await _feedSession.GetSubscriptionsAsync(cancellationToken)
             .ConfigureAwait(false))
         {
@@ -750,13 +717,6 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
                 _pluginRuntime.Register(subscription);
         }
         _initialized = true;
-
-        if (!pluginLoad.IsAvailable)
-        {
-            RaiseStatus(
-                $"内置视频站点插件不可用：{pluginLoad.ErrorMessage}",
-                InfoBarSeverity.Warning);
-        }
     }
 
     private async Task<IReadOnlyList<FeedItemRow>> QueryItemsAsync(
@@ -987,7 +947,7 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
             return null;
         }
 
-        if ((source.Options.TryGetValue(BuiltInVideoSitePlugin.SourceIconOption, out var iconUrl)
+        if ((source.Options.TryGetValue("source.icon", out var iconUrl)
                 || source.Options.TryGetValue(RssIconOption, out iconUrl))
             && Uri.TryCreate(iconUrl, UriKind.Absolute, out _))
         {

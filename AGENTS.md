@@ -65,10 +65,11 @@ Services/
 3. **页面不缓存 UI 树** — `Frame.CacheSize=0`，三个 Page 不使用 `NavigationCacheMode="Required"`。切页前主动 Dispose 当前页，避免已访问页面的 UI 内存叠加。
 4. **数据由 Core 持久化** — 页面 UI 可销毁，`FeedPeekPanelSession` 从 SQLite 和动态 Provider 恢复数据；不再保留旧窗口快照或站点专属 UI 模型。
 5. **插件能力驱动行为** — 来源、作者、直播、稍后再看和通知动作按 provider/source/item 标识及 manifest capability 分发，不按内置网站 ID 判断。
-6. **切页后延迟资源回收** — 页面切换后延迟、低优先级执行 GC + working set trim，用于提前触发 WinUI/图片资源释放后的工作集回落。
-7. **Flyout 内容按需创建** — `MainPanelControl` 在托盘左键打开时创建，关闭后 Dispose 面板与会话并低优先级修剪 working set；下次从持久层重建。
-8. **右键菜单不提供“打开”** — 左键托盘图标负责打开/关闭主 Flyout；右键菜单只保留“设置”和“退出”。不要重新加入右键“打开”，之前尝试在 MenuFlyout 命令中主动 `ShowAt(...)` 会造成状态重入和卡死风险。
-9. **无旧宿主窗口** — DesktopFlyouts 使用独立 XAML island 窗口；应用在 `OnLaunched` 中将 `DispatcherShutdownMode` 设为 `OnExplicitShutdown`，关闭最后一个设置/登录窗口后仍由托盘驻留，只有显式退出才停止 UI 消息循环。不要把设置移到 `App` 构造函数，`Application.Start` 会在随后覆盖它。不再创建透明锚点或隐藏 `TrayHostWindow`。
+6. **插件与来源分离** — FeedPeek 本体不随包发布任何视频网站插件。哔哩哔哩与其他网站一样，必须由用户从文件夹手动安装、登录并点击“添加来源”；安装、启用或登录都不得自动创建 Source/Subscription。所有网站插件均可停用和卸载。
+7. **切页后延迟资源回收** — 页面切换后延迟、低优先级执行 GC + working set trim，用于提前触发 WinUI/图片资源释放后的工作集回落。
+8. **Flyout 内容按需创建** — `MainPanelControl` 在托盘左键打开时创建，关闭后 Dispose 面板与会话并低优先级修剪 working set；下次从持久层重建。
+9. **右键菜单不提供“打开”** — 左键托盘图标负责打开/关闭主 Flyout；右键菜单只保留“设置”和“退出”。不要重新加入右键“打开”，之前尝试在 MenuFlyout 命令中主动 `ShowAt(...)` 会造成状态重入和卡死风险。
+10. **无旧宿主窗口** — DesktopFlyouts 使用独立 XAML island 窗口；应用在 `OnLaunched` 中将 `DispatcherShutdownMode` 设为 `OnExplicitShutdown`，关闭最后一个设置/登录窗口后仍由托盘驻留，只有显式退出才停止 UI 消息循环。不要把设置移到 `App` 构造函数，`Application.Start` 会在随后覆盖它。不再创建透明锚点或隐藏 `TrayHostWindow`。
 
 ## 构建
 
@@ -142,7 +143,7 @@ dotnet build BiliRadar/BiliRadar.csproj -p:Platform=x64 --no-restore
 
 Phase 3 生产项目为 `src/FeedPeek.PluginContracts` 与 `src/FeedPeek.PluginRuntime`。Runtime 锁定 Jint 4.16.1；同一插件 realm 串行调用，通过 JSON `IPluginTransport` 保持 transport-neutral。插件只能使用显式 Host Bridge，不开放 CLR、文件系统、进程、注册表、COM 或 WinUI。mock JS fixture 和必要验证复用 `tests/FeedPeek.Core.Tests`，不再新增测试项目。
 
-Phase 4 详细检查点见 `docs/design/rss-plugin-phase4-plan.md`。4.1–4.8 已完成通用 Host、内置 JS、三页数据、登录、作者/直播、通知和用户插件管理。4.9 已删除 legacy provider、旧模型、旧 adapter、旧快照和孤立卡片；停用插件不会继续刷新旧订阅，通知动作按 manifest capability 显示，插件升级/卸载使用可回滚目录切换。仅保留旧 Cookie 与通知规则的一次性兼容迁移。
+Phase 4 详细检查点见 `docs/design/rss-plugin-phase4-plan.md`。4.1–4.8 已完成通用 Host、仓库维护的网站 JS 插件、三页数据、登录、作者/直播、通知和用户插件管理。4.9 已删除 legacy provider、旧模型、旧 adapter、旧快照和孤立卡片；视频网站插件不再随应用发布，停用插件不会继续刷新旧订阅，通知动作按 manifest capability 显示，插件升级/卸载使用可回滚目录切换。仅保留旧 Cookie 与通知规则的一次性兼容迁移。
 
 ### DesktopFlyouts 迁移
 

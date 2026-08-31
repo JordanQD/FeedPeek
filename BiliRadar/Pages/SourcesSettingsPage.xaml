@@ -70,8 +70,8 @@
                                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
                                         <Button Click="PluginLoginButton_Click" Content="账户" DataContext="{x:Bind}" IsEnabled="{x:Bind HasLogin}" />
                                         <Button Click="AddPluginSourceButton_Click" Content="添加来源" DataContext="{x:Bind}" IsEnabled="{x:Bind CanConfigureSource}" />
-                                        <Button Click="TogglePluginButton_Click" Content="{x:Bind ToggleLabel}" DataContext="{x:Bind}" Visibility="{x:Bind UserManagementVisibility}" />
-                                        <Button Click="UninstallPluginButton_Click" DataContext="{x:Bind}" Style="{StaticResource SubtleButtonStyle}" ToolTipService.ToolTip="卸载插件" Visibility="{x:Bind UserManagementVisibility}">
+                                        <Button Click="TogglePluginButton_Click" Content="{x:Bind ToggleLabel}" DataContext="{x:Bind}" />
+                                        <Button Click="UninstallPluginButton_Click" DataContext="{x:Bind}" Style="{StaticResource SubtleButtonStyle}" ToolTipService.ToolTip="卸载插件">
                                             <FontIcon Glyph="&#xE74D;" />
                                         </Button>
                                     </StackPanel>

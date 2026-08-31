@@ -363,8 +363,8 @@ public static class AppSettings
     {
         if (string.IsNullOrWhiteSpace(item.CreatorKey) && item.Mid > 0)
         {
-            item.ProviderId = BuiltInVideoSitePlugin.PluginId;
-            item.SourceId = BuiltInVideoSitePlugin.SourceId;
+            item.ProviderId = LegacyVideoSiteCompatibility.PluginId;
+            item.SourceId = LegacyVideoSiteCompatibility.SourceId;
             item.CreatorKey = item.Mid.ToString();
         }
 
