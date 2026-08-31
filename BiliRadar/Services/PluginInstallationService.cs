@@ -244,10 +244,33 @@ internal sealed class PluginInstallationService
             var record = records.FirstOrDefault(item => string.Equals(item.PluginId, pluginId, StringComparison.Ordinal))
                 ?? throw new InvalidOperationException("找不到该用户插件的安装记录。");
             var targetPath = ResolveUserPath(record.DirectoryName);
+            var backupPath = ResolveUserPath($".uninstall-{Guid.NewGuid():N}");
             if (Directory.Exists(targetPath))
-                Directory.Delete(targetPath, recursive: true);
-            records.Remove(record);
-            await WriteRecordsCoreAsync(records, cancellationToken).ConfigureAwait(false);
+                Directory.Move(targetPath, backupPath);
+            try
+            {
+                records.Remove(record);
+                await WriteRecordsCoreAsync(records, cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                if (Directory.Exists(backupPath))
+                    Directory.Move(backupPath, targetPath);
+                throw;
+            }
+
+            if (Directory.Exists(backupPath))
+            {
+                try
+                {
+                    Directory.Delete(backupPath, recursive: true);
+                }
+                catch
+                {
+                    // The installation record is already gone. A hidden backup can be
+                    // cleaned up on a later maintenance pass without reviving the plugin.
+                }
+            }
         }
         finally
         {

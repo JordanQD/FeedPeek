@@ -127,6 +127,9 @@ public sealed partial class SourcesSettingsPage : Page, IDisposable
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
         await RunBusyAsync(async () =>
         {
+            await _session.ClearPluginCredentialsAsync(
+                plugin.PluginId,
+                GetSharedCredentialProfileId(plugin.PluginId));
             await _session.DeletePluginSourcesAsync(plugin.PluginId);
             await _installations.UninstallAsync(plugin.PluginId);
             await ReloadSourcesAsync();

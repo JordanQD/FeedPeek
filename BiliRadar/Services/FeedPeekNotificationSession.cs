@@ -50,7 +50,9 @@ internal sealed class FeedPeekNotificationSession : IDisposable, IAsyncDisposabl
                 var subscriptions = await _feedSession.GetSubscriptionsAsync(token).ConfigureAwait(false);
                 var newItems = new List<FeedItem>();
                 foreach (var subscription in subscriptions.Where(item =>
-                    item.IsEnabled && string.Equals(item.FeedId, PluginFeedIds.Updates, StringComparison.Ordinal)))
+                    item.IsEnabled
+                    && IsAvailableProvider(item.ProviderId)
+                    && string.Equals(item.FeedId, PluginFeedIds.Updates, StringComparison.Ordinal)))
                 {
                     token.ThrowIfCancellationRequested();
                     try
@@ -79,6 +81,10 @@ internal sealed class FeedPeekNotificationSession : IDisposable, IAsyncDisposabl
                     .ToArray();
             },
             cancellationToken);
+
+    public bool CanAddToViewLater(string providerId)
+        => _pluginRuntime.SupportsCapability(providerId, "collection.viewLater")
+            && _pluginRuntime.SupportsCapability(providerId, "item.actions");
 
     public Task<IReadOnlyList<CreatorDescriptor>> GetFollowingCreatorsAsync(
         CancellationToken cancellationToken = default)
@@ -135,7 +141,7 @@ internal sealed class FeedPeekNotificationSession : IDisposable, IAsyncDisposabl
                 await EnsureInitializedAsync(token).ConfigureAwait(false);
                 var stored = await _store.GetItemAsync(key, token).ConfigureAwait(false)
                     ?? throw new InvalidOperationException("找不到通知对应的条目。");
-                if (!_pluginRuntime.IsPluginProvider(stored.Item.ProviderId))
+                if (!CanAddToViewLater(stored.Item.ProviderId))
                     throw new InvalidOperationException("当前来源不支持稍后再看。");
 
                 var subscriptions = await _feedSession.GetSubscriptionsAsync(token).ConfigureAwait(false);
@@ -183,17 +189,9 @@ internal sealed class FeedPeekNotificationSession : IDisposable, IAsyncDisposabl
         _initialized = true;
     }
 
-    private async Task<FeedSubscription?> FindSiteSubscriptionAsync(
-        string feedId,
-        CancellationToken cancellationToken)
-    {
-        var subscriptions = await _feedSession.GetSubscriptionsAsync(cancellationToken).ConfigureAwait(false);
-        return subscriptions.FirstOrDefault(item =>
-            item.IsEnabled
-            && string.Equals(item.ProviderId, BuiltInVideoSitePlugin.PluginId, StringComparison.Ordinal)
-            && string.Equals(item.SourceId, BuiltInVideoSitePlugin.SourceId, StringComparison.Ordinal)
-            && string.Equals(item.FeedId, feedId, StringComparison.Ordinal));
-    }
+    private bool IsAvailableProvider(string providerId)
+        => string.Equals(providerId, RssProviderInfo.ProviderId, StringComparison.Ordinal)
+            || _pluginRuntime.IsPluginProvider(providerId);
 
     private async Task<T> RunExclusiveAsync<T>(
         Func<CancellationToken, Task<T>> operation,

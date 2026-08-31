@@ -21,8 +21,6 @@ internal sealed class BackgroundNotificationMonitor : IDisposable
     public Task StartAsync()
         => _notificationService.TryStartAsync(RefreshNotificationDataAsync);
 
-    public MainWindowSnapshot? GetSnapshot() => null;
-
     public async Task HandleActivationAsync(NotificationService.NotificationActivationRequest request)
     {
         if (string.Equals(request.Action, NotificationService.WatchLaterAction, StringComparison.OrdinalIgnoreCase)
@@ -82,7 +80,9 @@ internal sealed class BackgroundNotificationMonitor : IDisposable
                 $"rules={rules.Count}");
         }
 
-        await _notificationService.NotifyFeedUpdatesAsync(updates);
+        await _notificationService.NotifyFeedUpdatesAsync(
+            updates,
+            item => _session.CanAddToViewLater(item.ProviderId));
         await _notificationService.NotifyLiveStartsAsync(liveItems);
     }
 

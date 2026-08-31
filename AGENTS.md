@@ -1,8 +1,8 @@
-# BiliRadar — WinUI 3 项目速览
+# FeedPeek — WinUI 3 项目速览
 
 ## 项目概述
 
-BiliRadar 是一个 Windows 桌面应用（WinUI 3 + Windows App SDK），提供 Bilibili 关注作者的视频更新追踪、历史记录和稍后再看管理。通过系统托盘图标驻留后台，点击弹出 Flyout 面板展示内容。
+FeedPeek 是一个 Windows 桌面通用更新查看器（WinUI 3 + Windows App SDK），通过 RSS 与网站插件提供更新、历史记录、稍后再看、作者和直播内容。应用驻留系统托盘，点击弹出 Flyout 面板。
 
 **技术栈**：C# / WinUI 3 / DesktopFlyouts.WinUI 1.4.0 / CommunityToolkit 8.2 / .NET 9
 
@@ -30,22 +30,18 @@ Pages/
 ├── HistoryPage         ← 历史记录 ListView + 空状态
 ├── ViewLaterPage       ← 稍后再看 ListView + 移除按钮 + 空状态
 ├── GeneralSettingsPage ← 通用设置（语言、开机自启等）
+├── SourcesSettingsPage ← RSS 来源、网站插件、登录与来源配置
 ├── NotificationSettingsPage ← 通知设置
 └── AboutSettingsPage   ← 关于页面
 
 Controls/
-├── VideoCard        ← 视频卡片控件：封面图、标题、描述、UP主头像、时长标签、
-│                      追番/取消追番按钮。ViewLaterButtonMode 控制右侧按钮行为。
-├── MainPanelControl ← Flyout 外壳：SelectorBar + Frame + ProgressBar + 通知区
-└── (未来可能) LiveCreatorCard
+└── MainPanelControl ← Flyout 外壳：SelectorBar + Frame + ProgressBar + 通知区
 
 Models/
-├── BiliVideoUpdate / BiliVideoUpdatePage / BiliVideoHistoryPage / BiliViewLaterPage
-├── VideoUpdateRow      ← UI 绑定的视频行（BiliVideoUpdate → VideoUpdateRow）
-├── CreatorRow / LiveCreatorRow ← UP主 / 直播UP主 UI 行
-├── BiliCreator / BiliLiveCreator / BiliAccountProfile
+├── FeedItemRow / FeedLiveItemRow ← 通用条目与直播 UI 行
+├── FeedSourceRow / PluginSettingsRow ← 来源与插件设置行
+├── NotificationCreatorSubscription ← 通用作者通知规则
 ├── MainPanelSection    ← enum { Following, History, ViewLater }
-├── MainWindowSnapshot  ← (Updates[], LiveCreators[], HistoryItems[], ViewLaterItems[]) — 传给 MainPanelControl
 └── StatusNotification  ← InfoBar 消息
 ```
 
@@ -53,30 +49,24 @@ Models/
 
 ```
 Services/
-├── MainPanelSession     ← **核心**：数据容器 + 所有 API 调用
-│   暴露 ObservableCollection<T>、刷新/加载更多/关注/取消关注/稍后再看等方法
-│   通过事件 (UpdatesRefreshed, HistoryRefreshed, ViewLaterRefreshed,
-│   FollowingListRefreshed, CollectionAdded, CollectionUpdated, StatusAdded)
-│   通知 UI 更新
-├── UpdateMonitorService ← 封装 IBiliDataProvider 的分页逻辑
-├── BiliWebDataProvider  ← 实际 HTTP 请求（Bilibili API）
-├── IBiliDataProvider    ← 数据提供者接口
-├── MockBiliDataProvider ← 测试用 mock
+├── FeedPeekPanelSession ← **核心**：组合 Core、RSS 与动态插件 Provider，服务三个页面
+├── FeedPeekPluginRuntime ← manifest、凭据、插件调用与动态 Provider 注册
+├── PluginInstallationService ← 用户插件安装、哈希、启停、升级与卸载
+├── FeedPeekNotificationSession / NotificationService ← 通用更新与直播通知
 ├── AppSettings          ← ApplicationData.LocalSettings 持久化
-├── CookieStore          ← Bilibili Cookie 管理
-├── BiliAccountService / BiliKernelAuthService / NotificationService
+├── CookieStore          ← 旧登录状态的一次性兼容迁移
 └── TrayFlyoutService    ← DesktopFlyouts 托盘图标、主面板和右键菜单
 ```
 
 ## 关键设计决策
 
-1. **纵向视频列表使用 ListView** — 关注、历史、稍后再看三页的视频卡片都由 `ObservableCollection<VideoUpdateRow>` 驱动虚拟化 `ListView`，不再手动维护 `Panel.Children`。
+1. **纵向更新列表使用 ListView** — 关注、历史、稍后再看三页由通用 `FeedItemRow` 驱动虚拟化 `ListView`，卡片模板直接定义在页面资源中。
 2. **直播横向区域使用 ItemsRepeater** — 关注页直播 UP 主区域使用官方 `ItemsRepeater + StackLayout(Orientation=Horizontal)`，外层仍由横向 `ScrollViewer` 承载。
 3. **页面不缓存 UI 树** — `Frame.CacheSize=0`，三个 Page 不使用 `NavigationCacheMode="Required"`。切页前主动 Dispose 当前页，避免已访问页面的 UI 内存叠加。
-4. **数据保留在 MainPanelSession** — 页面 UI 可销毁，`MainPanelSession` 持有 `Updates`、`HistoryItems`、`ViewLaterItems`、`LiveCreators` 等集合，切页后新页面重新绑定集合。
-5. **VideoCard 适配虚拟化复用** — `Item` 是依赖属性，`Loaded` 幂等，`Unloaded` 释放当前图片引用，异步图片回写有版本校验；右键菜单通过 `CardMenuFlyoutFactory` 按当前 item 重建。
+4. **数据由 Core 持久化** — 页面 UI 可销毁，`FeedPeekPanelSession` 从 SQLite 和动态 Provider 恢复数据；不再保留旧窗口快照或站点专属 UI 模型。
+5. **插件能力驱动行为** — 来源、作者、直播、稍后再看和通知动作按 provider/source/item 标识及 manifest capability 分发，不按内置网站 ID 判断。
 6. **切页后延迟资源回收** — 页面切换后延迟、低优先级执行 GC + working set trim，用于提前触发 WinUI/图片资源释放后的工作集回落。
-7. **Flyout 内容按需创建** — `MainPanelControl` 在托盘左键打开时创建，Flyout 关闭后导出 `MainWindowSnapshot`、Dispose 面板并低优先级修剪 working set。
+7. **Flyout 内容按需创建** — `MainPanelControl` 在托盘左键打开时创建，关闭后 Dispose 面板与会话并低优先级修剪 working set；下次从持久层重建。
 8. **右键菜单不提供“打开”** — 左键托盘图标负责打开/关闭主 Flyout；右键菜单只保留“设置”和“退出”。不要重新加入右键“打开”，之前尝试在 MenuFlyout 命令中主动 `ShowAt(...)` 会造成状态重入和卡死风险。
 9. **无旧宿主窗口** — DesktopFlyouts 使用独立 XAML island 窗口；应用在 `OnLaunched` 中将 `DispatcherShutdownMode` 设为 `OnExplicitShutdown`，关闭最后一个设置/登录窗口后仍由托盘驻留，只有显式退出才停止 UI 消息循环。不要把设置移到 `App` 构造函数，`Application.Start` 会在随后覆盖它。不再创建透明锚点或隐藏 `TrayHostWindow`。
 
@@ -148,11 +138,11 @@ dotnet build BiliRadar/BiliRadar.csproj -p:Platform=x64 --no-restore
 | Phase 1（通用项目骨架） | ✅ |
 | Phase 2（通用核心与 RSS） | ✅ 已人工验收主路径 |
 | Phase 3（插件合同与 Jint Runtime） | ✅ 18 项必要验证通过，Release x64 构建通过 |
-| Phase 4（站点插件迁移） | 🧪 4.0–4.8 自动验证通过；4.3–4.4 已人工验收，4.5–4.8 待人工验收 |
+| Phase 4（站点插件迁移） | 🧪 4.0–4.9 自动验证通过；4.3–4.4 已人工验收，4.5–4.9 待人工验收 |
 
 Phase 3 生产项目为 `src/FeedPeek.PluginContracts` 与 `src/FeedPeek.PluginRuntime`。Runtime 锁定 Jint 4.16.1；同一插件 realm 串行调用，通过 JSON `IPluginTransport` 保持 transport-neutral。插件只能使用显式 Host Bridge，不开放 CLR、文件系统、进程、注册表、COM 或 WinUI。mock JS fixture 和必要验证复用 `tests/FeedPeek.Core.Tests`，不再新增测试项目。
 
-Phase 4 详细检查点见 `docs/design/rss-plugin-phase4-plan.md`。4.1–4.4 已完成通用 Host、内置 JS、关注/历史/稍后再看和 item actions。4.5 已实现 manifest 驱动 WebView 登录、按插件/profile 隔离的 Credential Locker、auth 合同与插件账户资料；登录入口位于“来源”，退出会清除该网站来源缓存。4.6 已完成 creator/live、卡片 UP 主展示及关注/取消关注；4.7 已将后台通知、自定义作者规则和通知动作切到通用 provider/source/creator/item 标识，并改为消费 Core 轮询产生的新增条目，通知基线跨应用重启保留，复合通知键使用 JSON 持久化。4.8 已完成用户插件安装区、包哈希与启停记录、动态 Provider 注册、manifest 来源表单、插件级可选登录和网站多来源配置，legacy 清理顺延至 4.9。当前 `FeedPeek.Core.Tests` 34 项、`FeedPeek.Compatibility.Tests` 16 项通过，4.8 待人工验收。
+Phase 4 详细检查点见 `docs/design/rss-plugin-phase4-plan.md`。4.1–4.8 已完成通用 Host、内置 JS、三页数据、登录、作者/直播、通知和用户插件管理。4.9 已删除 legacy provider、旧模型、旧 adapter、旧快照和孤立卡片；停用插件不会继续刷新旧订阅，通知动作按 manifest capability 显示，插件升级/卸载使用可回滚目录切换。仅保留旧 Cookie 与通知规则的一次性兼容迁移。
 
 ### DesktopFlyouts 迁移
 
@@ -191,9 +181,9 @@ DesktopFlyouts 迁移详见 `docs/design/desktopflyouts-migration.md`；旧架�
 
 1. **右键菜单范围** — 右键菜单只做设置和退出。左键托盘图标是唯一主面板入口，不要重新加入右键“打开”；之前尝试在 `MenuFlyout` 命令中主动打开主 Flyout，出现过状态重入和卡死。
 2. **不恢复旧宿主** — DesktopFlyouts 自己创建 XAML island 窗口，应用通过 `DispatcherShutdownMode.OnExplicitShutdown` 维持无窗口时的托盘生命周期；不要重新添加 `TrayHostWindow`、透明锚点、原生 `Flyout.ShowAt(...)` 或 WinUIEx 托盘路径。
-3. **Session 生命周期** — Flyout 关闭后 Dispose `MainPanelControl` 和 `MainPanelSession`，并用纯数据 `MainWindowSnapshot` 支撑下次重建。切页只 Dispose 当前 Page，`MainPanelSession` 在当前 Flyout 会话内保留。
+3. **Session 生命周期** — Flyout 关闭后 Dispose `MainPanelControl` 和 `FeedPeekPanelSession`；下次打开从 SQLite 重建。切页只 Dispose 当前 Page，会话在当前 Flyout 内保留。
 4. **页面缓存约束** — 当前以内存优先，`Frame.CacheSize=0`。不要重新启用 `NavigationCacheMode="Required"`，否则三页 UI 稳定内存会再次叠加。
-5. **取消请求链路** — 页面刷新和加载更多继续通过 `CancellationToken` 传到 `MainPanelSession`/`UpdateMonitorService`。Flyout 关闭触发取消时，不应显示错误 InfoBar。
+5. **取消请求链路** — 页面刷新和加载更多继续通过 `CancellationToken` 传到 `FeedPeekPanelSession`、Core 轮询和插件 Runtime。Flyout 关闭触发取消时，不应显示错误 InfoBar。
 
 ## 建议下一步
 

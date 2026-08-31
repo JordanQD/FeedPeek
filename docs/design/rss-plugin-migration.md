@@ -2,7 +2,7 @@
 
 > 文档用途：供当前仓库及后续 FeedPeek 项目中的开发者或编码代理直接读取并执行。  
 > 推荐实施方式：在当前 BiliRadar 仓库内渐进迁移为 FeedPeek；保留可运行基线和阶段检查点，不进行一次性推倒重写。  
-> 文档状态：实施中；Phase 0–3、Phase 4.0–4.7 已完成自动验证。
+> 文档状态：实施中；Phase 0–3、Phase 4.0–4.9 已完成自动验证，Phase 4.5–4.9 待人工验收。
 > 最近更新：2026-08-31。
 
 ## 1. 执行摘要
@@ -800,6 +800,8 @@ FeedPeek.PluginWorker.exe
 - Phase 4.5 已将 WebView2 登录参数切换为 manifest 驱动，凭据按插件和 profile 存入 Windows Credential Locker；登录验证、账户资料和退出分别通过通用 auth/account 合同。
 - Phase 4.6 已迁移关注列表、直播列表和作者关注操作；网站卡片归属位显示 UP 主名称与头像，直播区域使用官方 `ItemsRepeater + StackLayout`，RSS 卡片仍显示来源。
 - Phase 4.7 已将后台更新/直播通知和自定义作者规则切换到通用 Core 与插件路径；规则使用 `ProviderId + SourceId + CreatorKey`，通知条目和“稍后再看”激活不再以站点 `mid/aid` 作为宿主主键。通知监控消费 Core 轮询的 `NewItems`，订阅基线跨重启保留，复合去重键使用 JSON 持久化，RSS 批量更新不再因三条上限静默丢弃后续常见批次条目。
+- Phase 4.8 已实现用户插件安装区、包哈希与启停记录、动态 Provider、manifest 来源表单、插件级可选登录和网站多来源。
+- Phase 4.9 已删除 legacy provider、旧站点模型/adapter、旧会话/快照和孤立卡片；通知动作按 manifest capability 分发，停用插件不再刷新旧订阅，插件升级与卸载具备目录级回滚。仅保留旧 Cookie 与作者通知规则的一次性迁移入口。
 - 登录入口位于“来源”的网站插件卡片，不属于“通用”设置。退出登录会清除该网站来源的本地缓存并刷新已打开面板，避免账户内容在退出后继续显示。
 - `exposedCookieNames` 是插件读取 Cookie 值的显式最小权限清单；Cookie Header 仍只由 Host HTTP 代理注入 manifest 声明域，插件不能直接取得完整 Cookie。
 - 网站列表和动作成功结果是站点 saved 状态的权威来源；本地 SQLite 只缓存结果，同一逻辑条目跨 updates/history/viewLater 同步并去重。RSS saved 状态保持纯本地。
@@ -807,7 +809,7 @@ FeedPeek.PluginWorker.exe
 - 4.2 已增加仓库维护的内置站点插件，完成更新首刷、opaque cursor 分页、archive/PGC/opus 映射、结构化错误和取消传播；插件进入应用构建输出，但未注册为默认来源。
 - 4.5 完成时现有测试项目共 32 项通过，Debug/Release x64 构建均为 0 警告、0 错误；真实账号登录、重启保留、失效和退出待人工验收。
 
-为达到“后续只添加插件即可支持其他视频网站”的目标，Phase 4 后续扩展为：4.6 已迁移 creator/live 并让站点卡片归属位显示 UP 主；4.7 已迁移按 UP 主更新通知；4.8 实现用户插件目录、动态 Provider、插件管理、来源配置 Schema、插件级可选登录和网站多来源；原 4.8 legacy 清理顺延为 4.9。关系固定为一个插件对应一个网站，一个网站插件可有多个来源；当前每个插件最多一个可选凭据 profile，需要账户权限的来源共享它，无需登录的来源不绑定凭据。
+为达到“后续只添加插件即可支持其他视频网站”的目标，Phase 4 已扩展并完成到 4.9。关系固定为一个插件对应一个网站，一个网站插件可有多个来源；当前每个插件最多一个可选凭据 profile，需要账户权限的来源共享它，无需登录的来源不绑定凭据。自动验证为 `FeedPeek.Core.Tests` 34 项、`FeedPeek.Compatibility.Tests` 4 项，Debug/Release x64 均 0 警告、0 错误；人工矩阵见 `rss-plugin-phase4-plan.md`。
 
 ### Phase 5：FeedPeek 品牌、包身份与用户数据迁移
 

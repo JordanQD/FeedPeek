@@ -86,8 +86,7 @@ public partial class App : Application
             _trayFlyoutService = new TrayFlyoutService(
                 _dispatcherQueue,
                 ShowSettingsWindow,
-                ExitApplication,
-                _backgroundNotificationMonitor?.GetSnapshot());
+                ExitApplication);
         }
 
     }

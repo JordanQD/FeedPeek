@@ -29,14 +29,14 @@ public sealed partial class GeneralSettingsPage : Page
     };
 
     private readonly CookieStore _cookieStore = new();
-    private readonly BuiltInPluginAccountService _accountService;
+    private readonly FeedPeekPluginRuntime _accountService;
     private bool _isLoadingSettings;
     private bool _useRegistryStartup;
     private StartupTask? _startupTask;
 
     public GeneralSettingsPage()
     {
-        _accountService = new BuiltInPluginAccountService(_cookieStore);
+        _accountService = new FeedPeekPluginRuntime(_cookieStore);
         InitializeComponent();
         Loaded += GeneralSettingsPage_Loaded;
         Unloaded += GeneralSettingsPage_Unloaded;
@@ -345,7 +345,7 @@ public sealed partial class GeneralSettingsPage : Page
         }
         else
         {
-            await _accountService.SignOutAsync();
+            await _accountService.ClearCredentialsAsync();
         }
 
         _isLoadingSettings = true;

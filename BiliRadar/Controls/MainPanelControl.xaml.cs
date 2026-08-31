@@ -36,11 +36,6 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
         SelectDefaultPage();
     }
 
-    public MainPanelControl(MainWindowSnapshot? snapshot)
-        : this()
-    {
-    }
-
     private void MainPanelControl_Loaded(object sender, RoutedEventArgs e) => ApplyPanelHeight();
 
     public void SetHostHeight(double height)

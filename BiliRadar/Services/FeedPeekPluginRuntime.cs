@@ -60,6 +60,10 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
 
     public bool IsPluginProvider(string providerId) => _providers.ContainsKey(providerId);
 
+    public bool SupportsCapability(string providerId, string capability)
+        => _packages.TryGetValue(providerId, out var package)
+            && package.Manifest.Capabilities.Contains(capability, StringComparer.Ordinal);
+
     public PluginManifest? GetManifest(string pluginId)
         => _packages.TryGetValue(pluginId, out var package) ? package.Manifest : null;
 
@@ -334,8 +338,7 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
         if (string.Equals(pluginId, BuiltInVideoSitePlugin.PluginId, StringComparison.Ordinal)
             && string.Equals(credentialProfileId, BuiltInVideoSitePlugin.DefaultCredentialProfileId, StringComparison.Ordinal))
         {
-            using var legacyAuth = new BiliKernelAuthService(_legacyCookieStore);
-            await legacyAuth.SignOutAsync(cancellationToken).ConfigureAwait(false);
+            _legacyCookieStore.Clear();
         }
         PluginAccountEvents.RaiseChanged();
     }
@@ -580,8 +583,7 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
             BuiltInVideoSitePlugin.PluginId,
             BuiltInVideoSitePlugin.DefaultCredentialProfileId,
             cancellationToken).ConfigureAwait(false);
-        using var legacyAuth = new BiliKernelAuthService(_legacyCookieStore);
-        await legacyAuth.SignOutAsync(cancellationToken).ConfigureAwait(false);
+        _legacyCookieStore.Clear();
     }
 
     private static async Task PurgeCachedSourceDataAsync(CancellationToken cancellationToken)

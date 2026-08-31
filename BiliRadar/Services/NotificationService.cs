@@ -72,62 +72,9 @@ public sealed class NotificationService
         _refreshAction = null;
     }
 
-    public async Task NotifyVideoUpdatesAsync(IReadOnlyList<BiliVideoUpdate> updates, bool showNotifications = true)
-    {
-        var plan = NotificationBaselinePlanner.ForVideos(
-            updates,
-            AppSettings.KnownVideoUpdateIds,
-            AppSettings.VideoNotificationBaselineInitialized,
-            MaxNotificationsPerRefresh,
-            MaxStoredVideoUpdateIds);
-        AppSettings.KnownVideoUpdateIds = plan.KnownIds;
-        if (plan.InitializesBaseline)
-        {
-            AppSettings.VideoNotificationBaselineInitialized = true;
-            return;
-        }
-
-        if (!showNotifications || !IsVideoNotificationEnabled() || plan.NewItems.Count == 0)
-        {
-            return;
-        }
-
-        foreach (var update in plan.NewItems.OrderBy(item => item.PublishedAt))
-        {
-            ShowVideoNotification(update);
-            await Task.Delay(NotificationSpacing);
-        }
-    }
-
-    public async Task NotifyLiveStartsAsync(IReadOnlyList<BiliLiveCreator> liveCreators, bool showNotifications = true)
-    {
-        var plan = NotificationBaselinePlanner.ForLiveCreators(
-            liveCreators,
-            AppSettings.KnownLiveRoomIds,
-            AppSettings.LiveNotificationBaselineInitialized,
-            MaxNotificationsPerRefresh,
-            MaxStoredLiveRoomIds);
-        AppSettings.KnownLiveRoomIds = plan.KnownIds;
-        if (plan.InitializesBaseline)
-        {
-            AppSettings.LiveNotificationBaselineInitialized = true;
-            return;
-        }
-
-        if (!showNotifications || !IsLiveNotificationEnabled() || plan.NewItems.Count == 0)
-        {
-            return;
-        }
-
-        foreach (var creator in plan.NewItems)
-        {
-            ShowLiveNotification(creator);
-            await Task.Delay(NotificationSpacing);
-        }
-    }
-
     public async Task NotifyFeedUpdatesAsync(
         IReadOnlyList<FeedItem> items,
+        Func<FeedItem, bool>? canAddToViewLater = null,
         bool showNotifications = true)
     {
         var plan = FeedNotificationBaselinePlanner.ForFeedItems(
@@ -156,7 +103,7 @@ public sealed class NotificationService
 
         foreach (var item in plan.NewItems.OrderBy(item => item.PublishedAt))
         {
-            ShowFeedNotification(item);
+            ShowFeedNotification(item, canAddToViewLater?.Invoke(item) == true);
             await Task.Delay(NotificationSpacing);
         }
     }
@@ -310,60 +257,18 @@ public sealed class NotificationService
         }
     }
 
-    private static void ShowVideoNotification(BiliVideoUpdate update)
+    private static void ShowFeedNotification(FeedItem item, bool canAddToViewLater)
     {
-        var builder = new AppNotificationBuilder()
-            .AddArgument("kind", "video")
-            .AddArgument("action", OpenAction)
-            .AddArgument("url", update.Url)
-            .AddText(LocalizationHelper.Format("VideoNotificationTitle", update.CreatorName))
-            .AddText(update.Title)
-            .AddButton(new AppNotificationButton(LocalizationHelper.GetString("AddToViewLaterButton"))
-                .AddArgument("kind", "video")
-                .AddArgument("action", WatchLaterAction)
-                .AddArgument("aid", update.Aid.ToString()))
-            .AddButton(new AppNotificationButton(LocalizationHelper.GetString("OpenVideoButton"))
-                .AddArgument("kind", "video")
-                .AddArgument("action", OpenAction)
-                .AddArgument("url", update.Url));
-
-        AddImages(builder, update.AvatarUrl, update.CoverUrl);
-        TryShow(builder.BuildNotification());
-    }
-
-    private static void ShowLiveNotification(BiliLiveCreator creator)
-    {
-        var title = string.IsNullOrWhiteSpace(creator.Title)
-            ? LocalizationHelper.GetString("LiveNotificationFallbackTitle")
-            : creator.Title;
-
-        var builder = new AppNotificationBuilder()
-            .AddArgument("kind", "live")
-            .AddArgument("action", OpenAction)
-            .AddArgument("url", creator.Url)
-            .AddText(LocalizationHelper.Format("LiveNotificationTitle", creator.Name))
-            .AddText(title);
-
-        AddImages(builder, creator.AvatarUrl, string.Empty);
-        TryShow(builder.BuildNotification());
-    }
-
-    private static void ShowFeedNotification(FeedItem item)
-    {
-        var isVideoSite = string.Equals(
-            item.ProviderId,
-            BuiltInVideoSitePlugin.PluginId,
-            StringComparison.Ordinal);
         var builder = new AppNotificationBuilder()
             .AddArgument("kind", "update")
             .AddArgument("action", OpenAction)
             .AddArgument("url", item.Url)
             .AddText(LocalizationHelper.Format(
-                isVideoSite ? "VideoNotificationTitle" : "UpdateNotificationTitle",
+                canAddToViewLater ? "VideoNotificationTitle" : "UpdateNotificationTitle",
                 item.AuthorName))
             .AddText(item.Title);
 
-        if (isVideoSite)
+        if (canAddToViewLater)
         {
             var watchLaterButton = new AppNotificationButton(LocalizationHelper.GetString("AddToViewLaterButton"))
                 .AddArgument("kind", "update")
@@ -373,7 +278,7 @@ public sealed class NotificationService
         }
 
         builder.AddButton(new AppNotificationButton(LocalizationHelper.GetString(
-                isVideoSite ? "OpenVideoButton" : "OpenItemButton"))
+                canAddToViewLater ? "OpenVideoButton" : "OpenItemButton"))
             .AddArgument("kind", "update")
             .AddArgument("action", OpenAction)
             .AddArgument("url", item.Url));

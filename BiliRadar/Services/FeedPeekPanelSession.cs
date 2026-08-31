@@ -183,7 +183,9 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
                 var subscriptions = await _feedSession.GetSubscriptionsAsync(operationToken)
                     .ConfigureAwait(false);
                 foreach (var subscription in subscriptions.Where(item =>
-                    item.IsEnabled && !IsPluginFeed(item, PluginFeedIds.Live)))
+                    item.IsEnabled
+                    && IsAvailableProvider(item.ProviderId)
+                    && !string.Equals(item.FeedId, PluginFeedIds.Live, StringComparison.Ordinal)))
                 {
                     operationToken.ThrowIfCancellationRequested();
                     try
@@ -940,6 +942,10 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
         => subscription.IsEnabled
             && _pluginRuntime.IsPluginProvider(subscription.ProviderId)
             && string.Equals(subscription.FeedId, feedId, StringComparison.Ordinal);
+
+    private bool IsAvailableProvider(string providerId)
+        => string.Equals(providerId, RssProviderInfo.ProviderId, StringComparison.Ordinal)
+            || _pluginRuntime.IsPluginProvider(providerId);
 
     private async Task RunExclusiveAsync(
         Func<CancellationToken, Task> operation,

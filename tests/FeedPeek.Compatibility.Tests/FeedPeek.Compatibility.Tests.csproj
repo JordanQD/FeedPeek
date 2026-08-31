@@ -22,16 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\..\BiliRadar\Models\BiliCreator.cs" Link="Legacy\BiliCreator.cs" />
-    <Compile Include="..\..\BiliRadar\Models\BiliVideoUpdate.cs" Link="Legacy\BiliVideoUpdate.cs" />
-    <Compile Include="..\..\BiliRadar\Services\IBiliDataProvider.cs" Link="Legacy\IBiliDataProvider.cs" />
-    <Compile Include="..\..\BiliRadar\Services\LegacyBiliFeedProvider.cs" Link="Legacy\LegacyBiliFeedProvider.cs" />
-    <Compile Include="..\..\BiliRadar\Services\BiliLegacyJsonMapper.cs" Link="Legacy\BiliLegacyJsonMapper.cs" />
     <Compile Include="..\..\BiliRadar\Services\CookieNormalizer.cs" Link="Legacy\CookieNormalizer.cs" />
-    <Compile Include="..\..\BiliRadar\Services\LegacyItemIdTracker.cs" Link="Legacy\LegacyItemIdTracker.cs" />
-    <Compile Include="..\..\BiliRadar\Services\LegacyVideoPageBuffer.cs" Link="Legacy\LegacyVideoPageBuffer.cs" />
-    <Compile Include="..\..\BiliRadar\Services\MockBiliDataProvider.cs" Link="Legacy\MockBiliDataProvider.cs" />
-    <Compile Include="..\..\BiliRadar\Services\NotificationBaselinePlanner.cs" Link="Legacy\NotificationBaselinePlanner.cs" />
     <Compile Include="..\..\BiliRadar\Models\FeedLiveNotificationItem.cs" Link="FeedPeek\FeedLiveNotificationItem.cs" />
     <Compile Include="..\..\BiliRadar\Services\FeedNotificationBaselinePlanner.cs" Link="FeedPeek\FeedNotificationBaselinePlanner.cs" />
     <None Update="Fixtures\*.json" CopyToOutputDirectory="PreserveNewest" />

@@ -35,7 +35,6 @@ internal sealed class TrayFlyoutService : IDisposable
     private readonly DispatcherQueueTimer _mainFlyoutShowRetryTimer;
     private readonly long _mainFlyoutIsOpenCallbackToken;
     private readonly SystemTrayIcon _trayIcon;
-    private MainWindowSnapshot? _lastSnapshot;
     private UISettings? _uiSettings;
     private DateTime _lastMainFlyoutClosedAt = DateTime.MinValue;
     private Point? _pendingContextMenuPoint;
@@ -47,11 +46,9 @@ internal sealed class TrayFlyoutService : IDisposable
     public TrayFlyoutService(
         DispatcherQueue dispatcherQueue,
         Action settingsAction,
-        Action exitAction,
-        MainWindowSnapshot? initialSnapshot = null)
+        Action exitAction)
     {
         _dispatcherQueue = dispatcherQueue;
-        _lastSnapshot = initialSnapshot;
 
         _uiSettings = new UISettings();
         _uiSettings.ColorValuesChanged += OnColorValuesChanged;
@@ -412,7 +409,7 @@ internal sealed class TrayFlyoutService : IDisposable
             return;
         }
 
-        var panel = new MainPanelControl(_lastSnapshot);
+        var panel = new MainPanelControl();
         panel.SetHostHeight(panelHeight);
         _mainFlyoutIsland.Content = panel;
     }
