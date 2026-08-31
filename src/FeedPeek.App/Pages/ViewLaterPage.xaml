@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="FeedPeek.Pages.ViewLaterPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:models="using:FeedPeek.Models">
+
+    <Grid>
+        <ListView
+            x:Name="ItemsListView"
+            Padding="10,0,10,0"
+            HorizontalContentAlignment="Stretch"
+            IsItemClickEnabled="True"
+            IsSwipeEnabled="False"
+            ItemClick="ItemsListView_ItemClick"
+            SelectionMode="None">
+            <ListView.ItemContainerStyle>
+                <Style BasedOn="{StaticResource DefaultListViewItemStyle}" TargetType="ListViewItem">
+                    <Setter Property="Padding" Value="0" />
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                </Style>
+            </ListView.ItemContainerStyle>
+            <ListView.ItemTemplate>
+                <DataTemplate x:DataType="models:FeedItemRow">
+                    <Grid Padding="10,8" ColumnSpacing="12" MinHeight="92" AutomationProperties.Name="{x:Bind Title}" DataContext="{x:Bind}" RightTapped="ItemRoot_RightTapped">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="128" />
+                        </Grid.ColumnDefinitions>
+                        <Grid RowSpacing="4">
+                            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+                            <TextBlock FontSize="13" FontWeight="SemiBold" MaxLines="2" Text="{x:Bind Title}" TextTrimming="CharacterEllipsis" TextWrapping="Wrap" />
+                            <TextBlock Grid.Row="1" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" MaxLines="1" Text="{x:Bind Summary}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" Visibility="{x:Bind SummaryVisibility}" />
+                            <Grid Grid.Row="2" Margin="0,4,0,0" ColumnSpacing="2" VerticalAlignment="Bottom">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <PersonPicture Width="20" Height="20" ProfilePicture="{x:Bind AttributionIconSource}" />
+                                <TextBlock Grid.Column="1" HorizontalAlignment="Left" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" MaxWidth="120" Text="{x:Bind AttributionName}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="{x:Bind PublishedText, Mode=OneWay}" />
+                            </Grid>
+                        </Grid>
+                        <Grid Grid.Column="1" Width="128" Height="72" VerticalAlignment="Center">
+                            <Border Background="{ThemeResource ControlFillColorSecondaryBrush}" CornerRadius="{ThemeResource ListViewItemCornerRadius}"><Image Source="{x:Bind ImageSource}" Stretch="UniformToFill" /></Border>
+                            <Button Width="28" Height="28" MinWidth="0" Margin="5" Padding="0" HorizontalAlignment="Right" VerticalAlignment="Top" Click="RemoveButton_Click" DataContext="{x:Bind}" ToolTipService.ToolTip="从稍后再看移除">
+                                <Button.Resources><ResourceDictionary Source="/Styles/OverlayButtonResources.xaml" /></Button.Resources>
+                                <FontIcon FontSize="14" Glyph="&#xE74D;" />
+                            </Button>
+                            <Border Margin="5" Padding="4,1" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="{ThemeResource DurationBadgeBackgroundBrush}" CornerRadius="4" Visibility="{x:Bind DurationVisibility}"><TextBlock FontSize="11" Foreground="{ThemeResource DurationBadgeForegroundBrush}" Text="{x:Bind DurationText}" /></Border>
+                        </Grid>
+                    </Grid>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+
+        <StackPanel x:Name="EmptyPanel" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" Visibility="Collapsed">
+            <FontIcon HorizontalAlignment="Center" FontSize="28" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Glyph="&#xE734;" />
+            <TextBlock HorizontalAlignment="Center" FontSize="14" FontWeight="SemiBold" Text="稍后再看是空的" />
+            <TextBlock HorizontalAlignment="Center" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Text="在关注或历史中保存更新。" />
+        </StackPanel>
+    </Grid>
+</Page>

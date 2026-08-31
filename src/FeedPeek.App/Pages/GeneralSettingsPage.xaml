@@ -1,0 +1,258 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="FeedPeek.Pages.GeneralSettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:CommunityToolkit.WinUI.Controls">
+
+    <ScrollView
+        x:Name="SettingsScrollView"
+        Padding="36,32,36,0"
+        VerticalScrollBarVisibility="Auto"
+        VerticalScrollMode="Auto">
+        <VisualStateManager.VisualStateGroups>
+            <VisualStateGroup>
+                <VisualState x:Name="Wide">
+                    <VisualState.StateTriggers>
+                        <AdaptiveTrigger MinWindowWidth="640" />
+                    </VisualState.StateTriggers>
+                    <VisualState.Setters>
+                        <Setter Target="SettingsScrollView.Padding" Value="36,32,36,0" />
+                    </VisualState.Setters>
+                </VisualState>
+                <VisualState x:Name="Narrow">
+                    <VisualState.StateTriggers>
+                        <AdaptiveTrigger MinWindowWidth="0" />
+                    </VisualState.StateTriggers>
+                    <VisualState.Setters>
+                        <Setter Target="SettingsScrollView.Padding" Value="12,16,12,0" />
+                    </VisualState.Setters>
+                </VisualState>
+            </VisualStateGroup>
+        </VisualStateManager.VisualStateGroups>
+        <StackPanel
+            Margin="0,0,0,32"
+            MaxWidth="1064"
+            Spacing="{StaticResource SettingsCardSpacing}">
+            <StackPanel.ChildrenTransitions>
+                <EntranceThemeTransition FromVerticalOffset="36" />
+                <RepositionThemeTransition IsStaggeringEnabled="False" />
+            </StackPanel.ChildrenTransitions>
+
+            <TextBlock
+                x:Uid="GeneralPageTitle"
+                Margin="0,0,0,12"
+                Style="{ThemeResource TitleTextBlockStyle}"
+                Text="通用" />
+
+            <TextBlock
+                x:Uid="GeneralStartupSectionHeader"
+                Style="{StaticResource SettingsSectionHeaderTextBlockStyle}"
+                Text="启动" />
+            <controls:SettingsCard
+                x:Uid="GeneralAutoStartCard"
+                Description="登录 Windows 后自动启动应用。"
+                Header="开机后自动运行">
+                <controls:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE7E8;" />
+                </controls:SettingsCard.HeaderIcon>
+                <ToggleSwitch
+                    x:Name="AutoStartSwitch"
+                    x:Uid="GeneralAutoStartSwitch"
+                    AutomationProperties.AutomationId="AutoStartSwitch"
+                    AutomationProperties.Name="开机后自动运行"
+                    Toggled="AutoStartSwitch_Toggled" />
+            </controls:SettingsCard>
+            <InfoBar
+                x:Name="StartupInfoBar"
+                Margin="0,4,0,0"
+                IsClosable="False"
+                IsOpen="False"
+                Severity="Informational" />
+
+            <controls:SettingsCard
+                x:Uid="GeneralRunningLaunchActionCard"
+                Description="应用已经在后台运行时，从开始菜单再次打开后的行为。"
+                Header="重复打开应用时">
+                <controls:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE8EE;" />
+                </controls:SettingsCard.HeaderIcon>
+                <ComboBox
+                    x:Name="RunningLaunchActionBox"
+                    x:Uid="GeneralRunningLaunchActionBox"
+                    MinWidth="160"
+                    MaxWidth="300"
+                    HorizontalAlignment="Stretch"
+                    AutomationProperties.AutomationId="RunningLaunchActionBox"
+                    AutomationProperties.Name="重复打开应用时"
+                    SelectionChanged="RunningLaunchActionBox_SelectionChanged">
+                    <ComboBoxItem x:Uid="GeneralRunningLaunchOpenSettingsItem" Content="打开设置" />
+                    <ComboBoxItem x:Uid="GeneralRunningLaunchOpenCustomWebPageItem" Content="打开自定义网页" />
+                </ComboBox>
+            </controls:SettingsCard>
+            <controls:SettingsCard
+                x:Uid="GeneralCustomLaunchWebPageCard"
+                Description="重复打开应用并选择打开网页时使用。"
+                Header="自定义网页">
+                <controls:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE774;" />
+                </controls:SettingsCard.HeaderIcon>
+                <TextBox
+                    x:Name="CustomLaunchWebPageUrlBox"
+                    x:Uid="GeneralCustomLaunchWebPageUrlBox"
+                    MinWidth="200"
+                    MaxWidth="400"
+                    HorizontalAlignment="Stretch"
+                    AutomationProperties.AutomationId="CustomLaunchWebPageUrlBox"
+                    AutomationProperties.Name="自定义网页"
+                    LostFocus="CustomLaunchWebPageUrlBox_LostFocus"
+                    PlaceholderText="https://github.com/JordanQD/FeedPeek"
+                    TextChanged="CustomLaunchWebPageUrlBox_TextChanged" />
+            </controls:SettingsCard>
+            <controls:SettingsCard
+                x:Uid="GeneralDefaultOpenPageCard"
+                Description="点击任务栏托盘图标打开应用时默认显示的页面。"
+                Header="默认打开页面">
+                <controls:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE71B;" />
+                </controls:SettingsCard.HeaderIcon>
+                <ComboBox
+                    x:Name="DefaultOpenPageBox"
+                    x:Uid="GeneralDefaultOpenPageBox"
+                    MinWidth="160"
+                    MaxWidth="300"
+                    HorizontalAlignment="Stretch"
+                    AutomationProperties.AutomationId="DefaultOpenPageBox"
+                    AutomationProperties.Name="默认打开页面"
+                    SelectionChanged="DefaultOpenPageBox_SelectionChanged">
+                    <ComboBoxItem x:Uid="GeneralDefaultOpenFollowingItem" Content="关注" />
+                    <ComboBoxItem x:Uid="GeneralDefaultOpenHistoryItem" Content="历史" />
+                    <ComboBoxItem x:Uid="GeneralDefaultOpenViewLaterItem" Content="稍后再看" />
+                </ComboBox>
+            </controls:SettingsCard>
+            <controls:SettingsCard
+                x:Uid="GeneralSaveMainPanelPositionCard"
+                Description="关闭托盘弹窗后保留当前页面和直播区域展开状态。关闭时，每次打开都会按默认设置复位。"
+                Header="保留弹窗位置">
+                <controls:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE81C;" />
+                </controls:SettingsCard.HeaderIcon>
+                <ToggleSwitch
+                    x:Name="SaveMainPanelPositionSwitch"
+                    x:Uid="GeneralSaveMainPanelPositionSwitch"
+                    AutomationProperties.AutomationId="SaveMainPanelPositionSwitch"
+                    AutomationProperties.Name="保留弹窗位置"
+                    Toggled="SaveMainPanelPositionSwitch_Toggled" />
+            </controls:SettingsCard>
+
+            <TextBlock
+                x:Uid="GeneralDisplaySectionHeader"
+                Style="{StaticResource SettingsSectionHeaderTextBlockStyle}"
+                Text="显示" />
+            <controls:SettingsCard
+                x:Uid="GeneralMainPanelHeightCard"
+                Description="设置任务栏托盘主弹窗的高度。"
+                Header="主弹窗高度">
+                <controls:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE9D9;" />
+                </controls:SettingsCard.HeaderIcon>
+                <ComboBox
+                    x:Name="MainPanelHeightBox"
+                    x:Uid="GeneralMainPanelHeightBox"
+                    MinWidth="160"
+                    MaxWidth="300"
+                    HorizontalAlignment="Stretch"
+                    AutomationProperties.AutomationId="MainPanelHeightBox"
+                    AutomationProperties.Name="主弹窗高度"
+                    SelectionChanged="MainPanelHeightBox_SelectionChanged">
+                    <ComboBoxItem x:Uid="GeneralMainPanelHeight600Item" Content="600" Tag="600" />
+                    <ComboBoxItem x:Uid="GeneralMainPanelHeight800Item" Content="800" Tag="800" />
+                    <ComboBoxItem x:Uid="GeneralMainPanelHeight1000Item" Content="1000" Tag="1000" />
+                </ComboBox>
+            </controls:SettingsCard>
+            <controls:SettingsCard
+                x:Uid="GeneralLiveSectionDisplayModeCard"
+                Description="控制关注页面中正在直播区域的显示方式。"
+                Header="正在直播">
+                <controls:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE8B2;" />
+                </controls:SettingsCard.HeaderIcon>
+                <ComboBox
+                    x:Name="LiveSectionDisplayModeBox"
+                    x:Uid="GeneralLiveSectionDisplayModeBox"
+                    MinWidth="160"
+                    MaxWidth="300"
+                    HorizontalAlignment="Stretch"
+                    AutomationProperties.AutomationId="LiveSectionDisplayModeBox"
+                    AutomationProperties.Name="正在直播"
+                    SelectionChanged="LiveSectionDisplayModeBox_SelectionChanged">
+                    <ComboBoxItem x:Uid="GeneralLiveExpandedItem" Content="默认展开显示" />
+                    <ComboBoxItem x:Uid="GeneralLiveCollapsedItem" Content="默认折叠显示" />
+                    <ComboBoxItem x:Uid="GeneralLiveHiddenItem" Content="不显示" />
+                </ComboBox>
+            </controls:SettingsCard>
+
+            <TextBlock
+                x:Uid="GeneralConfigSectionHeader"
+                Style="{StaticResource SettingsSectionHeaderTextBlockStyle}"
+                Text="配置" />
+            <controls:SettingsCard
+                x:Uid="GeneralExportConfigCard"
+                Description="导出当前通知、启动和登录状态配置。"
+                Header="导出配置">
+                <controls:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xEDE1;" />
+                </controls:SettingsCard.HeaderIcon>
+                <Button
+                    x:Name="ExportConfigButton"
+                    x:Uid="GeneralExportConfigButton"
+                    AutomationProperties.AutomationId="ExportConfigButton"
+                    Click="ExportConfigButton_Click"
+                    Content="导出" />
+            </controls:SettingsCard>
+            <controls:SettingsCard
+                x:Uid="GeneralImportConfigCard"
+                Description="从 JSON 配置文件恢复通知、启动和登录状态配置。"
+                Header="导入配置">
+                <controls:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xEDE2;" />
+                </controls:SettingsCard.HeaderIcon>
+                <Button
+                    x:Name="ImportConfigButton"
+                    x:Uid="GeneralImportConfigButton"
+                    AutomationProperties.AutomationId="ImportConfigButton"
+                    Click="ImportConfigButton_Click"
+                    Content="导入" />
+            </controls:SettingsCard>
+            <TextBlock
+                x:Name="ConfigStatusText"
+                Margin="1,8,0,0"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                TextWrapping="Wrap"
+                Visibility="Collapsed" />
+
+            <controls:SettingsCard
+                x:Name="LanguageSettingsCard"
+                x:Uid="GeneralLanguageCard"
+                Description="选择跟随 Windows 语言，或手动指定界面显示语言。重启应用后生效。"
+                Header="界面语言">
+                <controls:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xF2B7;" />
+                </controls:SettingsCard.HeaderIcon>
+                <ComboBox
+                    x:Name="LanguageSelectorBox"
+                    x:Uid="GeneralLanguageSelectorBox"
+                    MinWidth="160"
+                    MaxWidth="300"
+                    HorizontalAlignment="Stretch"
+                    AutomationProperties.AutomationId="LanguageSelectorBox"
+                    AutomationProperties.Name="界面语言"
+                    SelectionChanged="LanguageSelectorBox_SelectionChanged">
+                    <ComboBoxItem x:Uid="GeneralLanguageSystemItem" Content="跟随系统" Tag="system" />
+                    <ComboBoxItem x:Uid="GeneralLanguageZhCnItem" Content="简体中文" Tag="zh-CN" />
+                    <ComboBoxItem x:Uid="GeneralLanguageZhHkItem" Content="繁體中文（香港）" Tag="zh-HK" />
+                </ComboBox>
+            </controls:SettingsCard>
+        </StackPanel>
+    </ScrollView>
+</Page>

@@ -1,0 +1,166 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>FeedPeek</RootNamespace>
+    <AssemblyName>FeedPeek</AssemblyName>
+    <DefaultLanguage>zh-CN</DefaultLanguage>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Platforms>x64</Platforms>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and '$(Platform)' == 'x64'">win-x64</RuntimeIdentifier>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <UseWinUI>true</UseWinUI>
+
+    <!-- Debug: framework-dependent for faster local builds. -->
+    <WinUISDKReferences Condition="'$(Configuration)' == 'Debug'">true</WinUISDKReferences>
+    <WindowsAppSDKSelfContained Condition="'$(Configuration)' == 'Debug'">false</WindowsAppSDKSelfContained>
+    <SelfContained Condition="'$(Configuration)' == 'Debug'">false</SelfContained>
+
+    <!-- Release / ReleaseFull: self-contained for Microsoft Store certification machines. -->
+    <WinUISDKReferences Condition="'$(Configuration)' != 'Debug'">false</WinUISDKReferences>
+    <WindowsAppSDKSelfContained Condition="'$(Configuration)' != 'Debug'">true</WindowsAppSDKSelfContained>
+    <SelfContained Condition="'$(Configuration)' != 'Debug'">true</SelfContained>
+    <PublishProfile Condition="'$(Configuration)' == 'Release'">win-$(Platform).pubxml</PublishProfile>
+    <PublishProfile Condition="'$(Configuration)' == 'ReleaseFull'">win-$(Platform)-full.pubxml</PublishProfile>
+    <DefaultItemExcludes>$(DefaultItemExcludes);artifacts\**;bin\**;obj\**</DefaultItemExcludes>
+    <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
+    <Version>2.0.0</Version>
+    <AssemblyVersion>2.0.0.0</AssemblyVersion>
+    <FileVersion>2.0.0.0</FileVersion>
+    <InformationalVersion>2.0.0</InformationalVersion>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Configurations>Debug;Release;ReleaseFull</Configurations>
+    <UseProductionPackageIdentity Condition="'$(UseProductionPackageIdentity)' == ''">false</UseProductionPackageIdentity>
+    <DevelopmentPackageIdentityName Condition="'$(DevelopmentPackageIdentityName)' == ''">JordanQD.FeedPeek.Preview</DevelopmentPackageIdentityName>
+    <!-- Store submission must override this with the exact identity reserved in Partner Center. -->
+    <ProductionPackageIdentityName Condition="'$(ProductionPackageIdentityName)' == ''">JordanQD.FeedPeek</ProductionPackageIdentityName>
+    <OutputPath Condition="'$(UseProductionPackageIdentity)' != 'true'">bin\dev\$(Platform)\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath Condition="'$(UseProductionPackageIdentity)' != 'true'">obj\dev\$(Platform)\$(Configuration)\</IntermediateOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\AppIcon.ico" />
+    <Content Include="Assets\SplashScreen.scale-200.png" />
+    <Content Include="Assets\LockScreenLogo.scale-200.png" />
+    <Content Include="Assets\Square150x150Logo.scale-200.png" />
+    <Content Include="Assets\Square44x44Logo.scale-200.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-16_altform-unplated.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-20_altform-unplated.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-30_altform-unplated.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-32_altform-unplated.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-36_altform-unplated.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-40_altform-unplated.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-44_altform-unplated.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-48_altform-unplated.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-60_altform-unplated.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-64_altform-unplated.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-72_altform-unplated.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-80_altform-unplated.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-96_altform-unplated.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-256_altform-unplated.png" />
+    <Content Include="Assets\StoreLogo.png" />
+    <Content Include="Assets\TrayIconDark.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Assets\TrayIconLight.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Assets\VideoClipTrayIcon.svg">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Assets\Wide310x150Logo.scale-200.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Manifest Include="$(ApplicationManifest)" />
+  </ItemGroup>
+
+  <!--
+    Defining the "Msix" ProjectCapability here allows the Single-project MSIX Packaging
+    Tools extension to be activated for this project even if the Windows App SDK Nuget
+    package has not yet been restored.
+  -->
+  <ItemGroup Condition="'$(DisableMsixProjectCapabilityAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
+    <ProjectCapability Include="Msix" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="CommunityToolkit.WinUI.Animations" Version="8.2.251219" />
+    <PackageReference Include="CommunityToolkit.WinUI.Behaviors" Version="8.2.251219" />
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.HeaderedControls" Version="8.2.251219" />
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.Primitives" Version="8.2.251219" />
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.Segmented" Version="8.2.251219" />
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.SettingsControls" Version="8.2.251219" />
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.Sizers" Version="8.2.251219" />
+    <PackageReference Include="CommunityToolkit.WinUI.Converters" Version="8.2.251219" />
+    <PackageReference Include="CommunityToolkit.WinUI.Extensions" Version="8.2.251219" />
+    <PackageReference Include="CommunityToolkit.WinUI.Helpers" Version="8.2.251219" />
+    <PackageReference Include="CommunityToolkit.WinUI.Media" Version="8.2.251219" />
+    <PackageReference Include="CommunityToolkit.WinUI.Triggers" Version="8.2.251219" />
+    <PackageReference Include="DesktopFlyouts.WinUI" Version="1.4.0" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2526" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.4.0" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4129.50" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FeedPeek.Core\FeedPeek.Core.csproj" />
+    <ProjectReference Include="..\FeedPeek.PluginContracts\FeedPeek.PluginContracts.csproj" />
+    <ProjectReference Include="..\FeedPeek.PluginHost\FeedPeek.PluginHost.csproj" />
+    <ProjectReference Include="..\FeedPeek.PluginRuntime\FeedPeek.PluginRuntime.csproj" />
+    <ProjectReference Include="..\FeedPeek.Rss\FeedPeek.Rss.csproj" />
+  </ItemGroup>
+
+  <!--
+    Defining the "HasPackageAndPublishMenuAddedByProject" property here allows the Solution
+    Explorer "Package and Publish" context menu entry to be enabled for this project even if
+    the Windows App SDK Nuget package has not yet been restored.
+  -->
+  <PropertyGroup Condition="'$(DisableHasPackageAndPublishMenuAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
+    <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
+  </PropertyGroup>
+
+  <!-- Publish Properties -->
+  <PropertyGroup>
+    <!-- Release: Store-ready self-contained package. -->
+    <PublishReadyToRun Condition="'$(Configuration)' == 'Release'">True</PublishReadyToRun>
+    <PublishTrimmed Condition="'$(Configuration)' == 'Release'">false</PublishTrimmed>
+    <!-- ReleaseFull: 全量自包含，不裁剪，R2R 开（最大兼容） -->
+    <PublishReadyToRun Condition="'$(Configuration)' == 'ReleaseFull'">True</PublishReadyToRun>
+    <PublishTrimmed Condition="'$(Configuration)' == 'ReleaseFull'">false</PublishTrimmed>
+    <!-- Debug: 不裁剪不 R2R -->
+    <PublishReadyToRun Condition="'$(Configuration)' == 'Debug'">False</PublishReadyToRun>
+    <PublishTrimmed Condition="'$(Configuration)' == 'Debug'">false</PublishTrimmed>
+    <PackageCertificateThumbprint>F22251E008DFF6CDBC87A826CCB806E2708379AE</PackageCertificateThumbprint>
+    <AppxPackageSigningEnabled>True</AppxPackageSigningEnabled>
+    <GenerateAppInstallerFile>False</GenerateAppInstallerFile>
+    <AppxPackageSigningTimestampDigestAlgorithm>SHA256</AppxPackageSigningTimestampDigestAlgorithm>
+    <!-- Microsoft Store reserves the fourth version component and requires it to stay zero. -->
+    <AppxAutoIncrementPackageRevision>False</AppxAutoIncrementPackageRevision>
+    <GenerateTestArtifacts>False</GenerateTestArtifacts>
+    <AppxBundle>Auto</AppxBundle>
+    <HoursBetweenUpdateChecks>0</HoursBetweenUpdateChecks>
+    <AppxBundlePlatforms>x64</AppxBundlePlatforms>
+    <PackageAndDeploySatelliteResourceLanguages>zh-CN;zh-HK</PackageAndDeploySatelliteResourceLanguages>
+    <AppxSymbolPackageEnabled>False</AppxSymbolPackageEnabled>
+    <GenerateTemporaryStoreCertificate>True</GenerateTemporaryStoreCertificate>
+  </PropertyGroup>
+
+  <Target Name="FixGeneratedDesktopExtensionManifest" AfterTargets="_GenerateAppxPackageRecipeFile">
+    <PropertyGroup>
+      <_GeneratedAppxManifest>$(OutDir)AppxManifest.xml</_GeneratedAppxManifest>
+      <_GeneratedAppxManifest Condition="!Exists('$(_GeneratedAppxManifest)')">$(OutDir)AppX\AppxManifest.xml</_GeneratedAppxManifest>
+      <_GeneratedPackageIdentityName Condition="'$(UseProductionPackageIdentity)' != 'true'">$(DevelopmentPackageIdentityName)</_GeneratedPackageIdentityName>
+      <_GeneratedPackageIdentityName Condition="'$(UseProductionPackageIdentity)' == 'true'">$(ProductionPackageIdentityName)</_GeneratedPackageIdentityName>
+      <_GeneratedPackageIdentityName Condition="'$(_GeneratedPackageIdentityName)' == ''">JordanQD.FeedPeek.Preview</_GeneratedPackageIdentityName>
+    </PropertyGroup>
+    <ItemGroup Condition="Exists('$(_GeneratedAppxManifest)')">
+      <_GeneratedAppxManifestLine Include="$(_GeneratedAppxManifest)" />
+    </ItemGroup>
+    <WriteLinesToFile Condition="Exists('$(_GeneratedAppxManifest)')" File="$(_GeneratedAppxManifest)" Lines="$([System.IO.File]::ReadAllText('$(_GeneratedAppxManifest)').Replace('Name=&quot;JordanQD.FeedPeek.Preview&quot;', 'Name=&quot;$(_GeneratedPackageIdentityName)&quot;').Replace('Name=&quot;JordanQD.BiliRadar.Dev&quot;', 'Name=&quot;$(_GeneratedPackageIdentityName)&quot;').Replace('Name=&quot;JordanQD.BiliRadar&quot;', 'Name=&quot;$(_GeneratedPackageIdentityName)&quot;').Replace('$targetnametoken$.exe', 'FeedPeek.exe').Replace('EntryPoint=&quot;$targetentrypoint$&quot;', 'EntryPoint=&quot;Windows.FullTrustApplication&quot;'))" Overwrite="true" />
+  </Target>
+</Project>

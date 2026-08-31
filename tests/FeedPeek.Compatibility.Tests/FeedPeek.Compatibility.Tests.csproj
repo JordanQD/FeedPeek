@@ -22,9 +22,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\..\BiliRadar\Services\CookieNormalizer.cs" Link="Legacy\CookieNormalizer.cs" />
-    <Compile Include="..\..\BiliRadar\Models\FeedLiveNotificationItem.cs" Link="FeedPeek\FeedLiveNotificationItem.cs" />
-    <Compile Include="..\..\BiliRadar\Services\FeedNotificationBaselinePlanner.cs" Link="FeedPeek\FeedNotificationBaselinePlanner.cs" />
+    <Compile Include="..\..\src\FeedPeek.App\Services\CookieNormalizer.cs" Link="Legacy\CookieNormalizer.cs" />
+    <Compile Include="..\..\src\FeedPeek.App\Models\FeedLiveNotificationItem.cs" Link="FeedPeek\FeedLiveNotificationItem.cs" />
+    <Compile Include="..\..\src\FeedPeek.App\Services\FeedNotificationBaselinePlanner.cs" Link="FeedPeek\FeedNotificationBaselinePlanner.cs" />
     <None Update="Fixtures\*.json" CopyToOutputDirectory="PreserveNewest" />
     <Using Include="Xunit" />
   </ItemGroup>

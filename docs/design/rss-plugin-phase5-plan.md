@@ -40,10 +40,10 @@ Phase 5 属于中等工作量。用户可见品牌已在迁移期间部分改为
 - 版本号最后写入；中断或失败后可在下次启动重试。
 - SQLite 和 Credential Locker 继续使用各自独立的版本/安全边界。
 
-### 5.3 宿主工程机械重命名（待完成）
+### 5.3 宿主工程机械重命名（已完成）
 
-- `BiliRadar.csproj`、输出程序集和 `BiliRadar.exe` 改为 FeedPeek。
-- `BiliRadar.*` C#/XAML 默认命名空间改为 `FeedPeek.*`。
+- 启动项目迁移到 `src/FeedPeek.App/FeedPeek.App.csproj`，输出程序集和可执行文件改为 `FeedPeek`。
+- `BiliRadar.*` C#/XAML 默认命名空间改为 `FeedPeek.*`；旧 Cookie 容器名和旧 identity 字符串仅作为一次性兼容标识保留。
 - 更新 manifest executable、桌面扩展和构建后的 manifest 修正规则。
 - 这是约 60 个文件的机械修改，必须单独提交并验证 XAML 编译、通知激活和开机启动。
 
@@ -57,7 +57,7 @@ Phase 5 属于中等工作量。用户可见品牌已在迁移期间部分改为
 ## 工作量估计
 
 - 5.0–5.2：小到中，已完成代码落地。
-- 5.3：中等，主要是 XAML 命名空间和打包入口联动；预计一个独立开发批次。
+- 5.3：中等，已作为独立批次完成。
 - 5.4：中等且以人工验证为主；跨 BiliRadar/Preview identity 的自动迁移不纳入当前路径。
 
-剩余代码量不大，但 5.3/5.4 的风险高于行数。额度有限时可以安全停在 5.2；当前应用仍可构建运行，用户可见品牌已经是 FeedPeek，内部 `BiliRadar` 名称不会影响功能。
+剩余工作集中在 5.4 的正式 identity 与人工发布验收。5.3 已完成，当前解决方案为 `FeedPeek.slnx`，启动项目位于 `src/FeedPeek.App`，生成的主程序为 `FeedPeek.exe`。

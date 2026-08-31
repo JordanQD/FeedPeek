@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="FeedPeek.Controls.MainPanelControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid x:Name="RootGrid" Width="420">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid
+            Grid.Row="0"
+            Padding="8,2,12,4"
+            ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <SelectorBar
+                x:Name="ContentSelectorBar"
+                Grid.Column="0"
+                HorizontalAlignment="Stretch"
+                SelectionChanged="ContentSelectorBar_SelectionChanged">
+                <SelectorBarItem
+                    x:Name="FollowingSelectorItem"
+                    x:Uid="MainFollowingSelectorItem"
+                    Icon="Contact"
+                    Text="关注" />
+                <SelectorBarItem
+                    x:Name="HistorySelectorItem"
+                    x:Uid="MainHistorySelectorItem"
+                    Icon="Clock"
+                    Text="历史" />
+                <SelectorBarItem
+                    x:Name="ViewLaterSelectorItem"
+                    x:Uid="MainViewLaterSelectorItem"
+                    Icon="Favorite"
+                    Text="稍后再看" />
+            </SelectorBar>
+
+            <Button
+                Grid.Column="1"
+                Width="34"
+                Height="34"
+                Padding="0"
+                Click="RefreshButton_Click"
+                Style="{StaticResource SubtleButtonStyle}"
+                ToolTipService.ToolTip="刷新更新">
+                <FontIcon FontSize="15" Glyph="&#xE72C;" />
+            </Button>
+        </Grid>
+
+        <Grid Grid.Row="1">
+            <Frame
+                x:Name="ContentFrame"
+                CacheSize="0"
+                IsNavigationStackEnabled="False" />
+
+            <Grid
+                x:Name="StatusNotificationLayer"
+                Canvas.ZIndex="10"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch"
+                Visibility="Collapsed">
+                <InfoBar
+                    x:Name="StatusInfoBar"
+                    Height="64"
+                    MinHeight="64"
+                    MaxHeight="64"
+                    Margin="12,0,12,16"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Bottom"
+                    IsClosable="True"
+                    IsOpen="False"
+                    CloseButtonClick="StatusNotificationInfoBar_CloseButtonClick">
+                    <TextBlock
+                        x:Name="StatusInfoBarText"
+                        VerticalAlignment="Center"
+                        MaxLines="1"
+                        TextTrimming="CharacterEllipsis"
+                        TextWrapping="NoWrap" />
+                </InfoBar>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>

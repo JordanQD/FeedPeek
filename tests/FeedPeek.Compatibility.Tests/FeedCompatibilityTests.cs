@@ -1,5 +1,5 @@
-using BiliRadar.Models;
-using BiliRadar.Services;
+using FeedPeek.Models;
+using FeedPeek.Services;
 using FeedPeek.Core.Models;
 using FeedPeek.PluginContracts.Dtos;
 

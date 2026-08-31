@@ -1,29 +1,23 @@
-# BiliRadar
+# FeedPeek
 
-一个使用 **WinUI 3 原生开发**的 B 站任务栏托盘动态雷达。  
-用于查看关注 UP 的最新视频、直播状态、历史记录、稍后再看，并在后台提醒视频更新和开播。
-
-<a href="https://apps.microsoft.com/detail/9MX8LLSP816P" target="_self" >
-	<img src="https://get.microsoft.com/images/zh-cn%20dark.svg" width="200"/>
-</a>
+一个使用 **WinUI 3 原生开发**的 Windows 托盘通用更新查看器。
+FeedPeek 原生支持 RSS/Atom，也可以通过用户安装的网站插件接入更新、历史记录、稍后再看、作者和直播内容。
 
 <img src="./docs/assets/主界面.png" alt="主界面" width="400" />
 
-> BiliRadar 不是哔哩哔哩官方应用，与哔哩哔哩没有从属、赞助或背书关系。
-
 ## 功能
 
-- 关注动态：查看关注 UP 的最新视频。
+- 关注更新：聚合 RSS 与已安装网站插件的最新内容。
 
-- 直播状态：显示正在直播的 UP，可在设置中选择展开、折叠或隐藏。
+- 直播状态：支持该能力的网站插件可显示正在直播的作者。
 
     <img src="./docs/assets/关注.png" alt="关注&直播" width="400" />
 
-- 历史记录：查看最近看过的视频。
+- 历史记录：统一展示支持历史能力的网站内容。
 
     <img src="./docs/assets/历史.png" alt="历史记录" width="400" />
 
-- 稍后再看：查看稍后再看列表，并支持从应用内添加或移除。
+- 稍后再看：由插件能力提供添加、查看和移除操作。
 
     <img src="./docs/assets/稍后再看.png" alt="稍后再看" width="400" />
 
@@ -33,7 +27,7 @@
 
     <img src="./docs/assets/设置-通用.png" alt="设置-通用" width="560" />
 
-- 桌面通知：支持视频更新通知和开播通知，可只关注指定 UP 的视频更新或开播提醒。
+- 桌面通知：支持 RSS 更新、网站更新和开播通知，也可只关注指定作者。
 
     <img src="./docs/assets/设置-通知-所有.png" alt="通知-所有" width="560" />
 
@@ -45,13 +39,11 @@
 
 ## 使用说明
 
-首次使用需要在设置中通过网页登录 Bilibili 账号。登录后，BiliRadar 会读取与你账号相关的关注动态、历史记录、稍后再看和直播状态。
-
-BiliRadar 依赖 Bilibili 的网页登录和公开接口行为。如果 Bilibili 调整登录验证、接口返回或风控策略，部分功能可能需要更新后才能继续使用。
+RSS 可在“设置 → 来源”中直接添加。网站能力需要先从本地文件夹安装相应插件，再按插件要求决定是否登录，最后手动添加来源。FeedPeek 本体不随包附带视频网站插件。
 
 ## 账号与隐私
 
-登录状态保存在本机应用数据中，用于后续刷新动态。BiliRadar 不运营自己的账号系统，也不会把你的 Bilibili 数据发送到开发者服务器。网络请求由你的设备直接访问 Bilibili 服务或你主动打开的链接。
+订阅、已读状态和插件配置保存在本机应用数据中；插件登录凭据保存在 Windows Credential Locker。FeedPeek 不运营自己的账号系统，网络请求由你的设备直接访问 RSS 地址、已安装插件声明的网站或你主动打开的链接。
 
 配置导出文件可能包含登录 Cookie 和其他本地设置，请不要随意分享导出的配置文件。
 
@@ -79,13 +71,13 @@ BiliRadar 依赖 Bilibili 的网页登录和公开接口行为。如果 Bilibili
 还原依赖：
 
 ```powershell
-dotnet restore BiliRadar.slnx
+dotnet restore FeedPeek.slnx
 ```
 
 编译 x64：
 
 ```powershell
-dotnet build BiliRadar.slnx -c Release -p:Platform=x64 --no-restore
+dotnet build FeedPeek.slnx -c Release -p:Platform=x64 --no-restore
 ```
 
 生成用于 Partner Center 的 Microsoft Store 上传包：
@@ -106,12 +98,10 @@ dotnet build BiliRadar.slnx -c Release -p:Platform=x64 --no-restore
 
 你可以在 GPL-3.0 许可条款下自由使用、复制、修改和分发本项目的源代码；如果分发修改后的版本或基于本项目的衍生作品，也需要继续以 GPL-3.0 兼容的方式公开相应源代码。
 
-BiliRadar 使用到的第三方项目、库和服务可能适用各自的许可证或使用条款，请在使用和分发时一并遵守。
+FeedPeek 使用到的第三方项目、库和服务可能适用各自的许可证或使用条款，请在使用和分发时一并遵守。
 
 ## 参考
 
-- [Richasy/Bili.Copilot](https://github.com/Richasy/Bili.Copilot)
-- [Richasy/bili-kernel](https://github.com/Richasy/bili-kernel)
 - [microsoft/WindowsAppSDK](https://github.com/microsoft/WindowsAppSDK)
 - [microsoft/WinUI-Gallery](https://github.com/microsoft/WinUI-Gallery)
 - [microsoft/microsoft-ui-xaml](https://github.com/microsoft/microsoft-ui-xaml)

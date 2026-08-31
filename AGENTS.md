@@ -74,7 +74,7 @@ Services/
 ## 构建
 
 ```bash
-dotnet build BiliRadar/BiliRadar.csproj -p:Platform=x64
+dotnet build src/FeedPeek.App/FeedPeek.App.csproj -p:Platform=x64
 ```
 
 Debug 配置：框架依赖（`WinUISDKReferences=true`）；Release：自包含 MSIX 包。
@@ -99,19 +99,19 @@ Debug 配置：框架依赖（`WinUISDKReferences=true`）；Release：自包含
 正确做法是在沙箱外运行同一条还原命令；Codex 工具调用应使用 `sandbox_permissions: require_escalated`：
 
 ```powershell
-dotnet restore BiliRadar/BiliRadar.csproj -p:Platform=x64
+dotnet restore src/FeedPeek.App/FeedPeek.App.csproj -p:Platform=x64
 ```
 
 下载期间偶发 `unexpected EOF or 0 bytes` 通常是代理或 CDN 瞬时断流，先让 NuGet 自己重试。若持续发生，再降低并发：
 
 ```powershell
-dotnet restore BiliRadar/BiliRadar.csproj -p:Platform=x64 --disable-parallel
+dotnet restore src/FeedPeek.App/FeedPeek.App.csproj -p:Platform=x64 --disable-parallel
 ```
 
 还原成功后，编译时避免再次触发网络请求：
 
 ```powershell
-dotnet build BiliRadar/BiliRadar.csproj -p:Platform=x64 --no-restore
+dotnet build src/FeedPeek.App/FeedPeek.App.csproj -p:Platform=x64 --no-restore
 ```
 
 项目根目录的 `NuGet.Config` 是本项目包源配置的唯一依据，当前通过 `<clear />` 后只启用官方 `https://api.nuget.org/v3/index.json`。若沙箱内失败而沙箱外访问该地址返回 HTTP 200，应直接按上述方式在沙箱外还原，不要继续修改项目配置。
@@ -120,7 +120,7 @@ dotnet build BiliRadar/BiliRadar.csproj -p:Platform=x64 --no-restore
 
 不要只根据“能编译”决定是否升级。候选版本必须是 Stable 通道，并按以下顺序评测：
 
-1. **依赖审计** — 用 `dotnet list BiliRadar/BiliRadar.csproj package --outdated` 确认候选版本；检查直接和传递依赖是否出现降级、冲突、弃用或安全警告，并确认 DesktopFlyouts 版本支持该 Windows App SDK。
+1. **依赖审计** — 用 `dotnet list src/FeedPeek.App/FeedPeek.App.csproj package --outdated` 确认候选版本；检查直接和传递依赖是否出现降级、冲突、弃用或安全警告，并确认 DesktopFlyouts 版本支持该 Windows App SDK。
 2. **构建与打包矩阵** — 验证 Debug x64 框架依赖构建和 Release x64 自包含 MSIX。项目当前为 x64-only，不再构建或发布 ARM64。还原成功后构建统一使用 `--no-restore`。
 3. **启动与生命周期** — 安装/注册并真实启动 MSIX，验证二次启动的单实例重定向、开机启动、通知激活、设置窗口和 WebView2 登录链路，不能只检查进程存在。
 4. **托盘关键路径** — 验证托盘左键 Flyout、右键仅“设置/退出”、Explorer 重启后的图标恢复、切换显示器/DPI 后图标清晰，以及连续开关 Flyout 不出现重入或卡死。
@@ -140,11 +140,11 @@ dotnet build BiliRadar/BiliRadar.csproj -p:Platform=x64 --no-restore
 | Phase 2（通用核心与 RSS） | ✅ 已人工验收主路径 |
 | Phase 3（插件合同与 Jint Runtime） | ✅ 18 项必要验证通过，Release x64 构建通过 |
 | Phase 4（站点插件迁移） | 🧪 4.0–4.9 自动验证通过；4.3–4.4 已人工验收，4.5–4.9 待人工验收 |
-| Phase 5（品牌、独立包身份与数据迁移） | 🚧 5.0–5.2 已完成；5.3–5.4 待完成 |
+| Phase 5（品牌、独立包身份与数据迁移） | 🚧 5.0–5.3 已完成；5.4 待完成 |
 
 Phase 3 生产项目为 `src/FeedPeek.PluginContracts` 与 `src/FeedPeek.PluginRuntime`。Runtime 锁定 Jint 4.16.1；同一插件 realm 串行调用，通过 JSON `IPluginTransport` 保持 transport-neutral。插件只能使用显式 Host Bridge，不开放 CLR、文件系统、进程、注册表、COM 或 WinUI。mock JS fixture 和必要验证复用 `tests/FeedPeek.Core.Tests`，不再新增测试项目。
 
-Phase 5 采用独立应用发布路径，不把 FeedPeek 作为旧 BiliRadar identity 的原位升级。开发包使用 `JordanQD.FeedPeek.Preview`，正式包通过 `UseProductionPackageIdentity=true` 选择独立 production identity；Microsoft Store 发布时必须使用 Partner Center 分配的精确 identity。用户可见品牌已统一为 FeedPeek，LocalSettings 已增加版本化幂等迁移。项目/程序集/可执行文件/默认命名空间重命名和正式包人工验收仍待完成，详见 `docs/design/rss-plugin-phase5-plan.md`。
+Phase 5 采用独立应用发布路径，不把 FeedPeek 作为旧 BiliRadar identity 的原位升级。开发包使用 `JordanQD.FeedPeek.Preview`，正式包通过 `UseProductionPackageIdentity=true` 选择独立 production identity；Microsoft Store 发布时必须使用 Partner Center 分配的精确 identity。用户可见品牌已统一为 FeedPeek，LocalSettings 已增加版本化幂等迁移。启动项目现为 `src/FeedPeek.App/FeedPeek.App.csproj`，程序集、可执行文件和默认命名空间均已改为 FeedPeek；正式 identity 和人工新装验收仍待完成，详见 `docs/design/rss-plugin-phase5-plan.md`。
 
 Phase 4 详细检查点见 `docs/design/rss-plugin-phase4-plan.md`。4.1–4.8 已完成通用 Host、仓库维护的网站 JS 插件、三页数据、登录、作者/直播、通知和用户插件管理。4.9 已删除 legacy provider、旧模型、旧 adapter、旧快照和孤立卡片；视频网站插件不再随应用发布，停用插件不会继续刷新旧订阅，通知动作按 manifest capability 显示，插件升级/卸载使用可回滚目录切换。仅保留旧 Cookie 与通知规则的一次性兼容迁移。
 

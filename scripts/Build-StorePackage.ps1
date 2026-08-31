@@ -5,8 +5,8 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$projectDir = Join-Path $repoRoot "BiliRadar"
-$projectFile = Join-Path $projectDir "BiliRadar.csproj"
+$projectDir = Join-Path $repoRoot "src\FeedPeek.App"
+$projectFile = Join-Path $projectDir "FeedPeek.App.csproj"
 $manifestPath = Join-Path $projectDir "Package.appxmanifest"
 $artifactsRoot = Join-Path $projectDir "artifacts"
 
@@ -97,7 +97,7 @@ if (-not $x64Msix) {
     throw "The expected x64 MSIX package was not generated."
 }
 
-Copy-Item -LiteralPath $x64Msix.FullName -Destination (Join-Path $bundleInput "BiliRadar_${Version}_x64.msix")
+Copy-Item -LiteralPath $x64Msix.FullName -Destination (Join-Path $bundleInput "FeedPeek_${Version}_x64.msix")
 
 $windowsKitsBin = "${env:ProgramFiles(x86)}\Windows Kits\10\bin"
 $makeAppx = Get-ChildItem -Path $windowsKitsBin -Recurse -Filter "makeappx.exe" |
@@ -109,7 +109,7 @@ if (-not $makeAppx) {
     throw "makeappx.exe was not found under $windowsKitsBin."
 }
 
-$bundlePath = Join-Path $submissionRoot "BiliRadar_${Version}_x64.msixbundle"
+$bundlePath = Join-Path $submissionRoot "FeedPeek_${Version}_x64.msixbundle"
 & $makeAppx.FullName bundle /d $bundleInput /p $bundlePath /bv $Version /o
 if ($LASTEXITCODE -ne 0) {
     throw "MakeAppx failed to create the Store bundle."

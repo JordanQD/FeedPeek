@@ -830,7 +830,7 @@ FeedPeek.PluginWorker.exe
 - 5.0 已完成身份与持久化边界盘点。FeedPeek 采用独立应用发布：开发包保留 `JordanQD.FeedPeek.Preview`，正式包使用独立 production identity；旧 `JordanQD.BiliRadar` 不原位升级，也不自动跨包搬迁数据。
 - 5.1 已将用户可见名称、窗口、托盘、通知注册、启动项显示和通用文案统一为 FeedPeek，同时保留部署兼容标识。
 - 5.2 已增加版本化、幂等的 LocalSettings v1 迁移；SQLite 和 Credential Locker 继续使用独立迁移/安全边界。
-- 5.3 的项目、程序集、可执行文件和默认命名空间机械重命名，以及 5.4 的兼容键清理和人工升级验收待完成。
+- 5.3 已完成启动项目、程序集、可执行文件和默认命名空间机械重命名；5.4 的正式 identity、兼容键清理和人工新装验收待完成。
 
 ### Phase 6：打包与发布验收
 

@@ -19,7 +19,7 @@ obj/
 **/obj/
 .verify-bin/
 .verify-obj/
-BiliRadar/artifacts/
+src/FeedPeek.App/artifacts/
 
 # WinUI / MSIX packaging output
 AppPackages/

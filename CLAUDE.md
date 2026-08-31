@@ -71,7 +71,7 @@ Services/
 ## 构建
 
 ```bash
-dotnet build BiliRadar/BiliRadar.csproj -p:Platform=x64
+dotnet build src/FeedPeek.App/FeedPeek.App.csproj -p:Platform=x64
 ```
 
 Debug 配置：框架依赖（`WinUISDKReferences=true`）；Release：自包含 MSIX 包。
