@@ -4,6 +4,7 @@ using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Navigation;
 using System;
 using System.Runtime.InteropServices;
 using Windows.Graphics;
@@ -40,6 +41,7 @@ public sealed partial class SettingsWindow : Window
             presenter.IsMinimizable = true;
         }
 
+        navFrame.Navigated += NavFrame_Navigated;
         GeneralNavItem.IsSelected = true;
         navFrame.Navigate(typeof(GeneralSettingsPage));
         RootGrid.SizeChanged += OnRootGridSizeChanged;
@@ -90,6 +92,16 @@ public sealed partial class SettingsWindow : Window
     private void TitleBar_PaneToggleRequested(TitleBar sender, object args)
     {
         navView.IsPaneOpen = !navView.IsPaneOpen;
+    }
+
+    private void TitleBar_BackRequested(TitleBar sender, object args)
+    {
+        if (navFrame.CanGoBack) navFrame.GoBack();
+    }
+
+    private void NavFrame_Navigated(object sender, NavigationEventArgs e)
+    {
+        titleBar.IsBackButtonVisible = e.SourcePageType == typeof(PluginDetailPage);
     }
 
     private void ConfigureTitleBar(IntPtr hwnd)

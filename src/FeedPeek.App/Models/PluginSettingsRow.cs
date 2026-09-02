@@ -37,6 +37,4 @@ public sealed class PluginSettingsRow
         && Manifest?.Capabilities.Contains("source.configuration", StringComparer.Ordinal) == true;
 
     public bool HasLogin => IsEnabled && Manifest?.Auth?.LoginFlow is not null;
-
-    public string ToggleLabel => IsEnabled ? "停用" : "启用";
 }

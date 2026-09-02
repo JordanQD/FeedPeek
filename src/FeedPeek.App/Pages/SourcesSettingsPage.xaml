@@ -32,149 +32,151 @@
             </VisualStateGroup>
         </VisualStateManager.VisualStateGroups>
 
-        <StackPanel Margin="0,0,0,32" MaxWidth="1064" Spacing="{StaticResource SettingsCardSpacing}">
-            <TextBlock Margin="0,0,0,12" Style="{ThemeResource TitleTextBlockStyle}" Text="来源" />
+        <!-- Wrapped in a Grid to work around the SettingsExpander ItemsRepeater + parent MaxWidth layout bug -->
+        <Grid>
+            <StackPanel Margin="0,0,0,32" MaxWidth="1064" Spacing="{StaticResource SettingsCardSpacing}">
+                <TextBlock Margin="0,0,0,12" Style="{ThemeResource TitleTextBlockStyle}" Text="来源" />
 
-            <TextBlock Style="{StaticResource SettingsSectionHeaderTextBlockStyle}" Text="网站插件" />
-            <controls:SettingsCard
-                Description="每个插件对应一个网站；同一网站可以添加多个来源，并共享该插件的登录状态。"
-                Header="已安装插件"
-                HorizontalContentAlignment="Stretch">
-                <controls:SettingsCard.HeaderIcon>
-                    <FontIcon Glyph="&#xE74C;" />
-                </controls:SettingsCard.HeaderIcon>
-                <StackPanel Spacing="8">
-                    <ListView
-                        x:Name="PluginsListView"
-                        IsItemClickEnabled="False"
-                        IsSwipeEnabled="False"
-                        SelectionMode="None">
-                        <ListView.ItemContainerStyle>
-                            <Style TargetType="ListViewItem">
-                                <Setter Property="Padding" Value="0" />
-                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                                <Setter Property="IsTabStop" Value="False" />
-                            </Style>
-                        </ListView.ItemContainerStyle>
-                        <ListView.ItemTemplate>
-                            <DataTemplate x:DataType="models:PluginSettingsRow">
-                                <Grid Padding="8" ColumnSpacing="8">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Spacing="2">
-                                        <TextBlock FontWeight="SemiBold" Text="{x:Bind DisplayName}" />
-                                        <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="{x:Bind Detail}" TextWrapping="Wrap" />
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
-                                        <Button Click="PluginLoginButton_Click" Content="账户" DataContext="{x:Bind}" IsEnabled="{x:Bind HasLogin}" />
-                                        <Button Click="AddPluginSourceButton_Click" Content="添加来源" DataContext="{x:Bind}" IsEnabled="{x:Bind CanConfigureSource}" />
-                                        <Button Click="TogglePluginButton_Click" Content="{x:Bind ToggleLabel}" DataContext="{x:Bind}" />
-                                        <Button Click="UninstallPluginButton_Click" DataContext="{x:Bind}" Style="{StaticResource SubtleButtonStyle}" ToolTipService.ToolTip="卸载插件">
+                <TextBlock Style="{StaticResource SettingsSectionHeaderTextBlockStyle}" Text="添加来源" />
+
+                <!-- RSS 订阅（第一位） -->
+                <controls:SettingsCard
+                    Description="输入网站地址或 RSS / Atom 地址，FeedPeek 会自动发现可用订阅。"
+                    Header="订阅地址"
+                    HorizontalContentAlignment="Stretch">
+                    <controls:SettingsCard.HeaderIcon>
+                        <FontIcon Glyph="&#xE774;" />
+                    </controls:SettingsCard.HeaderIcon>
+                    <Grid MinWidth="360" ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox
+                            x:Name="EndpointTextBox"
+                            PlaceholderText="https://example.com/feed.xml"
+                            KeyDown="EndpointTextBox_KeyDown" />
+                        <Button
+                            x:Name="AddButton"
+                            Grid.Column="1"
+                            Width="36"
+                            Height="36"
+                            Padding="0"
+                            VerticalAlignment="Center"
+                            Click="AddButton_Click"
+                            ToolTipService.ToolTip="添加来源">
+                            <FontIcon Glyph="&#xE710;" />
+                        </Button>
+                    </Grid>
+                </controls:SettingsCard>
+
+                <!-- 网站插件（第二位） -->
+                <controls:SettingsExpander
+                    x:Name="PluginsExpander"
+                    Description="安装、启用或管理网站插件；插件启用后即可添加对应网站来源。"
+                    Header="已安装插件"
+                    IsExpanded="True">
+                    <controls:SettingsExpander.HeaderIcon>
+                        <FontIcon Glyph="&#xE74C;" />
+                    </controls:SettingsExpander.HeaderIcon>
+                    <controls:SettingsExpander.ItemTemplate>
+                        <DataTemplate x:DataType="models:PluginSettingsRow">
+                            <controls:SettingsCard
+                                Description="{x:Bind Detail}"
+                                Header="{x:Bind DisplayName}"
+                                DataContext="{x:Bind}"
+                                IsClickEnabled="True"
+                                Click="PluginCard_Click" />
+                        </DataTemplate>
+                    </controls:SettingsExpander.ItemTemplate>
+                    <controls:SettingsExpander.ItemsFooter>
+                        <controls:SettingsCard
+                            BorderThickness="0,1,0,0"
+                            CornerRadius="0"
+                            Header="从文件夹安装插件"
+                            MinHeight="52"
+                            Padding="58,8,44,8">
+                            <Button
+                                x:Name="InstallPluginButton"
+                                Width="36"
+                                Height="36"
+                                Padding="0"
+                                VerticalAlignment="Center"
+                                Click="InstallPluginButton_Click"
+                                ToolTipService.ToolTip="从文件夹安装插件">
+                                <FontIcon Glyph="&#xE8B7;" />
+                            </Button>
+                        </controls:SettingsCard>
+                    </controls:SettingsExpander.ItemsFooter>
+                </controls:SettingsExpander>
+
+                <InfoBar
+                    x:Name="StatusInfoBar"
+                    IsClosable="True"
+                    IsOpen="False" />
+
+                <TextBlock Margin="0,12,0,0" Style="{StaticResource SettingsSectionHeaderTextBlockStyle}" Text="已添加的来源" />
+                <controls:SettingsCard HorizontalContentAlignment="Stretch">
+                    <Grid MinHeight="180">
+                        <ListView
+                            x:Name="SourcesListView"
+                            IsItemClickEnabled="False"
+                            IsSwipeEnabled="False"
+                            SelectionMode="None">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="Padding" Value="0" />
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                    <Setter Property="IsTabStop" Value="False" />
+                                </Style>
+                            </ListView.ItemContainerStyle>
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="models:FeedSourceRow">
+                                    <Grid Padding="12,10" ColumnSpacing="12" AutomationProperties.Name="{x:Bind DisplayName}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Spacing="3">
+                                            <TextBlock FontWeight="SemiBold" Text="{x:Bind DisplayName}" />
+                                            <TextBlock
+                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                MaxLines="1"
+                                                Text="{x:Bind Endpoint}"
+                                                TextTrimming="CharacterEllipsis" />
+                                            <StackPanel Orientation="Horizontal" Spacing="5">
+                                                <TextBlock Style="{ThemeResource CaptionTextBlockStyle}" Text="{x:Bind ItemCountText, Mode=OneWay}" />
+                                                <TextBlock Style="{ThemeResource CaptionTextBlockStyle}" Text="·" />
+                                                <TextBlock Style="{ThemeResource CaptionTextBlockStyle}" Text="{x:Bind UnreadCountText, Mode=OneWay}" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                        <Button
+                                            Grid.Column="1"
+                                            Width="36"
+                                            Height="36"
+                                            Padding="0"
+                                            VerticalAlignment="Center"
+                                            Click="DeleteButton_Click"
+                                            DataContext="{x:Bind}"
+                                            ToolTipService.ToolTip="删除来源">
                                             <FontIcon Glyph="&#xE74D;" />
                                         </Button>
-                                    </StackPanel>
-                                </Grid>
-                            </DataTemplate>
-                        </ListView.ItemTemplate>
-                    </ListView>
-                    <Button x:Name="InstallPluginButton" HorizontalAlignment="Left" Click="InstallPluginButton_Click" Content="从文件夹安装插件" />
-                </StackPanel>
-            </controls:SettingsCard>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
 
-            <TextBlock Style="{StaticResource SettingsSectionHeaderTextBlockStyle}" Text="添加 RSS 来源" />
-            <controls:SettingsCard
-                Description="输入网站地址或 RSS / Atom 地址，FeedPeek 会自动发现可用订阅。"
-                Header="订阅地址"
-                HorizontalContentAlignment="Stretch">
-                <controls:SettingsCard.HeaderIcon>
-                    <FontIcon Glyph="&#xE774;" />
-                </controls:SettingsCard.HeaderIcon>
-                <Grid MinWidth="360" ColumnSpacing="8">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <TextBox
-                        x:Name="EndpointTextBox"
-                        PlaceholderText="https://example.com/feed.xml"
-                        KeyDown="EndpointTextBox_KeyDown" />
-                    <Button
-                        x:Name="AddButton"
-                        Grid.Column="1"
-                        Click="AddButton_Click"
-                        Content="添加" />
-                </Grid>
-            </controls:SettingsCard>
-
-            <InfoBar
-                x:Name="StatusInfoBar"
-                IsClosable="True"
-                IsOpen="False" />
-
-            <TextBlock Margin="0,12,0,0" Style="{StaticResource SettingsSectionHeaderTextBlockStyle}" Text="已添加的来源" />
-            <controls:SettingsCard HorizontalContentAlignment="Stretch">
-                <Grid MinHeight="180">
-                    <ListView
-                        x:Name="SourcesListView"
-                        IsItemClickEnabled="False"
-                        IsSwipeEnabled="False"
-                        SelectionMode="None">
-                        <ListView.ItemContainerStyle>
-                            <Style TargetType="ListViewItem">
-                                <Setter Property="Padding" Value="0" />
-                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                                <Setter Property="IsTabStop" Value="False" />
-                            </Style>
-                        </ListView.ItemContainerStyle>
-                        <ListView.ItemTemplate>
-                            <DataTemplate x:DataType="models:FeedSourceRow">
-                                <Grid Padding="12,10" ColumnSpacing="12" AutomationProperties.Name="{x:Bind DisplayName}">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Spacing="3">
-                                        <TextBlock FontWeight="SemiBold" Text="{x:Bind DisplayName}" />
-                                        <TextBlock
-                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                            MaxLines="1"
-                                            Text="{x:Bind Endpoint}"
-                                            TextTrimming="CharacterEllipsis" />
-                                        <StackPanel Orientation="Horizontal" Spacing="5">
-                                            <TextBlock Style="{ThemeResource CaptionTextBlockStyle}" Text="{x:Bind ItemCountText, Mode=OneWay}" />
-                                            <TextBlock Style="{ThemeResource CaptionTextBlockStyle}" Text="·" />
-                                            <TextBlock Style="{ThemeResource CaptionTextBlockStyle}" Text="{x:Bind UnreadCountText, Mode=OneWay}" />
-                                        </StackPanel>
-                                    </StackPanel>
-                                    <Button
-                                        Grid.Column="1"
-                                        Width="36"
-                                        Height="36"
-                                        Padding="0"
-                                        VerticalAlignment="Center"
-                                        Click="DeleteButton_Click"
-                                        DataContext="{x:Bind}"
-                                        Style="{StaticResource SubtleButtonStyle}"
-                                        ToolTipService.ToolTip="删除来源">
-                                        <FontIcon Glyph="&#xE74D;" />
-                                    </Button>
-                                </Grid>
-                            </DataTemplate>
-                        </ListView.ItemTemplate>
-                    </ListView>
-
-                    <StackPanel
-                        x:Name="EmptyPanel"
-                        HorizontalAlignment="Center"
-                        VerticalAlignment="Center"
-                        Spacing="8">
-                        <FontIcon HorizontalAlignment="Center" FontSize="28" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Glyph="&#xE774;" />
-                        <TextBlock FontWeight="SemiBold" Text="还没有来源" />
-                    </StackPanel>
-                </Grid>
-            </controls:SettingsCard>
-        </StackPanel>
+                        <StackPanel
+                            x:Name="EmptyPanel"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Spacing="8">
+                            <FontIcon HorizontalAlignment="Center" FontSize="28" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Glyph="&#xE774;" />
+                            <TextBlock FontWeight="SemiBold" Text="还没有来源" />
+                        </StackPanel>
+                    </Grid>
+                </controls:SettingsCard>
+            </StackPanel>
+        </Grid>
     </ScrollView>
 </Page>

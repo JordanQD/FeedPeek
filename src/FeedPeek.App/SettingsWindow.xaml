@@ -17,6 +17,7 @@
         <TitleBar
             x:Name="titleBar"
             Title="FeedPeek"
+            BackRequested="TitleBar_BackRequested"
             IsBackButtonVisible="False"
             IsPaneToggleButtonVisible="True"
             PaneToggleRequested="TitleBar_PaneToggleRequested">

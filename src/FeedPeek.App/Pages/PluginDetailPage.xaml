@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="FeedPeek.Pages.PluginDetailPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:CommunityToolkit.WinUI.Controls"
+    xmlns:local="using:FeedPeek.Pages">
+
+    <Page.Resources>
+        <!-- BreadcrumbBar 的箭头（chevron）字号由这个主题资源控制（见 generic.xaml） -->
+        <x:Double x:Key="BreadcrumbBarChevronFontSize">10</x:Double>
+    </Page.Resources>
+
+    <ScrollView
+        x:Name="DetailScrollView"
+        Padding="36,32,36,0"
+        VerticalScrollBarVisibility="Auto"
+        VerticalScrollMode="Auto">
+        <VisualStateManager.VisualStateGroups>
+            <VisualStateGroup>
+                <VisualState x:Name="Wide">
+                    <VisualState.StateTriggers>
+                        <AdaptiveTrigger MinWindowWidth="640" />
+                    </VisualState.StateTriggers>
+                    <VisualState.Setters>
+                        <Setter Target="DetailScrollView.Padding" Value="36,32,36,0" />
+                    </VisualState.Setters>
+                </VisualState>
+                <VisualState x:Name="Narrow">
+                    <VisualState.StateTriggers>
+                        <AdaptiveTrigger MinWindowWidth="0" />
+                    </VisualState.StateTriggers>
+                    <VisualState.Setters>
+                        <Setter Target="DetailScrollView.Padding" Value="12,16,12,0" />
+                    </VisualState.Setters>
+                </VisualState>
+            </VisualStateGroup>
+        </VisualStateManager.VisualStateGroups>
+
+        <StackPanel Margin="0,0,0,32" MaxWidth="1064" Spacing="{StaticResource SettingsCardSpacing}">
+            <BreadcrumbBar
+                x:Name="PluginBreadcrumb"
+                Margin="0,0,0,8"
+                ItemClicked="PluginBreadcrumb_ItemClicked">
+                <BreadcrumbBar.ItemTemplate>
+                    <DataTemplate x:DataType="local:BreadcrumbCrumb">
+                        <TextBlock
+                            FontSize="{x:Bind FontSize}"
+                            Text="{x:Bind Text}"
+                            Width="{x:Bind Width}" />
+                    </DataTemplate>
+                </BreadcrumbBar.ItemTemplate>
+            </BreadcrumbBar>
+
+            <controls:SettingsCard
+                x:Name="PluginCard"
+                Description="版本"
+                Header="插件">
+                <ToggleSwitch
+                    x:Name="EnableSwitch"
+                    OffContent=""
+                    OnContent=""
+                    Toggled="EnableSwitch_Toggled" />
+            </controls:SettingsCard>
+
+            <controls:SettingsCard
+                x:Name="LoginCard"
+                Header="登录状态">
+                <Button
+                    x:Name="LoginButton"
+                    Click="LoginButton_Click" />
+            </controls:SettingsCard>
+
+            <controls:SettingsCard
+                x:Name="AddSourceCard"
+                Description="为该网站插件添加订阅来源"
+                Header="添加来源">
+                <Button
+                    x:Name="AddSourceButton"
+                    Content="添加来源"
+                    Click="AddSourceButton_Click" />
+            </controls:SettingsCard>
+
+            <controls:SettingsCard
+                Description="删除插件及其来源和本地缓存"
+                Header="删除插件">
+                <Button
+                    x:Name="DeletePluginButton"
+                    Content="删除插件"
+                    Click="DeletePluginButton_Click" />
+            </controls:SettingsCard>
+
+            <InfoBar
+                x:Name="StatusInfoBar"
+                IsClosable="True"
+                IsOpen="False" />
+        </StackPanel>
+    </ScrollView>
+</Page>
