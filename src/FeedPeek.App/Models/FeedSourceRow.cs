@@ -1,4 +1,5 @@
 using FeedPeek.Core.Models;
+using FeedPeek.Rss;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -52,6 +53,12 @@ public sealed class FeedSourceRow : INotifyPropertyChanged
         ? $"{UnreadCount} 条未读"
         : "无未读";
 
+    public string SourcesDetail => $"{Endpoint} · {ItemCountText} · {UnreadCountText}";
+
+    public string Category => string.Equals(ProviderId, RssProviderInfo.ProviderId, StringComparison.Ordinal)
+        ? "RSS / Atom"
+        : "插件";
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public void Update(FeedSourceSummary summary)
@@ -78,10 +85,12 @@ public sealed class FeedSourceRow : INotifyPropertyChanged
         if (propertyName == nameof(ItemCount))
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ItemCountText)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SourcesDetail)));
         }
         else if (propertyName == nameof(UnreadCount))
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(UnreadCountText)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SourcesDetail)));
         }
     }
 }

@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="FeedPeek.Pages.SourceDetailPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:CommunityToolkit.WinUI.Controls"
+    xmlns:local="using:FeedPeek.Pages">
+
+    <ScrollView
+        x:Name="DetailScrollView"
+        Padding="36,32,36,0"
+        VerticalScrollBarVisibility="Auto"
+        VerticalScrollMode="Auto">
+        <VisualStateManager.VisualStateGroups>
+            <VisualStateGroup>
+                <VisualState x:Name="Wide">
+                    <VisualState.StateTriggers>
+                        <AdaptiveTrigger MinWindowWidth="640" />
+                    </VisualState.StateTriggers>
+                    <VisualState.Setters>
+                        <Setter Target="DetailScrollView.Padding" Value="36,32,36,0" />
+                    </VisualState.Setters>
+                </VisualState>
+                <VisualState x:Name="Narrow">
+                    <VisualState.StateTriggers>
+                        <AdaptiveTrigger MinWindowWidth="0" />
+                    </VisualState.StateTriggers>
+                    <VisualState.Setters>
+                        <Setter Target="DetailScrollView.Padding" Value="12,16,12,0" />
+                    </VisualState.Setters>
+                </VisualState>
+            </VisualStateGroup>
+        </VisualStateManager.VisualStateGroups>
+
+        <StackPanel Margin="0,0,0,32" MaxWidth="1064" Spacing="{StaticResource SettingsCardSpacing}">
+            <BreadcrumbBar
+                x:Name="SourceBreadcrumb"
+                Margin="0,0,0,8"
+                ItemClicked="SourceBreadcrumb_ItemClicked">
+                <BreadcrumbBar.ItemTemplate>
+                    <DataTemplate x:DataType="local:BreadcrumbCrumb">
+                        <TextBlock
+                            FontSize="{x:Bind FontSize}"
+                            Text="{x:Bind Text}"
+                            Width="{x:Bind Width}" />
+                    </DataTemplate>
+                </BreadcrumbBar.ItemTemplate>
+            </BreadcrumbBar>
+
+            <controls:SettingsCard
+                x:Name="SourceCard"
+                Description="来源信息"
+                Header="来源" />
+
+            <controls:SettingsCard
+                x:Name="RssCard"
+                Description="修改源链接后点击保存"
+                Header="源链接">
+                <Grid MinWidth="360" ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox
+                        x:Name="EndpointTextBox"
+                        PlaceholderText="https://example.com/feed.xml" />
+                    <Button
+                        x:Name="SaveEndpointButton"
+                        Grid.Column="1"
+                        Click="SaveEndpointButton_Click"
+                        Content="保存" />
+                </Grid>
+            </controls:SettingsCard>
+
+            <controls:SettingsCard
+                x:Name="PluginCard"
+                Header="插件">
+                <StackPanel>
+                    <TextBlock x:Name="PluginNameText" FontWeight="SemiBold" />
+                    <TextBlock
+                        x:Name="PluginVersionText"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+            </controls:SettingsCard>
+
+            <controls:SettingsCard
+                Description="删除该来源及其本地缓存"
+                Header="删除来源">
+                <Button
+                    x:Name="DeleteSourceButton"
+                    Content="删除来源"
+                    Click="DeleteSourceButton_Click" />
+            </controls:SettingsCard>
+
+            <InfoBar
+                x:Name="StatusInfoBar"
+                IsClosable="True"
+                IsOpen="False" />
+        </StackPanel>
+    </ScrollView>
+</Page>

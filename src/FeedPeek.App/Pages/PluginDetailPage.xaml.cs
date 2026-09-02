@@ -20,7 +20,6 @@ public sealed partial class PluginDetailPage : Page, IDisposable
     private PluginSettingsRow? _plugin;
     private string? _pluginId;
     private WebSignInWindow? _signInWindow;
-    private bool _isLoading = true;
     private bool _disposed;
 
     public PluginDetailPage()
@@ -68,11 +67,10 @@ public sealed partial class PluginDetailPage : Page, IDisposable
             _plugin = new PluginSettingsRow(entry);
             PluginCard.Header = _plugin.DisplayName;
             PluginCard.Description = $"版本 {_plugin.Version}";
-            EnableSwitch.IsOn = _plugin.IsEnabled;
             PluginBreadcrumb.ItemsSource = new[]
             {
-                new BreadcrumbCrumb("来源", 14, double.NaN),
-                new BreadcrumbCrumb(_plugin.DisplayName, 14, double.NaN),
+                new BreadcrumbCrumb("来源", 30, double.NaN),
+                new BreadcrumbCrumb(_plugin.DisplayName, 30, double.NaN),
             };
 
             var hasLogin = _plugin.Manifest?.Auth?.LoginFlow is not null;
@@ -90,26 +88,11 @@ public sealed partial class PluginDetailPage : Page, IDisposable
                 LoginCard.Description = loggedIn ? "已登录" : "未登录";
                 LoginButton.Content = loggedIn ? "退出" : "登录";
             }
-
-            _isLoading = false;
         }
         catch (Exception ex)
         {
             ShowStatus(ex.Message, InfoBarSeverity.Error);
         }
-    }
-
-    private async void EnableSwitch_Toggled(object sender, RoutedEventArgs e)
-    {
-        if (_isLoading || _plugin is null) return;
-        var isEnabled = EnableSwitch.IsOn;
-        await RunBusyAsync(async () =>
-        {
-            await _installations.SetEnabledAsync(_plugin.PluginId, isEnabled);
-            LoginCard.IsEnabled = isEnabled;
-            AddSourceCard.IsEnabled = isEnabled;
-            ShowStatus($"插件已{(isEnabled ? "启用" : "停用")}。", InfoBarSeverity.Success);
-        });
     }
 
     private void PluginBreadcrumb_ItemClicked(BreadcrumbBar sender, BreadcrumbBarItemClickedEventArgs args)
@@ -289,7 +272,6 @@ public sealed partial class PluginDetailPage : Page, IDisposable
 
     private void SetBusy(bool isBusy)
     {
-        EnableSwitch.IsEnabled = !isBusy;
         LoginButton.IsEnabled = !isBusy;
         AddSourceButton.IsEnabled = !isBusy;
         DeletePluginButton.IsEnabled = !isBusy;

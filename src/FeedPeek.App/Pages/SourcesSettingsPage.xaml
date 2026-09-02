@@ -86,14 +86,21 @@
                                 Header="{x:Bind DisplayName}"
                                 DataContext="{x:Bind}"
                                 IsClickEnabled="True"
-                                Click="PluginCard_Click" />
+                                Click="PluginCard_Click">
+                                <ToggleSwitch
+                                    IsOn="{x:Bind IsEnabled}"
+                                    OffContent=""
+                                    OnContent=""
+                                    Toggled="PluginSwitch_Toggled" />
+                            </controls:SettingsCard>
                         </DataTemplate>
                     </controls:SettingsExpander.ItemTemplate>
                     <controls:SettingsExpander.ItemsFooter>
                         <controls:SettingsCard
                             BorderThickness="0,1,0,0"
                             CornerRadius="0"
-                            Header="从文件夹安装插件"
+                            Description="从文件夹安装"
+                            Header="安装插件"
                             MinHeight="52"
                             Padding="58,8,44,8">
                             <Button
@@ -115,9 +122,8 @@
                     IsClosable="True"
                     IsOpen="False" />
 
-                <TextBlock Margin="0,12,0,0" Style="{StaticResource SettingsSectionHeaderTextBlockStyle}" Text="已添加的来源" />
-                <controls:SettingsCard HorizontalContentAlignment="Stretch">
-                    <Grid MinHeight="180">
+                <TextBlock Style="{StaticResource SettingsSectionHeaderTextBlockStyle}" Text="已添加的来源" />
+                <Grid MinHeight="180">
                         <ListView
                             x:Name="SourcesListView"
                             IsItemClickEnabled="False"
@@ -132,36 +138,12 @@
                             </ListView.ItemContainerStyle>
                             <ListView.ItemTemplate>
                                 <DataTemplate x:DataType="models:FeedSourceRow">
-                                    <Grid Padding="12,10" ColumnSpacing="12" AutomationProperties.Name="{x:Bind DisplayName}">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Spacing="3">
-                                            <TextBlock FontWeight="SemiBold" Text="{x:Bind DisplayName}" />
-                                            <TextBlock
-                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                                MaxLines="1"
-                                                Text="{x:Bind Endpoint}"
-                                                TextTrimming="CharacterEllipsis" />
-                                            <StackPanel Orientation="Horizontal" Spacing="5">
-                                                <TextBlock Style="{ThemeResource CaptionTextBlockStyle}" Text="{x:Bind ItemCountText, Mode=OneWay}" />
-                                                <TextBlock Style="{ThemeResource CaptionTextBlockStyle}" Text="·" />
-                                                <TextBlock Style="{ThemeResource CaptionTextBlockStyle}" Text="{x:Bind UnreadCountText, Mode=OneWay}" />
-                                            </StackPanel>
-                                        </StackPanel>
-                                        <Button
-                                            Grid.Column="1"
-                                            Width="36"
-                                            Height="36"
-                                            Padding="0"
-                                            VerticalAlignment="Center"
-                                            Click="DeleteButton_Click"
-                                            DataContext="{x:Bind}"
-                                            ToolTipService.ToolTip="删除来源">
-                                            <FontIcon Glyph="&#xE74D;" />
-                                        </Button>
-                                    </Grid>
+                                    <controls:SettingsCard
+                                        Description="{x:Bind Category}"
+                                        Header="{x:Bind DisplayName}"
+                                        DataContext="{x:Bind}"
+                                        IsClickEnabled="True"
+                                        Click="SourceCard_Click" />
                                 </DataTemplate>
                             </ListView.ItemTemplate>
                         </ListView>
@@ -174,8 +156,7 @@
                             <FontIcon HorizontalAlignment="Center" FontSize="28" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Glyph="&#xE774;" />
                             <TextBlock FontWeight="SemiBold" Text="还没有来源" />
                         </StackPanel>
-                    </Grid>
-                </controls:SettingsCard>
+                </Grid>
             </StackPanel>
         </Grid>
     </ScrollView>

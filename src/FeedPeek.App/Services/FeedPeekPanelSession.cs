@@ -659,6 +659,56 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
             cancellationToken);
     }
 
+    public async Task UpdateRssEndpointAsync(
+        string providerId,
+        string sourceId,
+        string endpoint,
+        CancellationToken cancellationToken = default)
+    {
+        await RunExclusiveAsync(
+            async operationToken =>
+            {
+                await EnsureInitializedAsync(operationToken).ConfigureAwait(false);
+
+                var summaries = await _feedSession.GetSourceSummariesAsync(operationToken)
+                    .ConfigureAwait(false);
+                var summary = summaries.FirstOrDefault(item =>
+                        string.Equals(item.Source.ProviderId, providerId, StringComparison.Ordinal)
+                        && string.Equals(item.Source.SourceId, sourceId, StringComparison.Ordinal))
+                    ?? throw new InvalidOperationException("来源不存在。");
+
+                var options = new Dictionary<string, string>(StringComparer.Ordinal);
+                if (summary.Source.Options is not null)
+                {
+                    foreach (var pair in summary.Source.Options)
+                    {
+                        options[pair.Key] = pair.Value;
+                    }
+                }
+
+                options[RssEndpointOption] = endpoint;
+                var updatedSource = summary.Source with { Options = options };
+
+                var subscriptions = await _feedSession.GetSubscriptionsAsync(operationToken)
+                    .ConfigureAwait(false);
+                var sourceSubscriptions = subscriptions
+                    .Where(item =>
+                        string.Equals(item.ProviderId, providerId, StringComparison.Ordinal)
+                        && string.Equals(item.SourceId, sourceId, StringComparison.Ordinal))
+                    .ToList();
+
+                foreach (var subscription in sourceSubscriptions)
+                {
+                    var updatedSubscription = subscription with { Endpoint = endpoint };
+                    await _feedSession.AddSubscriptionAsync(
+                        updatedSource,
+                        updatedSubscription,
+                        operationToken).ConfigureAwait(false);
+                }
+            },
+            cancellationToken);
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_disposed)

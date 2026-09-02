@@ -65,6 +65,23 @@ public sealed partial class SourcesSettingsPage : Page, IDisposable
         Frame.Navigate(typeof(PluginDetailPage), plugin.PluginId);
     }
 
+    private async void PluginSwitch_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (sender is not ToggleSwitch { DataContext: PluginSettingsRow plugin } toggle) return;
+        if (toggle.IsOn == plugin.IsEnabled) return;
+        await RunBusyAsync(async () =>
+        {
+            await _installations.SetEnabledAsync(plugin.PluginId, toggle.IsOn);
+            ShowStatus($"插件已{(toggle.IsOn ? "启用" : "停用")}。", InfoBarSeverity.Success);
+        });
+    }
+
+    private void SourceCard_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not SettingsCard { DataContext: FeedSourceRow source }) return;
+        Frame.Navigate(typeof(SourceDetailPage), source);
+    }
+
     private async void AddButton_Click(object sender, RoutedEventArgs e) => await AddRssSourceAsync();
 
     private async void EndpointTextBox_KeyDown(object sender, KeyRoutedEventArgs e)
@@ -104,18 +121,6 @@ public sealed partial class SourcesSettingsPage : Page, IDisposable
             var installed = await _installations.InstallAsync(folder.Path);
             await ReloadPluginsAsync();
             ShowStatus($"已安装 {installed.DisplayName}。", InfoBarSeverity.Success);
-        });
-    }
-
-    private async void DeleteButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not Button { DataContext: FeedSourceRow source }) return;
-        await RunBusyAsync(async () =>
-        {
-            await _session.DeleteSourceAsync(source);
-            _sources.Remove(source);
-            UpdateEmptyState();
-            ShowStatus("来源已删除。", InfoBarSeverity.Success);
         });
     }
 

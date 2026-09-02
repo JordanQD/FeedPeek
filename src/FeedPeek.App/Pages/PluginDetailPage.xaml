@@ -8,7 +8,7 @@
 
     <Page.Resources>
         <!-- BreadcrumbBar 的箭头（chevron）字号由这个主题资源控制（见 generic.xaml） -->
-        <x:Double x:Key="BreadcrumbBarChevronFontSize">10</x:Double>
+        <x:Double x:Key="BreadcrumbBarChevronFontSize">20</x:Double>
     </Page.Resources>
 
     <ScrollView
@@ -55,13 +55,7 @@
             <controls:SettingsCard
                 x:Name="PluginCard"
                 Description="版本"
-                Header="插件">
-                <ToggleSwitch
-                    x:Name="EnableSwitch"
-                    OffContent=""
-                    OnContent=""
-                    Toggled="EnableSwitch_Toggled" />
-            </controls:SettingsCard>
+                Header="插件" />
 
             <controls:SettingsCard
                 x:Name="LoginCard"
