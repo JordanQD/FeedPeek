@@ -27,9 +27,6 @@
   <ItemGroup>
     <None Include="Fixtures\Plugins\**\*" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Fixtures\SiteResponses\**\*" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="..\..\plugins\feedpeek.video-site\**\*"
-          Link="Fixtures\Plugins\feedpeek.video-site\%(RecursiveDir)%(Filename)%(Extension)"
-          CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\FeedPeek.Compatibility.Tests\Fixtures\dynamic-video-page.json"
           Link="Fixtures\SiteResponses\dynamic-video-page.json"
           CopyToOutputDirectory="PreserveNewest" />

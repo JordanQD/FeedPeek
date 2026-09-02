@@ -146,33 +146,7 @@ Phase 3 生产项目为 `src/FeedPeek.PluginContracts` 与 `src/FeedPeek.PluginR
 
 Phase 5 采用独立应用发布路径，不把 FeedPeek 作为旧 BiliRadar identity 的原位升级。开发包使用 `JordanQD.FeedPeek.Preview`，正式包通过 `UseProductionPackageIdentity=true` 选择独立 production identity；Microsoft Store 发布时必须使用 Partner Center 分配的精确 identity。用户可见品牌已统一为 FeedPeek，LocalSettings 已增加版本化幂等迁移。启动项目现为 `src/FeedPeek.App/FeedPeek.App.csproj`，程序集、可执行文件和默认命名空间均已改为 FeedPeek；正式 identity 和人工新装验收仍待完成，详见 `docs/design/rss-plugin-phase5-plan.md`。
 
-Phase 4 详细检查点见 `docs/design/rss-plugin-phase4-plan.md`。4.1–4.8 已完成通用 Host、仓库维护的网站 JS 插件、三页数据、登录、作者/直播、通知和用户插件管理。4.9 已删除 legacy provider、旧模型、旧 adapter、旧快照和孤立卡片；视频网站插件不再随应用发布，停用插件不会继续刷新旧订阅，通知动作按 manifest capability 显示，插件升级/卸载使用可回滚目录切换。仅保留旧 Cookie 与通知规则的一次性兼容迁移。
-
-### DesktopFlyouts 迁移
-
-| 阶段 | 状态 |
-|------|------|
-| Phase 0 (分支与构建基线) | ✅ |
-| Phase 1 (26100 TFM、依赖和 x64 打包准入) | ✅ |
-| Phase 2 (SystemTrayIcon + DesktopFlyout + DesktopMenuFlyout) | ✅ 已人工验收 |
-| Phase 3 (旧路径清理与 WinUIEx 依赖移除) | ✅ |
-| Phase 4 (状态机加固与交付收口) | ✅ |
-| Phase 5 (Shell 环境适配核查) | ✅ |
-| Phase 6 (移除 WinUIEx 和旧宿主) | 🧪 自动验证通过，待人工生命周期/交互验收 |
-
-### 旧 WinUIEx 架构迁移（历史）
-
-| 阶段 | 状态 |
-|------|------|
-| Phase 1 (WinUIEx 原型) | ✅ |
-| Phase 2a-2f (页面提取) | ✅ |
-| Phase 2g (Flyout 集成) | ✅ 已手动验证 |
-| Phase 3 (右键菜单迁移) | ✅ 新路径原生 MenuFlyout，仅保留设置/退出 |
-| Phase 4 (清理旧代码) | ✅ 删除 MainWindow、TrayIconService、SystemTray/，#if 双路径已移除 |
-| Phase 5 (内存测试) | ✅ 已接入关闭后重建面板、切页 Dispose 和延迟 working set trim；仍建议记录最终数值 |
-| Phase 6 (ListView / ItemsRepeater 迁移) | ✅ 三个纵向列表已改 ListView，直播横向区已改 ItemsRepeater |
-
-DesktopFlyouts 迁移详见 `docs/design/desktopflyouts-migration.md`；旧架构记录见 `docs/design/tray-flyout-migration.md`。
+Phase 4 详细检查点见 `docs/design/rss-plugin-phase4-plan.md`。4.1–4.8 已完成通用 Host、网站 JS 插件、三页数据、登录、作者/直播、通知和用户插件管理。4.9 已删除 legacy provider、旧模型、旧 adapter、旧快照和孤立卡片；视频网站插件不再随应用发布，停用插件不会继续刷新旧订阅，通知动作按 manifest capability 显示，插件升级/卸载使用可回滚目录切换。仅保留旧 Cookie 与通知规则的一次性兼容迁移。哔哩哔哩插件源码和插件兼容设计现位于独立项目 `C:\Users\Q\Data\Projects\FeedPeek-Plugin`。
 
 ## WinUI 控件选型约束
 
