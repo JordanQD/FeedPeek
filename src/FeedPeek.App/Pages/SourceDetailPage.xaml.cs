@@ -1,12 +1,20 @@
 using FeedPeek.Models;
 using FeedPeek.Rss;
 using FeedPeek.Services;
+using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Navigation;
 using System;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Windows.Storage;
+using Windows.Storage.Pickers;
+using WinRT.Interop;
 
 namespace FeedPeek.Pages;
 
@@ -48,8 +56,11 @@ public sealed partial class SourceDetailPage : Page, IDisposable
         try
         {
             await _session.InitializeAsync();
-            SourceCard.Header = _source.DisplayName;
-            SourceCard.Description = _source.Category;
+
+            HeroName.Text = _source.DisplayName;
+            HeroCategory.Text = _source.Category;
+            IconPicture.ProfilePicture = CreateImageSource(_source.IconUrl);
+            IconPicture.Initials = GetInitials(_source.DisplayName);
 
             if (string.Equals(_source.ProviderId, RssProviderInfo.ProviderId, StringComparison.Ordinal))
             {
@@ -85,6 +96,83 @@ public sealed partial class SourceDetailPage : Page, IDisposable
         if (args.Index >= 1) return; // 最后一项是当前来源，不需要导航
         if (Frame.CanGoBack) Frame.GoBack();
         else Frame.Navigate(typeof(SourcesSettingsPage));
+    }
+
+    private async void PickIconFile_Click(object sender, RoutedEventArgs e)
+    {
+        if (_source is null) return;
+        var picker = new FileOpenPicker();
+        picker.ViewMode = PickerViewMode.Thumbnail;
+        foreach (var ext in new[] { ".png", ".jpg", ".jpeg", ".ico", ".bmp", ".gif", ".webp" })
+        {
+            picker.FileTypeFilter.Add(ext);
+        }
+
+        var hwnd = Win32Interop.GetWindowFromWindowId(XamlRoot.ContentIslandEnvironment.AppWindowId);
+        InitializeWithWindow.Initialize(picker, hwnd);
+        var file = await picker.PickSingleFileAsync();
+        if (file is null) return;
+
+        await RunBusyAsync(async () =>
+        {
+            var iconUri = await StoreIconFileAsync(file);
+            await _session.UpdateSourceIconAsync(_source.ProviderId, _source.SourceId, iconUri);
+            IconPicture.ProfilePicture = CreateImageSource(iconUri);
+            ShowStatus("图标已更新。", InfoBarSeverity.Success);
+        });
+    }
+
+    private async void ResetIcon_Click(object sender, RoutedEventArgs e)
+    {
+        if (_source is null) return;
+        await RunBusyAsync(async () =>
+        {
+            await _session.UpdateSourceIconAsync(_source.ProviderId, _source.SourceId, null);
+            IconPicture.ProfilePicture = null;
+            ShowStatus("已恢复默认图标。", InfoBarSeverity.Success);
+        });
+    }
+
+    private async Task<string> StoreIconFileAsync(StorageFile file)
+    {
+        var folder = await ApplicationData.Current.LocalFolder
+            .CreateFolderAsync("source-icons", CreationCollisionOption.OpenIfExists);
+        var ext = Path.GetExtension(file.Name);
+        if (string.IsNullOrWhiteSpace(ext))
+        {
+            ext = ".png";
+        }
+
+        // 用唯一文件名，避免覆盖被 BitmapImage 占用的旧文件导致“文件被占用”错误。
+        var fileName = $"{SanitizeFileName(_source!.SourceId)}_{Guid.NewGuid():N}{ext}";
+        await file.CopyAsync(folder, fileName, NameCollisionOption.ReplaceExisting);
+        return $"ms-appdata:///local/source-icons/{fileName}";
+    }
+
+    private static string SanitizeFileName(string name)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        return new string(name.Select(c => invalid.Contains(c) ? '_' : c).ToArray());
+    }
+
+    private void IconGrid_PointerEntered(object sender, PointerRoutedEventArgs e)
+        => EditOverlay.Visibility = Visibility.Visible;
+
+    private void IconGrid_PointerExited(object sender, PointerRoutedEventArgs e)
+        => EditOverlay.Visibility = Visibility.Collapsed;
+
+    private static string GetInitials(string? name)
+    {
+        var trimmed = name?.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+        {
+            return string.Empty;
+        }
+
+        return new string(trimmed
+            .Take(2)
+            .Select(char.ToUpperInvariant)
+            .ToArray());
     }
 
     private async void SaveEndpointButton_Click(object sender, RoutedEventArgs e)
@@ -150,7 +238,21 @@ public sealed partial class SourceDetailPage : Page, IDisposable
     {
         EndpointTextBox.IsEnabled = !isBusy;
         SaveEndpointButton.IsEnabled = !isBusy;
+        IconButton.IsEnabled = !isBusy;
         DeleteSourceButton.IsEnabled = !isBusy;
+    }
+
+    private static ImageSource? CreateImageSource(string? imageUrl)
+    {
+        if (!Uri.TryCreate(imageUrl, UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps
+                && !string.Equals(uri.Scheme, "ms-appdata", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(uri.Scheme, "file", StringComparison.OrdinalIgnoreCase)))
+        {
+            return null;
+        }
+
+        return new BitmapImage(uri);
     }
 
     public void Dispose()

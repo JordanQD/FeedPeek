@@ -1,5 +1,8 @@
 using FeedPeek.Core.Models;
 using FeedPeek.Rss;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -55,9 +58,62 @@ public sealed class FeedSourceRow : INotifyPropertyChanged
 
     public string SourcesDetail => $"{Endpoint} · {ItemCountText} · {UnreadCountText}";
 
+    public string? IconUrl
+    {
+        get
+        {
+            var options = Source.Options;
+            if (options is not null)
+            {
+                if (options.TryGetValue("source.icon", out var custom)
+                    || options.TryGetValue("rss.icon", out custom))
+                {
+                    return custom;
+                }
+            }
+
+            if (Uri.TryCreate(Endpoint, UriKind.Absolute, out var uri)
+                && uri.Scheme is ("http" or "https"))
+            {
+                return new UriBuilder(uri.Scheme, uri.Host, uri.IsDefaultPort ? -1 : uri.Port)
+                {
+                    Path = "/favicon.ico",
+                }.Uri.AbsoluteUri;
+            }
+
+            return null;
+        }
+    }
+
     public string Category => string.Equals(ProviderId, RssProviderInfo.ProviderId, StringComparison.Ordinal)
         ? "RSS / Atom"
         : "插件";
+
+    public IconElement SourceIcon => CreateSourceIcon(IconUrl);
+
+    private static IconElement CreateSourceIcon(string? iconUrl)
+    {
+        var source = CreateImageSource(iconUrl);
+        if (source is not null)
+        {
+            return new ImageIcon { Source = source };
+        }
+
+        return new FontIcon { Glyph = "\uE774", FontSize = 16 };
+    }
+
+    private static ImageSource? CreateImageSource(string? imageUrl)
+    {
+        if (!Uri.TryCreate(imageUrl, UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps
+                && !string.Equals(uri.Scheme, "ms-appdata", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(uri.Scheme, "file", StringComparison.OrdinalIgnoreCase)))
+        {
+            return null;
+        }
+
+        return new BitmapImage(uri);
+    }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 

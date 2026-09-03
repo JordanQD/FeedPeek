@@ -6,6 +6,21 @@
     xmlns:controls="using:CommunityToolkit.WinUI.Controls"
     xmlns:local="using:FeedPeek.Pages">
 
+    <Page.Resources>
+        <Style x:Key="IconButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <ContentPresenter />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Page.Resources>
+
     <ScrollView
         x:Name="DetailScrollView"
         Padding="36,32,36,0"
@@ -47,10 +62,40 @@
                 </BreadcrumbBar.ItemTemplate>
             </BreadcrumbBar>
 
-            <controls:SettingsCard
-                x:Name="SourceCard"
-                Description="来源信息"
-                Header="来源" />
+            <StackPanel Orientation="Horizontal" Spacing="16" Margin="0,8,0,16">
+                <Button
+                    x:Name="IconButton"
+                    Style="{StaticResource IconButtonStyle}"
+                    ToolTipService.ToolTip="修改图标">
+                    <Button.Flyout>
+                        <MenuFlyout>
+                            <MenuFlyoutItem Text="从文件选择图标" Click="PickIconFile_Click" />
+                            <MenuFlyoutItem Text="恢复默认图标" Click="ResetIcon_Click" />
+                        </MenuFlyout>
+                    </Button.Flyout>
+                    <Grid Width="96" Height="96" PointerEntered="IconGrid_PointerEntered" PointerExited="IconGrid_PointerExited">
+                        <PersonPicture x:Name="IconPicture" Width="96" Height="96" />
+                        <Border
+                            x:Name="EditOverlay"
+                            Width="96"
+                            Height="96"
+                            CornerRadius="48"
+                            Background="#66000000"
+                            Visibility="Collapsed">
+                            <FontIcon
+                                Glyph="&#xE70F;"
+                                FontSize="28"
+                                Foreground="White"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center" />
+                        </Border>
+                    </Grid>
+                </Button>
+                <StackPanel VerticalAlignment="Center" Spacing="4">
+                    <TextBlock x:Name="HeroName" Style="{ThemeResource TitleTextBlockStyle}" />
+                    <TextBlock x:Name="HeroCategory" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+            </StackPanel>
 
             <controls:SettingsCard
                 x:Name="RssCard"

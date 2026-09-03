@@ -141,6 +141,7 @@
                                     <controls:SettingsCard
                                         Description="{x:Bind Category}"
                                         Header="{x:Bind DisplayName}"
+                                        HeaderIcon="{x:Bind SourceIcon}"
                                         DataContext="{x:Bind}"
                                         IsClickEnabled="True"
                                         Click="SourceCard_Click" />
