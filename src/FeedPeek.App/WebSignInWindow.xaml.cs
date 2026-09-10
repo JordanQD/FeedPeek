@@ -154,11 +154,7 @@ public sealed partial class WebSignInWindow : Window
     }
 
     private void ShowStatus(string message, InfoBarSeverity severity)
-    {
-        statusInfoBar.Message = message;
-        statusInfoBar.Severity = severity;
-        statusInfoBar.IsOpen = true;
-    }
+        => InfoBarAutoDismiss.Show(statusInfoBar, message, severity);
 
     private void WebSignInWindow_Closed(object sender, WindowEventArgs args)
     {

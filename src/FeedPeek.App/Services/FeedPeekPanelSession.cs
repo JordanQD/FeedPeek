@@ -5,6 +5,7 @@ using FeedPeek.Core.Persistence;
 using FeedPeek.PluginContracts.Protocol;
 using FeedPeek.PluginContracts.Dtos;
 using FeedPeek.Rss;
+using FeedPeek.Helpers;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml.Controls;
 using System;
@@ -433,6 +434,13 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
                 }
 
                 item.SetSaved(isSaved);
+
+                if (isSaved)
+                {
+                    RaiseStatus(
+                        LocalizationHelper.GetString("AddedToViewLater"),
+                        InfoBarSeverity.Success);
+                }
             },
             cancellationToken);
     }

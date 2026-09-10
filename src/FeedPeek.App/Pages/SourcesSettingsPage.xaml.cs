@@ -1,4 +1,5 @@
 using CommunityToolkit.WinUI.Controls;
+using FeedPeek.Helpers;
 using FeedPeek.Models;
 using FeedPeek.Services;
 using Microsoft.UI;
@@ -144,11 +145,7 @@ public sealed partial class SourcesSettingsPage : Page, IDisposable
         => ShowStatus(status.Message, status.Severity);
 
     private void ShowStatus(string message, InfoBarSeverity severity)
-    {
-        StatusInfoBar.Message = message;
-        StatusInfoBar.Severity = severity;
-        StatusInfoBar.IsOpen = true;
-    }
+        => InfoBarAutoDismiss.Show(StatusInfoBar, message, severity);
 
     private void SetBusy(bool isBusy)
     {

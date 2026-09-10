@@ -1,3 +1,4 @@
+using FeedPeek.Helpers;
 using FeedPeek.Models;
 using FeedPeek.Services;
 using FeedPeek.PluginContracts.Manifest;
@@ -256,11 +257,7 @@ public sealed partial class PluginDetailPage : Page, IDisposable
         => ShowStatus(status.Message, status.Severity);
 
     private void ShowStatus(string message, InfoBarSeverity severity)
-    {
-        StatusInfoBar.Message = message;
-        StatusInfoBar.Severity = severity;
-        StatusInfoBar.IsOpen = true;
-    }
+        => InfoBarAutoDismiss.Show(StatusInfoBar, message, severity);
 
     private async Task RunBusyAsync(Func<Task> operation)
     {

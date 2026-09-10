@@ -17,7 +17,7 @@ App.xaml.cs                    ← 应用入口，初始化托盘、数据监控
 │       ├── SelectorBar        ← 关注/历史/稍后再看 三页切换
 │       ├── Frame              ← 承载三个 Page（CacheSize=0, 切页释放旧页）
 │       ├── ProgressBar        ← 顶部刷新进度条
-│       └── ItemsControl       ← 底部 StatusNotification InfoBar 列表
+│       └── InfoBar            ← 底部状态通知（3 秒后自动消失）
 ├── BackgroundNotificationMonitor ← 后台轮询推送通知
 └── SettingsWindow             ← 独立设置窗口（常规/通知/关于 三个页面）
 ```
@@ -39,8 +39,7 @@ Controls/
 Models/
 ├── FeedItemRow / FeedLiveItemRow ← 通用条目与直播 UI 行
 ├── FeedSourceRow / PluginSettingsRow ← 来源与插件设置行
-├── MainPanelSection    ← enum { Following, History, ViewLater }
-└── StatusNotification  ← InfoBar 消息
+└── MainPanelSection    ← enum { Following, History, ViewLater }
 ```
 
 ### 服务层

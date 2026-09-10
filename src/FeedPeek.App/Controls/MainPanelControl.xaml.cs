@@ -1,6 +1,7 @@
 using FeedPeek.Models;
 using FeedPeek.Pages;
 using FeedPeek.Services;
+using FeedPeek.Helpers;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -218,7 +219,9 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
             StatusNotificationLayer.Visibility = Visibility.Visible;
             StatusInfoBarText.Text = status.Message;
             StatusInfoBar.Severity = status.Severity;
-            StatusInfoBar.IsOpen = true;
+            InfoBarAutoDismiss.Show(
+                StatusInfoBar,
+                () => StatusNotificationLayer.Visibility = Visibility.Collapsed);
         });
     }
 
@@ -245,10 +248,7 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
     }
 
     private void StatusNotificationInfoBar_CloseButtonClick(InfoBar sender, object args)
-    {
-        StatusInfoBar.IsOpen = false;
-        StatusNotificationLayer.Visibility = Visibility.Collapsed;
-    }
+        => InfoBarAutoDismiss.Dismiss(StatusInfoBar);
 
     public void Dispose()
     {
