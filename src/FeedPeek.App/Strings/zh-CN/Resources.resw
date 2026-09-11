@@ -200,6 +200,8 @@
   <data name="VideoNotificationTitle" xml:space="preserve"><value>{0} 发布了新视频</value></data>
   <data name="UpdateNotificationTitle" xml:space="preserve"><value>{0} 有新更新</value></data>
   <data name="AddToViewLaterButton" xml:space="preserve"><value>添加到稍后再看</value></data>
+  <data name="OpenItemInBackground" xml:space="preserve"><value>在后台打开</value></data>
+  <data name="RemoveFromViewLaterMenuItem" xml:space="preserve"><value>从稍后再看移除</value></data>
   <data name="OpenVideoButton" xml:space="preserve"><value>打开视频</value></data>
   <data name="OpenItemButton" xml:space="preserve"><value>打开</value></data>
   <data name="LiveNotificationFallbackTitle" xml:space="preserve"><value>正在直播</value></data>

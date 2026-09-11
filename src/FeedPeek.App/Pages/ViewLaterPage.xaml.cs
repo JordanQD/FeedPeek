@@ -3,6 +3,8 @@ using FeedPeek.Services;
 using FeedPeek.Helpers;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -20,9 +22,20 @@ public sealed partial class ViewLaterPage : Page, IMainPanelPage, IDisposable
         _items = new IncrementalFeedItemCollection(LoadMoreAsync);
         InitializeComponent();
         ItemsListView.ItemsSource = _items;
+        // Middle click is handled on the list itself, and with handledEventsToo, so a row that is
+        // still being realised right after the panel opens cannot swallow the press.
+        ItemsListView.AddHandler(
+            UIElement.PointerPressedEvent,
+            new PointerEventHandler(ItemsListView_PointerPressed),
+            handledEventsToo: true);
     }
 
-    public void Initialize(FeedPeekPanelSession session) => _session = session;
+    public void Initialize(FeedPeekPanelSession session)
+    {
+        UnsubscribeFromSession();
+        _session = session;
+        _session.ItemSavedChanged += Session_ItemSavedChanged;
+    }
 
     public async Task ActivateAsync(CancellationToken cancellationToken = default)
     {
@@ -66,9 +79,8 @@ public sealed partial class ViewLaterPage : Page, IMainPanelPage, IDisposable
         if (sender is not Button { DataContext: FeedItemRow item } || _session is null) return;
         try
         {
+            // The session raises ItemSavedChanged, which drops the row from this list.
             await _session.SetSavedAsync(item, false);
-            _items.Remove(item);
-            EmptyPanel.Visibility = _items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         }
         catch
         {
@@ -80,8 +92,69 @@ public sealed partial class ViewLaterPage : Page, IMainPanelPage, IDisposable
     {
         if (sender is FrameworkElement { DataContext: FeedItemRow item } target && _session is not null)
         {
-            await FeedItemMenuHelper.ShowCreatorMenuAsync(target, e, item, _session);
+            await FeedItemMenuHelper.ShowItemMenuAsync(target, e, item, _session, MainPanelSection.ViewLater);
         }
+    }
+
+    private async void ItemsListView_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (_session is null || !e.GetCurrentPoint(ItemsListView).Properties.IsMiddleButtonPressed)
+        {
+            return;
+        }
+
+        if (ResolveItemFromPointer(e.OriginalSource as DependencyObject) is not FeedItemRow item)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        try
+        {
+            await _session.OpenItemInBackgroundAsync(item);
+        }
+        catch
+        {
+            // The session already reports the actionable error through its status notification.
+        }
+    }
+
+    /// <summary>
+    /// Resolves the pressed row through the list instead of through the element's DataContext.
+    /// The list is rebuilt once the first refresh finishes, so right after the panel opens a row
+    /// can still be settling; reading DataContext then would turn the press into a silent no-op.
+    /// A press inside a button (the watch-later overlay) resolves to <see langword="null"/> so that
+    /// button keeps its own behaviour.
+    /// </summary>
+    private FeedItemRow? ResolveItemFromPointer(DependencyObject? source)
+    {
+        for (var node = source; node is not null; node = VisualTreeHelper.GetParent(node))
+        {
+            if (node is Button)
+            {
+                return null;
+            }
+
+            if (node is ListViewItem container)
+            {
+                return ItemsListView.ItemFromContainer(container) as FeedItemRow;
+            }
+        }
+
+        return null;
+    }
+
+    private void Session_ItemSavedChanged(object? sender, FeedItemSavedChangedEventArgs e)
+    {
+        if (_isDisposed || e.IsSaved) return;
+        _items.Remove(e.Item);
+        EmptyPanel.Visibility = _items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void UnsubscribeFromSession()
+    {
+        if (_session is null) return;
+        _session.ItemSavedChanged -= Session_ItemSavedChanged;
     }
 
     public void ResetScrollPosition()
@@ -91,6 +164,7 @@ public sealed partial class ViewLaterPage : Page, IMainPanelPage, IDisposable
 
     public void Deactivate()
     {
+        UnsubscribeFromSession();
         _items.StopLoading();
         _session = null;
     }
@@ -99,6 +173,7 @@ public sealed partial class ViewLaterPage : Page, IMainPanelPage, IDisposable
     {
         if (_isDisposed) return;
         _isDisposed = true;
+        UnsubscribeFromSession();
         _items.StopLoading();
         _session = null;
         ItemsListView.ItemsSource = null;

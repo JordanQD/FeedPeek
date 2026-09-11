@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Windows.System;
 
@@ -12,11 +13,12 @@ namespace FeedPeek.Helpers;
 
 internal static class FeedItemMenuHelper
 {
-    public static async Task ShowCreatorMenuAsync(
+    public static async Task ShowItemMenuAsync(
         FrameworkElement target,
         RightTappedRoutedEventArgs args,
         FeedItemRow item,
-        FeedPeekPanelSession session)
+        FeedPeekPanelSession session,
+        MainPanelSection section)
     {
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(args);
@@ -26,6 +28,30 @@ internal static class FeedItemMenuHelper
         args.Handled = true;
 
         var menu = new MenuFlyout();
+
+        var openInBackground = new MenuFlyoutItem
+        {
+            Text = LocalizationHelper.GetString("OpenItemInBackground"),
+            Icon = new FontIcon { Glyph = "\uE8A7" },
+        };
+        openInBackground.Click += async (_, _) => await IgnoreSessionErrorsAsync(
+            () => session.OpenItemInBackgroundAsync(item));
+        menu.Items.Add(openInBackground);
+
+        // "稍后再看" is a toggle: the remove command only makes sense on its own page.
+        var isViewLaterSection = section == MainPanelSection.ViewLater;
+        var viewLaterItem = new MenuFlyoutItem
+        {
+            Text = isViewLaterSection
+                ? LocalizationHelper.GetString("RemoveFromViewLaterMenuItem")
+                : LocalizationHelper.GetString("AddToViewLaterButton"),
+            Icon = new FontIcon { Glyph = isViewLaterSection ? "\uE74D" : "\uE710" },
+        };
+        viewLaterItem.Click += async (_, _) => await IgnoreSessionErrorsAsync(
+            () => session.SetSavedAsync(item, !isViewLaterSection));
+        menu.Items.Add(viewLaterItem);
+
+        var creatorItems = new List<MenuFlyoutItem>();
         if (Uri.TryCreate(item.AuthorUrl, UriKind.Absolute, out var authorUri)
             && authorUri.Scheme is "http" or "https")
         {
@@ -35,7 +61,7 @@ internal static class FeedItemMenuHelper
                 Icon = new FontIcon { Glyph = "\uE77B" },
             };
             openCreator.Click += async (_, _) => await Launcher.LaunchUriAsync(authorUri);
-            menu.Items.Add(openCreator);
+            creatorItems.Add(openCreator);
         }
 
         try
@@ -48,33 +74,41 @@ internal static class FeedItemMenuHelper
                     Text = action.FallbackText,
                     Icon = new FontIcon
                     {
-                        Glyph = action.ActionId == "creator.follow" ? "\uE8FA" : "\uE8D7",
+                        // E8FA AddFriend / E8F8 BlockContact read as the follow / unfollow pair.
+                        Glyph = action.ActionId == "creator.follow" ? "\uE8FA" : "\uE8F8",
                     },
                 };
-                relationItem.Click += async (_, _) =>
-                {
-                    try
-                    {
-                        await session.ExecuteCreatorActionAsync(item, action);
-                    }
-                    catch
-                    {
-                        // The session reports the plugin error through the panel status area.
-                    }
-                };
-                menu.Items.Add(relationItem);
+                relationItem.Click += async (_, _) => await IgnoreSessionErrorsAsync(
+                    () => session.ExecuteCreatorActionAsync(item, action));
+                creatorItems.Add(relationItem);
             }
         }
         catch
         {
-            // Keep the author-home command available when relation lookup fails.
+            // Keep the item level commands available when relation lookup fails.
         }
 
-        if (menu.Items.Count == 0)
+        if (creatorItems.Count > 0)
         {
-            return;
+            menu.Items.Add(new MenuFlyoutSeparator());
+            foreach (var creatorItem in creatorItems)
+            {
+                menu.Items.Add(creatorItem);
+            }
         }
 
         menu.ShowAt(target, new FlyoutShowOptions { Position = position });
+    }
+
+    private static async Task IgnoreSessionErrorsAsync(Func<Task> action)
+    {
+        try
+        {
+            await action();
+        }
+        catch
+        {
+            // The session reports the actionable error through the panel status InfoBar.
+        }
     }
 }

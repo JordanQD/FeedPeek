@@ -28,6 +28,13 @@ public sealed class FeedPeekStatus(string message, InfoBarSeverity severity) : E
     public InfoBarSeverity Severity { get; } = severity;
 }
 
+public sealed class FeedItemSavedChangedEventArgs(FeedItemRow item, bool isSaved) : EventArgs
+{
+    public FeedItemRow Item { get; } = item;
+
+    public bool IsSaved { get; } = isSaved;
+}
+
 public sealed record FeedItemLoadResult(
     IReadOnlyList<FeedItemRow> Items,
     bool HasMore);
@@ -98,6 +105,15 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public event EventHandler<FeedPeekStatus>? StatusRaised;
+
+    /// <summary>Raised on the UI thread when an item's "watch later" state changes.</summary>
+    public event EventHandler<FeedItemSavedChangedEventArgs>? ItemSavedChanged;
+
+    /// <summary>
+    /// Raised on the UI thread just before a background open hands a link to the shell, so the
+    /// host can keep the panel open while the shell target takes focus.
+    /// </summary>
+    public event EventHandler? BackgroundOpenRequested;
 
     public IReadOnlyList<CreatorDescriptor> FollowingCreators { get; private set; } = [];
 
@@ -434,6 +450,7 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
                 }
 
                 item.SetSaved(isSaved);
+                RaiseItemSavedChanged(item, isSaved);
 
                 if (isSaved)
                 {
@@ -623,15 +640,7 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
             async operationToken =>
             {
                 await EnsureInitializedAsync(operationToken).ConfigureAwait(false);
-                await _feedSession.MarkReadAsync(item.Key, cancellationToken: operationToken)
-                    .ConfigureAwait(false);
-                item.SetRead(true);
-
-                if (!Uri.TryCreate(item.Url, UriKind.Absolute, out var uri)
-                    || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
-                {
-                    throw new InvalidOperationException("该条目没有有效的网页地址。");
-                }
+                var uri = await MarkReadAndResolveUriAsync(item, operationToken).ConfigureAwait(false);
 
                 if (!await Launcher.LaunchUriAsync(uri))
                 {
@@ -639,6 +648,66 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
                 }
             },
             cancellationToken);
+    }
+
+    /// <summary>
+    /// Opens the item's link in the background. The link is handed to the shell before any work
+    /// that needs the operation gate: an initial refresh can hold that gate for seconds, and it
+    /// must not delay the browser. The host is told first so it can keep the panel open while the
+    /// browser takes focus.
+    /// </summary>
+    public async Task OpenItemInBackgroundAsync(
+        FeedItemRow item,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+
+        if (ResolveWebUri(item) is not Uri uri)
+        {
+            RaiseStatus("该条目没有有效的网页地址。", InfoBarSeverity.Error);
+            return;
+        }
+
+        // Raised on the caller's thread before the shell launches, so the host suppresses its light
+        // dismiss and reclaims the flyout window while the browser activates.
+        RaiseBackgroundOpenRequested();
+
+        if (!ShellUrlLauncher.TryOpenInBackground(uri.AbsoluteUri))
+        {
+            RaiseStatus("无法在后台打开该条目的网页地址。", InfoBarSeverity.Warning);
+        }
+
+        try
+        {
+            await RunExclusiveAsync(
+                async operationToken =>
+                {
+                    await EnsureInitializedAsync(operationToken).ConfigureAwait(false);
+                    await _feedSession.MarkReadAsync(item.Key, cancellationToken: operationToken)
+                        .ConfigureAwait(false);
+                    item.SetRead(true);
+                },
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            // The link is already open; a failed read-state write must not disturb the user.
+        }
+    }
+
+    private static Uri? ResolveWebUri(FeedItemRow item)
+        => Uri.TryCreate(item.Url, UriKind.Absolute, out var uri)
+            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+                ? uri
+                : null;
+
+    private async Task<Uri> MarkReadAndResolveUriAsync(FeedItemRow item, CancellationToken cancellationToken)
+    {
+        await _feedSession.MarkReadAsync(item.Key, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        item.SetRead(true);
+
+        return ResolveWebUri(item) ?? throw new InvalidOperationException("该条目没有有效的网页地址。");
     }
 
     public Task DeleteSourceAsync(
@@ -1077,6 +1146,29 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
         {
             Path = "/favicon.ico",
         }.Uri.AbsoluteUri;
+    }
+
+    private void RaiseItemSavedChanged(FeedItemRow item, bool isSaved)
+    {
+        var args = new FeedItemSavedChangedEventArgs(item, isSaved);
+        if (_dispatcherQueue.HasThreadAccess)
+        {
+            ItemSavedChanged?.Invoke(this, args);
+            return;
+        }
+
+        _dispatcherQueue.TryEnqueue(() => ItemSavedChanged?.Invoke(this, args));
+    }
+
+    private void RaiseBackgroundOpenRequested()
+    {
+        if (_dispatcherQueue.HasThreadAccess)
+        {
+            BackgroundOpenRequested?.Invoke(this, EventArgs.Empty);
+            return;
+        }
+
+        _dispatcherQueue.TryEnqueue(() => BackgroundOpenRequested?.Invoke(this, EventArgs.Empty));
     }
 
     private void RaiseStatus(string message, InfoBarSeverity severity)

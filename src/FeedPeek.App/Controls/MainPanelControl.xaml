@@ -84,5 +84,19 @@
                 </InfoBar>
             </Grid>
         </Grid>
+
+        <!-- Overlay: pinned to the very top edge above the rows above it. It is declared last and
+             given a higher z-order, so it draws on top of the existing layout without reserving
+             space or shifting the content while the session is busy. -->
+        <ProgressBar
+            x:Name="RefreshProgressBar"
+            Grid.Row="0"
+            Canvas.ZIndex="20"
+            Height="3"
+            Margin="0"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Top"
+            IsIndeterminate="True"
+            Visibility="Collapsed" />
     </Grid>
 </UserControl>

@@ -9,6 +9,7 @@ using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Navigation;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -26,14 +27,23 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
 
     public FeedPeekPanelSession Session { get; }
 
+    /// <summary>
+    /// Set by the tray host. Lets a page keep the flyout open across a focus change, for
+    /// example when a link is opened in the background and the browser takes focus.
+    /// </summary>
+    public Action? KeepFlyoutOpen { get; set; }
+
     public MainPanelControl()
     {
         Session = new FeedPeekPanelSession();
         InitializeComponent();
         Session.StatusRaised += Session_StatusRaised;
+        Session.BackgroundOpenRequested += Session_BackgroundOpenRequested;
+        Session.PropertyChanged += Session_PropertyChanged;
         PluginAccountEvents.Changed += PluginAccountEvents_Changed;
         ContentFrame.Navigated += ContentFrame_Navigated;
         Loaded += MainPanelControl_Loaded;
+        ApplyBusyState();
         SelectDefaultPage();
     }
 
@@ -210,6 +220,24 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
     private async void RefreshButton_Click(object sender, RoutedEventArgs e)
         => await RefreshCurrentPageAsync();
 
+    private void Session_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(FeedPeekPanelSession.IsBusy))
+        {
+            ApplyBusyState();
+        }
+    }
+
+    /// <summary>
+    /// Drives the flush top progress bar. The session raises <see cref="FeedPeekPanelSession.IsBusy"/>
+    /// on the UI thread, so the bar can be toggled directly.
+    /// </summary>
+    private void ApplyBusyState()
+        => RefreshProgressBar.Visibility = Session.IsBusy ? Visibility.Visible : Visibility.Collapsed;
+
+    private void Session_BackgroundOpenRequested(object? sender, EventArgs e)
+        => KeepFlyoutOpen?.Invoke();
+
     private void Session_StatusRaised(object? sender, FeedPeekStatus status)
     {
         if (_isDisposed) return;
@@ -261,6 +289,8 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
         Loaded -= MainPanelControl_Loaded;
         PluginAccountEvents.Changed -= PluginAccountEvents_Changed;
         Session.StatusRaised -= Session_StatusRaised;
+        Session.BackgroundOpenRequested -= Session_BackgroundOpenRequested;
+        Session.PropertyChanged -= Session_PropertyChanged;
         ContentFrame.Navigated -= ContentFrame_Navigated;
         DisposeCurrentPage();
         foreach (var page in _initializedPages) page.Dispose();
