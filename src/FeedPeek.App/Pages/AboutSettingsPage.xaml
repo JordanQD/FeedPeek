@@ -7,7 +7,7 @@
 
     <ScrollView
         x:Name="SettingsScrollView"
-        Padding="36,32,36,0"
+        Padding="24,16,24,36"
         VerticalScrollBarVisibility="Auto"
         VerticalScrollMode="Auto">
         <VisualStateManager.VisualStateGroups>
@@ -17,7 +17,7 @@
                         <AdaptiveTrigger MinWindowWidth="640" />
                     </VisualState.StateTriggers>
                     <VisualState.Setters>
-                        <Setter Target="SettingsScrollView.Padding" Value="36,32,36,0" />
+                        <Setter Target="SettingsScrollView.Padding" Value="24,16,24,36" />
                     </VisualState.Setters>
                 </VisualState>
                 <VisualState x:Name="Narrow">
@@ -25,23 +25,17 @@
                         <AdaptiveTrigger MinWindowWidth="0" />
                     </VisualState.StateTriggers>
                     <VisualState.Setters>
-                        <Setter Target="SettingsScrollView.Padding" Value="12,16,12,16" />
+                        <Setter Target="SettingsScrollView.Padding" Value="16,16,16,36" />
                     </VisualState.Setters>
                 </VisualState>
             </VisualStateGroup>
         </VisualStateManager.VisualStateGroups>
         <StackPanel
-            MaxWidth="1064"
+            MaxWidth="1000"
             Spacing="{StaticResource SettingsCardSpacing}">
             <StackPanel.ChildrenTransitions>
                 <RepositionThemeTransition />
             </StackPanel.ChildrenTransitions>
-
-            <TextBlock
-                x:Uid="AboutPageTitle"
-                Margin="0,0,0,12"
-                Style="{ThemeResource TitleTextBlockStyle}"
-                Text="关于" />
 
             <controls:SettingsExpander
                 x:Name="AboutExpander"

@@ -34,7 +34,7 @@ public sealed partial class PluginDetailPage : Page, IDisposable
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
-        _pluginId = e.Parameter as string;
+        _pluginId = (e.Parameter as PluginSettingsRow)?.PluginId;
     }
 
     private async void PluginDetailPage_Loaded(object sender, RoutedEventArgs e)
@@ -68,11 +68,6 @@ public sealed partial class PluginDetailPage : Page, IDisposable
             _plugin = new PluginSettingsRow(entry);
             PluginCard.Header = _plugin.DisplayName;
             PluginCard.Description = $"版本 {_plugin.Version}";
-            PluginBreadcrumb.ItemsSource = new[]
-            {
-                new BreadcrumbCrumb("来源", 30, double.NaN),
-                new BreadcrumbCrumb(_plugin.DisplayName, 30, double.NaN),
-            };
 
             var hasLogin = _plugin.Manifest?.Auth?.LoginFlow is not null;
             var canConfigureSource = _plugin.Manifest?.Capabilities?.Contains("source.configuration", StringComparer.Ordinal) == true;
@@ -94,13 +89,6 @@ public sealed partial class PluginDetailPage : Page, IDisposable
         {
             ShowStatus(ex.Message, InfoBarSeverity.Error);
         }
-    }
-
-    private void PluginBreadcrumb_ItemClicked(BreadcrumbBar sender, BreadcrumbBarItemClickedEventArgs args)
-    {
-        if (args.Index >= 1) return; // 最后一项是当前插件，不需要导航
-        if (Frame.CanGoBack) Frame.GoBack();
-        else Frame.Navigate(typeof(SourcesSettingsPage));
     }
 
     private async void LoginButton_Click(object sender, RoutedEventArgs e)
@@ -291,5 +279,3 @@ public sealed partial class PluginDetailPage : Page, IDisposable
         _session.Dispose();
     }
 }
-
-public sealed record BreadcrumbCrumb(string Text, double FontSize, double Width);

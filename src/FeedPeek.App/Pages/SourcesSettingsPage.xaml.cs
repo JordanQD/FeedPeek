@@ -63,7 +63,7 @@ public sealed partial class SourcesSettingsPage : Page, IDisposable
     private void PluginCard_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not SettingsCard { DataContext: PluginSettingsRow plugin }) return;
-        Frame.Navigate(typeof(PluginDetailPage), plugin.PluginId);
+        Frame.Navigate(typeof(PluginDetailPage), plugin);
     }
 
     private async void PluginSwitch_Toggled(object sender, RoutedEventArgs e)

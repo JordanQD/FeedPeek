@@ -179,7 +179,9 @@ internal sealed class TrayFlyoutService : IDisposable
         menu.Items.Add(new MenuFlyoutItem
         {
             Text = LocalizationHelper.GetString("TrayExit"),
-            Icon = new FontIcon { Glyph = "\uE8BB" },
+            // 19 keeps this glyph's ink at 25x25. At the default 20 the close cross reads larger
+            // than the settings gear beside it (27x27 against 25x27).
+            Icon = new FontIcon { Glyph = "\uE8BB", FontSize = 19 },
             Command = new DelegateCommand(() => RequestExit(exitAction)),
         });
         return menu;

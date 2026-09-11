@@ -8,7 +8,7 @@
 
     <ScrollView
         x:Name="SettingsScrollView"
-        Padding="36,32,36,0"
+        Padding="24,16,24,36"
         VerticalScrollBarVisibility="Auto"
         VerticalScrollMode="Auto">
         <VisualStateManager.VisualStateGroups>
@@ -18,7 +18,7 @@
                         <AdaptiveTrigger MinWindowWidth="640" />
                     </VisualState.StateTriggers>
                     <VisualState.Setters>
-                        <Setter Target="SettingsScrollView.Padding" Value="36,32,36,0" />
+                        <Setter Target="SettingsScrollView.Padding" Value="24,16,24,36" />
                     </VisualState.Setters>
                 </VisualState>
                 <VisualState x:Name="Narrow">
@@ -26,7 +26,7 @@
                         <AdaptiveTrigger MinWindowWidth="0" />
                     </VisualState.StateTriggers>
                     <VisualState.Setters>
-                        <Setter Target="SettingsScrollView.Padding" Value="12,16,12,0" />
+                        <Setter Target="SettingsScrollView.Padding" Value="16,16,16,36" />
                     </VisualState.Setters>
                 </VisualState>
             </VisualStateGroup>
@@ -34,10 +34,8 @@
 
         <!-- Wrapped in a Grid to work around the SettingsExpander ItemsRepeater + parent MaxWidth layout bug -->
         <Grid>
-            <StackPanel Margin="0,0,0,32" MaxWidth="1064" Spacing="{StaticResource SettingsCardSpacing}">
-                <TextBlock Margin="0,0,0,12" Style="{ThemeResource TitleTextBlockStyle}" Text="来源" />
-
-                <TextBlock Style="{StaticResource SettingsSectionHeaderTextBlockStyle}" Text="添加来源" />
+            <StackPanel Margin="0" MaxWidth="1000" Spacing="{StaticResource SettingsCardSpacing}">
+                <TextBlock Margin="0,0,0,4" Style="{StaticResource SettingsSectionHeaderTextBlockStyle}" Text="添加来源" />
 
                 <!-- RSS 订阅（第一位） -->
                 <controls:SettingsCard

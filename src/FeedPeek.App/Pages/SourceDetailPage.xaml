@@ -23,7 +23,7 @@
 
     <ScrollView
         x:Name="DetailScrollView"
-        Padding="36,32,36,0"
+        Padding="24,16,24,36"
         VerticalScrollBarVisibility="Auto"
         VerticalScrollMode="Auto">
         <VisualStateManager.VisualStateGroups>
@@ -33,7 +33,7 @@
                         <AdaptiveTrigger MinWindowWidth="640" />
                     </VisualState.StateTriggers>
                     <VisualState.Setters>
-                        <Setter Target="DetailScrollView.Padding" Value="36,32,36,0" />
+                        <Setter Target="DetailScrollView.Padding" Value="24,16,24,36" />
                     </VisualState.Setters>
                 </VisualState>
                 <VisualState x:Name="Narrow">
@@ -41,27 +41,13 @@
                         <AdaptiveTrigger MinWindowWidth="0" />
                     </VisualState.StateTriggers>
                     <VisualState.Setters>
-                        <Setter Target="DetailScrollView.Padding" Value="12,16,12,0" />
+                        <Setter Target="DetailScrollView.Padding" Value="16,16,16,36" />
                     </VisualState.Setters>
                 </VisualState>
             </VisualStateGroup>
         </VisualStateManager.VisualStateGroups>
 
-        <StackPanel Margin="0,0,0,32" MaxWidth="1064" Spacing="{StaticResource SettingsCardSpacing}">
-            <BreadcrumbBar
-                x:Name="SourceBreadcrumb"
-                Margin="0,0,0,8"
-                ItemClicked="SourceBreadcrumb_ItemClicked">
-                <BreadcrumbBar.ItemTemplate>
-                    <DataTemplate x:DataType="local:BreadcrumbCrumb">
-                        <TextBlock
-                            FontSize="{x:Bind FontSize}"
-                            Text="{x:Bind Text}"
-                            Width="{x:Bind Width}" />
-                    </DataTemplate>
-                </BreadcrumbBar.ItemTemplate>
-            </BreadcrumbBar>
-
+        <StackPanel Margin="0" MaxWidth="1000" Spacing="{StaticResource SettingsCardSpacing}">
             <StackPanel Orientation="Horizontal" Spacing="16" Margin="0,8,0,16">
                 <Button
                     x:Name="IconButton"

@@ -1,4 +1,5 @@
 using FeedPeek.Helpers;
+using FeedPeek.Models;
 using FeedPeek.Pages;
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
@@ -101,7 +102,25 @@ public sealed partial class SettingsWindow : Window
 
     private void NavFrame_Navigated(object sender, NavigationEventArgs e)
     {
-        titleBar.IsBackButtonVisible = e.SourcePageType == typeof(PluginDetailPage);
+        var pageType = e.SourcePageType;
+        titleBar.IsBackButtonVisible = pageType == typeof(PluginDetailPage) || pageType == typeof(SourceDetailPage);
+
+        NavigationBreadcrumb.ItemsSource = pageType switch
+        {
+            var t when t == typeof(GeneralSettingsPage) => new[] { LocalizationHelper.GetString("GeneralPageTitle.Text", "通用") },
+            var t when t == typeof(SourcesSettingsPage) => new[] { "来源" },
+            var t when t == typeof(NotificationSettingsPage) => new[] { LocalizationHelper.GetString("NotificationPageTitle.Text", "通知") },
+            var t when t == typeof(AboutSettingsPage) => new[] { LocalizationHelper.GetString("AboutPageTitle.Text", "关于") },
+            var t when t == typeof(PluginDetailPage) && e.Parameter is PluginSettingsRow plugin => new[] { "来源", plugin.DisplayName },
+            var t when t == typeof(SourceDetailPage) && e.Parameter is FeedSourceRow source => new[] { "来源", source.DisplayName },
+            _ => Array.Empty<string>(),
+        };
+    }
+
+    private void NavigationBreadcrumb_ItemClicked(BreadcrumbBar sender, BreadcrumbBarItemClickedEventArgs args)
+    {
+        if (args.Index >= 1) return; // 最后一项是当前页，不导航
+        if (navFrame.CanGoBack) navFrame.GoBack();
     }
 
     private void ConfigureTitleBar(IntPtr hwnd)

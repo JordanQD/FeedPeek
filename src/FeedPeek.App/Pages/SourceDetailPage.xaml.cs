@@ -79,24 +79,11 @@ public sealed partial class SourceDetailPage : Page, IDisposable
                 PluginNameText.Text = plugin?.DisplayName ?? _source.ProviderId;
                 PluginVersionText.Text = plugin is null ? string.Empty : $"版本 {plugin.Version}";
             }
-
-            SourceBreadcrumb.ItemsSource = new[]
-            {
-                new BreadcrumbCrumb("来源", 30, double.NaN),
-                new BreadcrumbCrumb(_source.DisplayName, 30, double.NaN),
-            };
         }
         catch (Exception ex)
         {
             ShowStatus(ex.Message, InfoBarSeverity.Error);
         }
-    }
-
-    private void SourceBreadcrumb_ItemClicked(BreadcrumbBar sender, BreadcrumbBarItemClickedEventArgs args)
-    {
-        if (args.Index >= 1) return; // 最后一项是当前来源，不需要导航
-        if (Frame.CanGoBack) Frame.GoBack();
-        else Frame.Navigate(typeof(SourcesSettingsPage));
     }
 
     private async void PickIconFile_Click(object sender, RoutedEventArgs e)

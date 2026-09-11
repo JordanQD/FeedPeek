@@ -74,7 +74,16 @@
         x:Key="SettingsSectionHeaderTextBlockStyle"
         BasedOn="{StaticResource BodyStrongTextBlockStyle}"
         TargetType="TextBlock">
-        <Setter Property="Margin" Value="1,30,0,6" />
+        <Setter Property="Margin" Value="0,32,0,4" />
     </Style>
+
+    <!--  ============================================================
+          BreadcrumbBar 轻量样式（参考 Windows Terminal 设置页）。
+          只覆写主题资源，不重写 ControlTemplate。
+          ============================================================  -->
+    <x:Double x:Key="BreadcrumbBarItemThemeFontSize">30</x:Double>
+    <FontWeight x:Key="BreadcrumbBarItemFontWeight">SemiBold</FontWeight>
+    <x:Double x:Key="BreadcrumbBarChevronFontSize">16</x:Double>
+    <Thickness x:Key="BreadcrumbBarChevronPadding">8,4,8,0</Thickness>
 
 </ResourceDictionary>

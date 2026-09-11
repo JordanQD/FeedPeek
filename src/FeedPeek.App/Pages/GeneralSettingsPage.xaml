@@ -7,7 +7,7 @@
 
     <ScrollView
         x:Name="SettingsScrollView"
-        Padding="36,32,36,0"
+        Padding="24,16,24,36"
         VerticalScrollBarVisibility="Auto"
         VerticalScrollMode="Auto">
         <VisualStateManager.VisualStateGroups>
@@ -17,7 +17,7 @@
                         <AdaptiveTrigger MinWindowWidth="640" />
                     </VisualState.StateTriggers>
                     <VisualState.Setters>
-                        <Setter Target="SettingsScrollView.Padding" Value="36,32,36,0" />
+                        <Setter Target="SettingsScrollView.Padding" Value="24,16,24,36" />
                     </VisualState.Setters>
                 </VisualState>
                 <VisualState x:Name="Narrow">
@@ -25,14 +25,14 @@
                         <AdaptiveTrigger MinWindowWidth="0" />
                     </VisualState.StateTriggers>
                     <VisualState.Setters>
-                        <Setter Target="SettingsScrollView.Padding" Value="12,16,12,0" />
+                        <Setter Target="SettingsScrollView.Padding" Value="16,16,16,36" />
                     </VisualState.Setters>
                 </VisualState>
             </VisualStateGroup>
         </VisualStateManager.VisualStateGroups>
         <StackPanel
-            Margin="0,0,0,32"
-            MaxWidth="1064"
+            Margin="0"
+            MaxWidth="1000"
             Spacing="{StaticResource SettingsCardSpacing}">
             <StackPanel.ChildrenTransitions>
                 <EntranceThemeTransition FromVerticalOffset="36" />
@@ -40,35 +40,39 @@
             </StackPanel.ChildrenTransitions>
 
             <TextBlock
-                x:Uid="GeneralPageTitle"
-                Margin="0,0,0,12"
-                Style="{ThemeResource TitleTextBlockStyle}"
-                Text="通用" />
-
-            <TextBlock
                 x:Uid="GeneralStartupSectionHeader"
+                Margin="0,0,0,4"
                 Style="{StaticResource SettingsSectionHeaderTextBlockStyle}"
                 Text="启动" />
-            <controls:SettingsCard
-                x:Uid="GeneralAutoStartCard"
-                Description="登录 Windows 后自动启动应用。"
-                Header="开机后自动运行">
-                <controls:SettingsCard.HeaderIcon>
-                    <FontIcon Glyph="&#xE7E8;" />
-                </controls:SettingsCard.HeaderIcon>
-                <ToggleSwitch
-                    x:Name="AutoStartSwitch"
-                    x:Uid="GeneralAutoStartSwitch"
-                    AutomationProperties.AutomationId="AutoStartSwitch"
-                    AutomationProperties.Name="开机后自动运行"
-                    Toggled="AutoStartSwitch_Toggled" />
-            </controls:SettingsCard>
-            <InfoBar
-                x:Name="StartupInfoBar"
-                Margin="0,4,0,0"
-                IsClosable="False"
-                IsOpen="False"
-                Severity="Informational" />
+            <!-- 卡片与紧随其后的提示条必须是 StackPanel 的同一个子元素：关闭状态的 InfoBar 会变成
+                 Collapsed，而 StackPanel 仍为折叠子元素计入 Spacing，导致与下方卡片的间距翻倍。 -->
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <controls:SettingsCard
+                    x:Uid="GeneralAutoStartCard"
+                    Description="登录 Windows 后自动启动应用。"
+                    Header="开机后自动运行">
+                    <controls:SettingsCard.HeaderIcon>
+                        <FontIcon Glyph="&#xE7E8;" />
+                    </controls:SettingsCard.HeaderIcon>
+                    <ToggleSwitch
+                        x:Name="AutoStartSwitch"
+                        x:Uid="GeneralAutoStartSwitch"
+                        AutomationProperties.AutomationId="AutoStartSwitch"
+                        AutomationProperties.Name="开机后自动运行"
+                        Toggled="AutoStartSwitch_Toggled" />
+                </controls:SettingsCard>
+                <InfoBar
+                    x:Name="StartupInfoBar"
+                    Grid.Row="1"
+                    Margin="0,4,0,0"
+                    IsClosable="False"
+                    IsOpen="False"
+                    Severity="Informational" />
+            </Grid>
 
             <controls:SettingsCard
                 x:Uid="GeneralRunningLaunchActionCard"
@@ -210,26 +214,33 @@
                     Click="ExportConfigButton_Click"
                     Content="导出" />
             </controls:SettingsCard>
-            <controls:SettingsCard
-                x:Uid="GeneralImportConfigCard"
-                Description="从 JSON 配置文件恢复通知、启动和登录状态配置。"
-                Header="导入配置">
-                <controls:SettingsCard.HeaderIcon>
-                    <FontIcon Glyph="&#xEDE2;" />
-                </controls:SettingsCard.HeaderIcon>
-                <Button
-                    x:Name="ImportConfigButton"
-                    x:Uid="GeneralImportConfigButton"
-                    AutomationProperties.AutomationId="ImportConfigButton"
-                    Click="ImportConfigButton_Click"
-                    Content="导入" />
-            </controls:SettingsCard>
-            <TextBlock
-                x:Name="ConfigStatusText"
-                Margin="1,8,0,0"
-                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                TextWrapping="Wrap"
-                Visibility="Collapsed" />
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <controls:SettingsCard
+                    x:Uid="GeneralImportConfigCard"
+                    Description="从 JSON 配置文件恢复通知、启动和登录状态配置。"
+                    Header="导入配置">
+                    <controls:SettingsCard.HeaderIcon>
+                        <FontIcon Glyph="&#xEDE2;" />
+                    </controls:SettingsCard.HeaderIcon>
+                    <Button
+                        x:Name="ImportConfigButton"
+                        x:Uid="GeneralImportConfigButton"
+                        AutomationProperties.AutomationId="ImportConfigButton"
+                        Click="ImportConfigButton_Click"
+                        Content="导入" />
+                </controls:SettingsCard>
+                <TextBlock
+                    x:Name="ConfigStatusText"
+                    Grid.Row="1"
+                    Margin="1,8,0,0"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    TextWrapping="Wrap"
+                    Visibility="Collapsed" />
+            </Grid>
 
             <controls:SettingsCard
                 x:Name="LanguageSettingsCard"

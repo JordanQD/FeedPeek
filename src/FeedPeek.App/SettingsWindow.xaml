@@ -36,6 +36,43 @@
             OpenPaneLength="220"
             PaneDisplayMode="Left"
             SelectionChanged="NavView_SelectionChanged">
+            <NavigationView.Resources>
+                <ResourceDictionary>
+                    <!--  顶栏留白参考 WinUI Gallery "All" 页，但左边与内容对齐（24）  -->
+                    <Thickness x:Key="NavigationViewHeaderMargin">0,0,0,0</Thickness>
+                </ResourceDictionary>
+            </NavigationView.Resources>
+
+            <NavigationView.Header>
+                <Grid x:Name="HeaderGrid" Padding="24,24,24,0">
+                    <VisualStateManager.VisualStateGroups>
+                        <VisualStateGroup>
+                            <VisualState x:Name="WideHeader">
+                                <VisualState.StateTriggers>
+                                    <AdaptiveTrigger MinWindowWidth="640" />
+                                </VisualState.StateTriggers>
+                                <VisualState.Setters>
+                                    <Setter Target="HeaderGrid.Padding" Value="24,24,24,0" />
+                                </VisualState.Setters>
+                            </VisualState>
+                            <VisualState x:Name="NarrowHeader">
+                                <VisualState.StateTriggers>
+                                    <AdaptiveTrigger MinWindowWidth="0" />
+                                </VisualState.StateTriggers>
+                                <VisualState.Setters>
+                                    <Setter Target="HeaderGrid.Padding" Value="16,24,16,0" />
+                                </VisualState.Setters>
+                            </VisualState>
+                        </VisualStateGroup>
+                    </VisualStateManager.VisualStateGroups>
+                    <BreadcrumbBar
+                        x:Name="NavigationBreadcrumb"
+                        MaxWidth="1000"
+                        HorizontalAlignment="Stretch"
+                        ItemClicked="NavigationBreadcrumb_ItemClicked" />
+                </Grid>
+            </NavigationView.Header>
+
             <NavigationView.MenuItems>
                 <NavigationViewItem
                     x:Name="GeneralNavItem"
@@ -62,8 +99,17 @@
                     Tag="about" />
             </NavigationView.MenuItems>
 
-            <Frame
-                x:Name="navFrame" />
+            <Frame x:Name="navFrame">
+                <Frame.ContentTransitions>
+                    <TransitionCollection>
+                        <NavigationThemeTransition>
+                            <NavigationThemeTransition.DefaultNavigationTransitionInfo>
+                                <DrillInNavigationTransitionInfo />
+                            </NavigationThemeTransition.DefaultNavigationTransitionInfo>
+                        </NavigationThemeTransition>
+                    </TransitionCollection>
+                </Frame.ContentTransitions>
+            </Frame>
         </NavigationView>
     </Grid>
 </Window>
