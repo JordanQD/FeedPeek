@@ -35,6 +35,9 @@ public sealed partial class GeneralSettingsPage : Page
     public GeneralSettingsPage()
     {
         InitializeComponent();
+        // 关闭状态的 InfoBar 自身仍是 Visible 并保留 Margin，会占位；统一让它跟随 IsOpen 折叠。
+        InfoBarAutoDismiss.CollapseWhenClosed(StartupInfoBar);
+        InfoBarAutoDismiss.CollapseWhenClosed(ConfigInfoBar);
         Loaded += GeneralSettingsPage_Loaded;
         Unloaded += GeneralSettingsPage_Unloaded;
     }
@@ -75,14 +78,14 @@ public sealed partial class GeneralSettingsPage : Page
             _useRegistryStartup = false;
             AutoStartSwitch.IsOn = _startupTask.State is StartupTaskState.Enabled;
             AutoStartSwitch.IsEnabled = _startupTask.State is StartupTaskState.Disabled or StartupTaskState.Enabled;
-            StartupInfoBar.IsOpen = _startupTask.State is StartupTaskState.DisabledByUser or StartupTaskState.DisabledByPolicy;
-            StartupInfoBar.Severity = InfoBarSeverity.Informational;
-            StartupInfoBar.Message = _startupTask.State switch
-            {
-                StartupTaskState.DisabledByUser => LocalizationHelper.GetString("StartupDisabledByUser"),
-                StartupTaskState.DisabledByPolicy => LocalizationHelper.GetString("StartupDisabledByPolicy"),
-                _ => string.Empty,
-            };
+            SetStartupInfoBar(
+                _startupTask.State is StartupTaskState.DisabledByUser or StartupTaskState.DisabledByPolicy,
+                _startupTask.State switch
+                {
+                    StartupTaskState.DisabledByUser => LocalizationHelper.GetString("StartupDisabledByUser"),
+                    StartupTaskState.DisabledByPolicy => LocalizationHelper.GetString("StartupDisabledByPolicy"),
+                    _ => string.Empty,
+                });
             return;
         }
         catch
@@ -93,9 +96,20 @@ public sealed partial class GeneralSettingsPage : Page
         _useRegistryStartup = true;
         AutoStartSwitch.IsEnabled = true;
         AutoStartSwitch.IsOn = IsRegistryStartupEnabled();
-        StartupInfoBar.IsOpen = true;
+        SetStartupInfoBar(true, LocalizationHelper.GetString("StartupTaskFallback"));
+    }
+
+    /// <summary>
+    /// InfoBar 关闭时只折叠模板内容，元素自身仍是 Visible 且保留 Margin，
+    /// 会让它与下方卡片的间距比其它卡片多出 4px。这里显式同步 Visibility：
+    /// 关闭时完全不参与布局，打开时仍保留 4px 间距。
+    /// </summary>
+    private void SetStartupInfoBar(bool isOpen, string message)
+    {
+        StartupInfoBar.IsOpen = isOpen;
         StartupInfoBar.Severity = InfoBarSeverity.Informational;
-        StartupInfoBar.Message = LocalizationHelper.GetString("StartupTaskFallback");
+        StartupInfoBar.Message = message;
+        StartupInfoBar.Visibility = isOpen ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private async void AutoStartSwitch_Toggled(object sender, RoutedEventArgs e)
@@ -258,11 +272,11 @@ public sealed partial class GeneralSettingsPage : Page
             var export = await CreateSettingsExportAsync();
             var json = JsonSerializer.Serialize(export, JsonOptions);
             await File.WriteAllTextAsync(result.Path, json);
-            SetConfigStatus(LocalizationHelper.Format("ExportedTo", result.Path));
+            SetConfigStatus(LocalizationHelper.Format("ExportedTo", result.Path), InfoBarSeverity.Success);
         }
         catch (Exception ex)
         {
-            SetConfigStatus(LocalizationHelper.Format("ExportFailed", ex.Message));
+            SetConfigStatus(LocalizationHelper.Format("ExportFailed", ex.Message), InfoBarSeverity.Error);
         }
     }
 
@@ -287,11 +301,11 @@ public sealed partial class GeneralSettingsPage : Page
                 ?? throw new InvalidOperationException(LocalizationHelper.GetString("InvalidConfigFile"));
 
             await ApplySettingsExportAsync(import);
-            SetConfigStatus(LocalizationHelper.Format("ImportedFrom", result.Path));
+            SetConfigStatus(LocalizationHelper.Format("ImportedFrom", result.Path), InfoBarSeverity.Success);
         }
         catch (Exception ex)
         {
-            SetConfigStatus(LocalizationHelper.Format("ImportFailed", ex.Message));
+            SetConfigStatus(LocalizationHelper.Format("ImportFailed", ex.Message), InfoBarSeverity.Error);
         }
     }
 
@@ -440,13 +454,14 @@ public sealed partial class GeneralSettingsPage : Page
             "zh-CN" => "简体中文",
             "zh-HK" => "繁體中文（香港）",
             _ => "简体中文",
-        }));
+        }), InfoBarSeverity.Informational);
     }
 
-    private void SetConfigStatus(string message)
+    private void SetConfigStatus(string message, InfoBarSeverity severity)
     {
-        ConfigStatusText.Text = message;
-        ConfigStatusText.Visibility = string.IsNullOrWhiteSpace(message) ? Visibility.Collapsed : Visibility.Visible;
+        ConfigInfoBar.Message = message ?? string.Empty;
+        ConfigInfoBar.Severity = severity;
+        ConfigInfoBar.IsOpen = !string.IsNullOrWhiteSpace(message);
     }
 
     private sealed class SettingsExport

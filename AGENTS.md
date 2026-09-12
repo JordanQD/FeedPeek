@@ -153,6 +153,17 @@ Phase 4 详细检查点见 `docs/design/rss-plugin-phase4-plan.md`。4.1–4.8 �
 2. **先检索官方来源** — 新增或重做 UI 前，先检索本机 `C:\Users\Q\Data\Projects\WinUI-Gallery`、`C:\Users\Q\Data\Projects\Windows` 以及可用的官方示例索引；记录找到的候选控件、来源和适用限制。
 3. **采用前先通知用户** — 找到合适的官方或官方推荐控件后，先向用户说明候选、收益、依赖和迁移影响，由用户决定是否采用。未经用户决定，不要擅自引入新控件库或用自制控件替代候选。
 4. **确需自定义时说明证据** — 只有确认现有控件无法满足需求后才考虑自定义，并在动手前说明缺口、键盘/无障碍/主题/高对比度/虚拟化成本及建议实现边界。
+5. **默认控件尺寸 32×32** — 除非另有说明，或内容确实需要更多空间，控件统一使用标准高度 32（`TextControlThemeMinHeight`）：图标按钮写成 32×32，输入框保持默认高度、不要显式设 `Height`。不要随手写 36×36——同一 `Grid` 行里的输入框默认 `VerticalAlignment="Stretch"`，会被撑成同样的高度，导致该行的输入框比其它卡片里的输入框更高（对照“通知检查间隔”的 NumberBox）。
+
+## 设置页布局约束
+
+设置窗口由 `SettingsWindow` + `Pages/*SettingsPage` 组成，间距基准集中在 `src/FeedPeek.App/Styles/SharedResources.xaml`：卡片间距 `SettingsCardSpacing`(4)、分节标题 `SettingsSectionHeaderTextBlockStyle`(Margin `0,32,0,4`)。以下几条都是实际踩过并已修复的坑，改设置页前先读：
+
+1. **页面内边距放在滚动内容上，不要放在 `ScrollView` 上** — 实测 WinUI 的 `ScrollView.Padding` 内缩的是滚动视口本身（内容到了视口边界就被裁掉），而不是滚动内容。放在控件上会在顶部/底部留下永久死区，内容永远滚不进去，看起来像被什么东西盖住了。正确写法：`ScrollView` 不设 `Padding`，把宽窗口 `24,16,24,36` / 窄窗口 `16,16,16,36` 作为内容根元素（`SettingsContent` / `DetailContent`）的 `Margin`，并让 `VisualState` 的 Setter 指向 `<内容>.Margin`。
+2. **关闭状态的 `InfoBar` 仍然占位** — `InfoBar` 关闭时只折叠模板内容，元素自身仍是 `Visible` 并保留 `Margin`，那 4px 间距照样生效。所有内联提示条都要让 `Visibility` 跟随 `IsOpen`：走 `InfoBarAutoDismiss` 的提示条由 `InfoBarAutoDismiss.CollapseWhenClosed` 统一接管（覆盖自动消失、关闭按钮、代码关闭三条路径）；页面自管的提示条（`StartupInfoBar`、`ConfigInfoBar`）在构造函数里显式调用该方法，并在 XAML 写 `Visibility="Collapsed"` 作为初始状态。
+3. **条件元素要与其相邻元素合并为一个 `StackPanel` 子元素** — `StackPanel` 会为折叠子元素照样计入 `Spacing`。一个关闭的提示条或状态文本夹在两张卡片/两个分节之间，会让那一段多出 4px，比其它卡片宽。写法是用两行 `Auto` 的 `Grid` 把「卡片 + 紧随它的提示条」或「提示条 + 紧随它的分节标题」包成一个子元素（参见 `GeneralSettingsPage` 的自启卡片、`SourcesSettingsPage` 的 `StatusInfoBar`）。
+4. **页面第一个分节标题不要带额外上边距** — `SettingsSectionHeaderTextBlockStyle` 的 `Margin="0,32,0,4"` 是给「分组之间」用的；页面首个分节标题再吃 32 会让内容顶部空出一大截。首个小节标题写 `Margin="0,0,0,4"`，页面顶部留白交给内容根元素的 `Margin`(16)。
+5. **改动设置页后必须实测像素** — 这几类问题（死区、多 4px）在代码里看不出来，只靠肉眼截图也容易误判。验证方式是采样截图的像素行：卡片底色 `#323232`、页面底色 `#272727`，两卡之间的纯净背景行数应一致（4px 间距约 3 行），滚动条轨道范围应与滚动视口边界吻合。
 
 ## 后续迁移约束
 

@@ -13,7 +13,6 @@
 
     <ScrollView
         x:Name="DetailScrollView"
-        Padding="24,16,24,36"
         VerticalScrollBarVisibility="Auto"
         VerticalScrollMode="Auto">
         <VisualStateManager.VisualStateGroups>
@@ -23,7 +22,7 @@
                         <AdaptiveTrigger MinWindowWidth="640" />
                     </VisualState.StateTriggers>
                     <VisualState.Setters>
-                        <Setter Target="DetailScrollView.Padding" Value="24,16,24,36" />
+                        <Setter Target="DetailContent.Margin" Value="24,16,24,36" />
                     </VisualState.Setters>
                 </VisualState>
                 <VisualState x:Name="Narrow">
@@ -31,13 +30,13 @@
                         <AdaptiveTrigger MinWindowWidth="0" />
                     </VisualState.StateTriggers>
                     <VisualState.Setters>
-                        <Setter Target="DetailScrollView.Padding" Value="16,16,16,36" />
+                        <Setter Target="DetailContent.Margin" Value="16,16,16,36" />
                     </VisualState.Setters>
                 </VisualState>
             </VisualStateGroup>
         </VisualStateManager.VisualStateGroups>
 
-        <StackPanel Margin="0" MaxWidth="1000" Spacing="{StaticResource SettingsCardSpacing}">
+        <StackPanel x:Name="DetailContent" Margin="24,16,24,36" MaxWidth="1000" Spacing="{StaticResource SettingsCardSpacing}">
             <controls:SettingsCard
                 x:Name="PluginCard"
                 Description="版本"
@@ -73,7 +72,8 @@
             <InfoBar
                 x:Name="StatusInfoBar"
                 IsClosable="True"
-                IsOpen="False" />
+                IsOpen="False"
+                Visibility="Collapsed" />
         </StackPanel>
     </ScrollView>
 </Page>

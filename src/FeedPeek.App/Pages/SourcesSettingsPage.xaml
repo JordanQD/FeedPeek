@@ -8,7 +8,6 @@
 
     <ScrollView
         x:Name="SettingsScrollView"
-        Padding="24,16,24,36"
         VerticalScrollBarVisibility="Auto"
         VerticalScrollMode="Auto">
         <VisualStateManager.VisualStateGroups>
@@ -18,7 +17,7 @@
                         <AdaptiveTrigger MinWindowWidth="640" />
                     </VisualState.StateTriggers>
                     <VisualState.Setters>
-                        <Setter Target="SettingsScrollView.Padding" Value="24,16,24,36" />
+                        <Setter Target="SettingsContent.Margin" Value="24,16,24,36" />
                     </VisualState.Setters>
                 </VisualState>
                 <VisualState x:Name="Narrow">
@@ -26,14 +25,14 @@
                         <AdaptiveTrigger MinWindowWidth="0" />
                     </VisualState.StateTriggers>
                     <VisualState.Setters>
-                        <Setter Target="SettingsScrollView.Padding" Value="16,16,16,36" />
+                        <Setter Target="SettingsContent.Margin" Value="16,16,16,36" />
                     </VisualState.Setters>
                 </VisualState>
             </VisualStateGroup>
         </VisualStateManager.VisualStateGroups>
 
         <!-- Wrapped in a Grid to work around the SettingsExpander ItemsRepeater + parent MaxWidth layout bug -->
-        <Grid>
+        <Grid x:Name="SettingsContent" Margin="24,16,24,36">
             <StackPanel Margin="0" MaxWidth="1000" Spacing="{StaticResource SettingsCardSpacing}">
                 <TextBlock Margin="0,0,0,4" Style="{StaticResource SettingsSectionHeaderTextBlockStyle}" Text="添加来源" />
 
@@ -50,15 +49,18 @@
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
+                        <!-- 高度与 TextBox / NumberBox 等标准控件一致（TextControlThemeMinHeight = 32），
+                             不要比它们更高，否则会把同行的输入框一起撑高。 -->
                         <TextBox
                             x:Name="EndpointTextBox"
+                            VerticalAlignment="Center"
                             PlaceholderText="https://example.com/feed.xml"
                             KeyDown="EndpointTextBox_KeyDown" />
                         <Button
                             x:Name="AddButton"
                             Grid.Column="1"
-                            Width="36"
-                            Height="36"
+                            Width="32"
+                            Height="32"
                             Padding="0"
                             VerticalAlignment="Center"
                             Click="AddButton_Click"
@@ -103,8 +105,8 @@
                             Padding="58,8,44,8">
                             <Button
                                 x:Name="InstallPluginButton"
-                                Width="36"
-                                Height="36"
+                                Width="32"
+                                Height="32"
                                 Padding="0"
                                 VerticalAlignment="Center"
                                 Click="InstallPluginButton_Click"
@@ -115,12 +117,23 @@
                     </controls:SettingsExpander.ItemsFooter>
                 </controls:SettingsExpander>
 
-                <InfoBar
-                    x:Name="StatusInfoBar"
-                    IsClosable="True"
-                    IsOpen="False" />
-
-                <TextBlock Style="{StaticResource SettingsSectionHeaderTextBlockStyle}" Text="已添加的来源" />
+                <!-- 提示条与紧随其后的分节标题放在同一个 Grid 里，作为 StackPanel 的单个子元素：
+                     关闭状态的 InfoBar 仍会被 StackPanel 计入 Spacing，会让标题多出 4px。 -->
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <InfoBar
+                        x:Name="StatusInfoBar"
+                        IsClosable="True"
+                        IsOpen="False"
+                        Visibility="Collapsed" />
+                    <TextBlock
+                        Grid.Row="1"
+                        Style="{StaticResource SettingsSectionHeaderTextBlockStyle}"
+                        Text="已添加的来源" />
+                </Grid>
                 <Grid MinHeight="180">
                         <ListView
                             x:Name="SourcesListView"

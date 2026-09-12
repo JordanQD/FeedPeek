@@ -7,7 +7,6 @@
 
     <ScrollView
         x:Name="SettingsScrollView"
-        Padding="24,16,24,36"
         VerticalScrollBarVisibility="Auto"
         VerticalScrollMode="Auto">
         <VisualStateManager.VisualStateGroups>
@@ -17,7 +16,7 @@
                         <AdaptiveTrigger MinWindowWidth="640" />
                     </VisualState.StateTriggers>
                     <VisualState.Setters>
-                        <Setter Target="SettingsScrollView.Padding" Value="24,16,24,36" />
+                        <Setter Target="SettingsContent.Margin" Value="24,16,24,36" />
                     </VisualState.Setters>
                 </VisualState>
                 <VisualState x:Name="Narrow">
@@ -25,13 +24,14 @@
                         <AdaptiveTrigger MinWindowWidth="0" />
                     </VisualState.StateTriggers>
                     <VisualState.Setters>
-                        <Setter Target="SettingsScrollView.Padding" Value="16,16,16,36" />
+                        <Setter Target="SettingsContent.Margin" Value="16,16,16,36" />
                     </VisualState.Setters>
                 </VisualState>
             </VisualStateGroup>
         </VisualStateManager.VisualStateGroups>
         <StackPanel
-            Margin="0"
+            x:Name="SettingsContent"
+            Margin="24,16,24,36"
             MaxWidth="1000"
             Spacing="{StaticResource SettingsCardSpacing}">
             <StackPanel.ChildrenTransitions>
@@ -71,7 +71,8 @@
                     Margin="0,4,0,0"
                     IsClosable="False"
                     IsOpen="False"
-                    Severity="Informational" />
+                    Severity="Informational"
+                    Visibility="Collapsed" />
             </Grid>
 
             <controls:SettingsCard
@@ -233,12 +234,12 @@
                         Click="ImportConfigButton_Click"
                         Content="导入" />
                 </controls:SettingsCard>
-                <TextBlock
-                    x:Name="ConfigStatusText"
+                <InfoBar
+                    x:Name="ConfigInfoBar"
                     Grid.Row="1"
-                    Margin="1,8,0,0"
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                    TextWrapping="Wrap"
+                    Margin="0,4,0,0"
+                    IsClosable="True"
+                    IsOpen="False"
                     Visibility="Collapsed" />
             </Grid>
 

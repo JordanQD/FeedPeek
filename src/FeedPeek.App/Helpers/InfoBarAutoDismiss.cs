@@ -25,6 +25,14 @@ internal static class InfoBarAutoDismiss
             typeof(InfoBarAutoDismiss),
             new PropertyMetadata(null));
 
+    /// <summary>Marks a bar whose <see cref="InfoBar.IsOpen"/> is already being watched.</summary>
+    private static readonly DependencyProperty HookedProperty =
+        DependencyProperty.RegisterAttached(
+            "Hooked",
+            typeof(bool),
+            typeof(InfoBarAutoDismiss),
+            new PropertyMetadata(false));
+
     /// <summary>Shows <paramref name="message"/> and schedules the dismissal.</summary>
     /// <param name="onDismissed">Runs after the bar closes, whether by timeout or by its close button.</param>
     public static void Show(
@@ -49,9 +57,41 @@ internal static class InfoBarAutoDismiss
         ArgumentNullException.ThrowIfNull(infoBar);
         var state = GetState(infoBar);
         state.OnDismissed = onDismissed;
+        CollapseWhenClosed(infoBar);
         infoBar.IsOpen = true;
         state.Restart();
     }
+
+    /// <summary>
+    /// Makes <paramref name="infoBar"/> stop occupying layout while it is closed. A closed
+    /// InfoBar only collapses its template content: the element itself stays visible and keeps
+    /// its <c>Margin</c>, so it still eats 4px of the gap around it. This follows
+    /// <see cref="InfoBar.IsOpen"/>, so every close path (auto-dismiss, close button or code)
+    /// collapses the element as well.
+    /// </summary>
+    public static void CollapseWhenClosed(InfoBar infoBar)
+    {
+        ArgumentNullException.ThrowIfNull(infoBar);
+        if ((bool)infoBar.GetValue(HookedProperty))
+        {
+            return;
+        }
+
+        infoBar.SetValue(HookedProperty, true);
+        infoBar.RegisterPropertyChangedCallback(InfoBar.IsOpenProperty, OnIsOpenChanged);
+        SyncVisibility(infoBar);
+    }
+
+    private static void OnIsOpenChanged(DependencyObject sender, DependencyProperty dp)
+    {
+        if (sender is InfoBar infoBar)
+        {
+            SyncVisibility(infoBar);
+        }
+    }
+
+    private static void SyncVisibility(InfoBar infoBar)
+        => infoBar.Visibility = infoBar.IsOpen ? Visibility.Visible : Visibility.Collapsed;
 
     /// <summary>Closes <paramref name="infoBar"/> immediately and cancels its pending auto-dismiss.</summary>
     public static void Dismiss(InfoBar infoBar)
