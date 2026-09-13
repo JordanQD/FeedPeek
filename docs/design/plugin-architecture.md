@@ -325,15 +325,15 @@ Host 之外没有网络出口：插件脚本里的 URL 只有经过这个桥才�
 - 进程内 Jint **不是安全沙箱**：单 EXE 只提供代码与目录隔离，插件崩溃、死循环或内存泄漏可能影响主程序；第三方不可信插件需要 Phase 7 的 Named Pipe Worker（协议已为此保持 transport-neutral）。
 - 插件不能提供 XAML，不能访问任意文件 / Cookie / 域名，不能拉取或播放直播流。
 
-### 13.2 当前实现里的缺口与不一致
+### 13.2 缺口与不一致（✅ 表示已在 LiveParse 兼容工作中修复，见 `docs/design/liveparse-compat-plan.md` 附录 A）
 
 | # | 现象 | 位置 |
 |---|---|---|
 | 1 | 清单文件名实际是 `plugin.json`，总纲文档写的是 `manifest.json` | `PluginManifestRules.FileName` 对比 `docs/design/rss-plugin-migration.md` |
-| 2 | `Host.log.*` 的 sink 是 `NullPluginLogSink.Instance`，插件日志全部被丢弃（脱敏器已就绪但未接线） | `FeedPeekPluginRuntime` 构造函数 |
-| 3 | 安装或启停后当前会话不热加载，必须等下一个 Flyout 或设置页会话 | `FeedPeekPluginRuntime.LoadAsync` 的 `_loaded` 早退 |
+| 2 | ✅ 插件 `console` / `Host.log` 的 sink 曾是 `NullPluginLogSink.Instance`（日志全丢），现由 `TracePluginLogSink` 接入应用 trace | `FeedPeekPluginRuntime` 构造函数 / `TracePluginLogSink` |
+| 3 | ✅ 安装/启停/卸载后不再需要新会话：`ComputeChangeToken` 检测安装状态变化，两个会话每次操作都重同步插件 | `PluginInstallationService.ComputeChangeToken` / `FeedPeekPluginRuntime.LoadAsync` |
 | 4 | 关注页直播区在没有 `updates` 订阅时直接早退，纯直播来源不会显示 | `FeedPeekPanelSession.GetFollowingExtrasAsync` |
-| 5 | `cookieDomains` 用 `uri.IdnHost` **精确匹配**，写 `bilibili.com` 无法命中 `api.bilibili.com` | `PluginHttpBridge.SendAsync` |
+| 5 | ✅ 凭据域已改为后缀匹配（`host == domain \|\| hasSuffix("." + domain)`），写 `bilibili.com` 可命中 `api.bilibili.com`；请求路由仍用精确 `allowedHosts` | `PluginHttpBridge.IsCredentialDomain` |
 | 6 | 登录捕获只在命中 `successUrlPrefixes` 时触发，仅靠 cookie 判断成功的站点无法完成登录 | `WebSignInWindow.MainView_NavigationCompleted` |
 | 7 | 直播卡片只渲染 `AvatarUrl` / `DisplayName` / `Title`，`CoverUrl` / `ViewerCount` / `StartedAt` 已在 DTO 里但未展示 | `FeedLiveItemRow` |
 | 8 | `Host.http.request` 不接受 `authMode` / `cookieInject` / `signing`，只有「按域自动注入整条 Cookie header」加受限的 opaque secret | `JintPluginTransport` 与 `PluginHttpBridge` |

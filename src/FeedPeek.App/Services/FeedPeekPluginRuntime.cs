@@ -39,6 +39,7 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
     private readonly Dictionary<string, PluginPackage> _packages = new(StringComparer.Ordinal);
     private readonly Dictionary<string, IFeedProvider> _providers = new(StringComparer.Ordinal);
     private PluginPackage? _sitePackage;
+    private string? _changeToken;
     private bool _loaded;
     private bool _disposed;
 
@@ -49,13 +50,16 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
         _catalog = new PluginRuntimeCatalog(new PluginHostServices(
             _httpBridge,
             _credentials,
-            NullPluginLogSink.Instance,
+            TracePluginLogSink.Instance,
             _invocations,
             _credentials));
         _client = new PluginClient(new PluginRuntimeCatalogInvoker(_catalog));
     }
 
     public IReadOnlyList<IFeedProvider> FeedProviders => _providers.Values.ToArray();
+
+    /// <summary>Provider ids the currently loaded plugin set exposes; used to drop stale registrations.</summary>
+    public IReadOnlyList<string> AvailableProviderIds => _providers.Keys.OrderBy(value => value, StringComparer.Ordinal).ToArray();
 
     public bool IsPluginProvider(string providerId) => _providers.ContainsKey(providerId);
 
@@ -89,7 +93,11 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
     public async Task<PluginLoadResult> LoadAsync(CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        if (_loaded)
+        // Fast path: nothing changed since the last load. The token covers installing, enabling,
+        // disabling and uninstalling, so a plugin added from Settings starts working in the sessions
+        // that are already alive instead of waiting for an app restart.
+        var changeToken = _installations.ComputeChangeToken();
+        if (_loaded && string.Equals(changeToken, _changeToken, StringComparison.Ordinal))
         {
             return new PluginLoadResult(true, null);
         }
@@ -102,6 +110,7 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
             configuration.ExpectedPackageHashes,
             cancellationToken: cancellationToken).ConfigureAwait(false);
         _loaded = true;
+        _changeToken = changeToken;
 
         _packages.Clear();
         _providers.Clear();

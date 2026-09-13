@@ -59,6 +59,7 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
     private readonly DispatcherQueue _dispatcherQueue;
     private readonly SemaphoreSlim _operationGate = new(1, 1);
     private readonly CancellationTokenSource _lifetimeCancellation = new();
+    private readonly HashSet<string> _registeredPluginProviders = new(StringComparer.Ordinal);
     private bool _initialized;
     private bool _disposed;
     private bool _isBusy;
@@ -872,28 +873,39 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
 
     private async Task EnsureInitializedAsync(CancellationToken cancellationToken)
     {
-        if (_initialized)
+        if (!_initialized)
         {
-            return;
+            await _feedSession.InitializeAsync(cancellationToken).ConfigureAwait(false);
+            // Phase 4.3 created this source automatically. It is not a user-created
+            // source, and must not spring back to life when the plugin is installed.
+            await _feedSession.DeleteSourceAsync(
+                LegacyVideoSiteCompatibility.PluginId,
+                LegacyVideoSiteCompatibility.SourceId,
+                cancellationToken).ConfigureAwait(false);
+            _initialized = true;
         }
 
-        await _feedSession.InitializeAsync(cancellationToken).ConfigureAwait(false);
-        // Phase 4.3 created this source automatically. It is not a user-created
-        // source, and must not spring back to life when the plugin is installed.
-        await _feedSession.DeleteSourceAsync(
-            LegacyVideoSiteCompatibility.PluginId,
-            LegacyVideoSiteCompatibility.SourceId,
-            cancellationToken).ConfigureAwait(false);
+        // Re-synced on every call: LoadAsync is a no-op until the install state changes, and this is what
+        // lets a plugin installed from Settings start working without restarting the app.
         await _pluginRuntime.LoadAsync(cancellationToken).ConfigureAwait(false);
         foreach (var provider in _pluginRuntime.FeedProviders)
             _providerRegistry.Register(provider);
+        foreach (var stale in _registeredPluginProviders
+            .Where(id => !_pluginRuntime.IsPluginProvider(id))
+            .ToArray())
+        {
+            _providerRegistry.Unregister(stale);
+            _registeredPluginProviders.Remove(stale);
+        }
+
+        foreach (var provider in _pluginRuntime.FeedProviders)
+            _registeredPluginProviders.Add(provider.ProviderId);
         foreach (var subscription in await _feedSession.GetSubscriptionsAsync(cancellationToken)
             .ConfigureAwait(false))
         {
             if (_pluginRuntime.IsPluginProvider(subscription.ProviderId))
                 _pluginRuntime.Register(subscription);
         }
-        _initialized = true;
     }
 
     private async Task<IReadOnlyList<FeedItemRow>> QueryItemsAsync(

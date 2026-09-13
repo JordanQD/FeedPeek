@@ -390,6 +390,7 @@ public static class LiveParseDialect
             const source = room && typeof room === 'object' ? room : {};
             const roomId = text(source.roomId).trim() || text(fallbackRoomId).trim();
             if (!roomId) return null;
+            const state = text(source.liveState).trim();
             return {
               creatorKey: roomId,
               displayName: text(source.userName).trim() || '房间 ' + roomId,
@@ -399,7 +400,7 @@ public static class LiveParseDialect
               coverUrl: image(source.roomCover),
               viewerCount: viewers(source.liveWatchedCount),
               startedAt: null,
-              metadata: null
+              metadata: state ? { liveState: state } : null
             };
           };
           // A source pins concrete rooms. A full link such as https://www.douyu.com/74751 is accepted

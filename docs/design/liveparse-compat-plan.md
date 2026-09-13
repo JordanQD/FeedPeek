@@ -26,9 +26,9 @@
 | 可行路径 | 宿主侧新增一个 `liveparse-v1` 运行时方言 + 一个通用适配脚本 + 一个清单转换器；**不改动插件源码** |
 | 来源模型 | 一个来源 = 若干钉住的直播间：manifest 的 `sourceConfiguration.fields` 增加 `roomIds`（可填多个，也可粘贴直播间链接），`feed.getLive` 对每个房间调 `getRoomDetail({ roomId })`，复用现有「添加来源」表单，无需新 UI |
 | 分页 | 不需要。FeedPeek 直播区是一条横向列表，只取第 1 页 |
-| 工作量 | 框架 3–4 人日；斗鱼 +1；哔哩 +2–3；抖音 +3–5。合计 **10–15 人日** |
-| 最大风险 | 抖音 `a_bogus` 签名依赖 485KB 的 `webmssdk.js`（内含 `eval(...require(...))`），在 Jint 中大概率不可用 |
-| 第二风险 | 合规：`references/` 下三套包**均无 LICENSE / README**，且内含平台签名实现 |
+| 工作量 | 实际完成 M0/M1/M2/M4（哔哩 M3 取消）；数据链路已联网实测通过，UI 验收已由用户完成 |
+| 曾经的「最大风险」 | 抖音 `a_bogus`（依赖 485KB `webmssdk.js`）——**已解除**：真实房间走插件自带的匿名 HTML 路径即可出数据，签名接口根本不会被用到（见 6.8.1） |
+| 仍然开放的风险 | 合规：`references/` 下三套包**均无 LICENSE / README**，本机自用无碍，分发前必须解决 |
 
 ## 2. 目标插件现状
 
@@ -148,6 +148,7 @@ PluginLiveItem -> FeedLiveItemRow（关注页直播横向区域）
 | `roomCover` | `CoverUrl` | 同上（关注页当前只渲染头像，封面留给后续） |
 | `liveWatchedCount` | `ViewerCount` | 解析 `"1.2万"` 得 `12000`；无法解析则 `null`，不猜 |
 | `roomId`（插件没返回时用用户填的那个）加 `runtimeOptions.roomUrlTemplate` | `Url` | 宿主校验必须是 http(s) |
+| `liveState` | `Metadata` | 原样透传为 `{ liveState: "1" }` 之类，供诊断与后续 UI 使用（过滤判定也用它） |
 | — | `StartedAt` | 无数据，恒为 `null` |
 
 `auth.*` 的映射：`auth.begin` 直接返回 `{ state: "webviewRequired" }`（登录窗口由 FeedPeek 的 WebView2 负责）；`auth.complete` 先调用插件的 `setCredential`/`setCookie` 再探测状态；`auth.validate` 调 `validateCredential`/`getCredentialStatus`，把 `valid` 归一成 FeedPeek 要求的 `authenticated`；`auth.clear` 调 `clearCredential`/`clearCookie`。
@@ -178,7 +179,7 @@ PluginLiveItem -> FeedLiveItemRow（关注页直播横向区域）
 
 - 副作用（已在 6.6 实测确认）：用户钉的 `74751` 当前是轮播，会被过滤掉；换成真在播的房间则正常显示。
 - 允许值是可调的：想放宽就改转换器写入的 `liveStates`（例如 `"1,2"`），不需要改方言或适配脚本。
-- 抖音的 `"1"` 还要求「有可播流」，所以签名不可用时（M0 已确认首选签名返回空串）抖音房间可能被判为不在播而全部隐藏——这是保守方向，不会误报。
+- 抖音的 `"1"` 还要求「有可播流」，所以签名不可用时抖音房间可能被判为不在播而全部隐藏——这是保守方向。**实测：真实房间不受影响**（见 6.8.1）。
 
 另一个取舍：
 
@@ -215,7 +216,9 @@ host 清单来自对各包 `index.js` 与登录 preload 中 URL 字面量的静�
 | 需要的 LiveParse 方法 | `getRoomDetail`（每个钉住的房间一次） |
 | 已知坑 | 房间列表里 `liveState` 可能为空串；封面/头像字段来自 `rs16_avif`/`avif`，同样是协议相对或 http，需要归一化 |
 
-### 5.2 哔哩哔哩 `bilibili-2.0.0`
+### 5.2 哔哩哔哩 `bilibili-2.0.0`（M3 已取消，本节仅存档）
+
+> 用户已有自己的 `feedpeek.bilibili` 插件，因此哔哩这条线**不再实施**；下面的 host / 登录 / 坑位数据保留备查。
 
 | 项 | 值 |
 |---|---|
@@ -228,7 +231,7 @@ host 清单来自对各包 `index.js` 与登录 preload 中 URL 字面量的静�
 | 示例可钉房间 | `74751`（超级小桀），M2 已实测通过 |
 | 已知坑 | ① `getRooms` 硬编码 `authMode: "platform_cookie"`，未登录会返回 `-352`（原包 changelog 明确写了「列表返回352」）；② 房间列表分支的 `cover`/`face` 未补 `https:`，而 `search` 分支补了，说明字段值确实是协议相对 —— 归一化必须做；③ 需要 `Host.crypto.md5`（FeedPeek 已有）与 wbi 签名，签名在插件内自实现，宿主无需额外能力 |
 
-### 5.3 抖音 `douyin-2.0.5`（风险最高）
+### 5.3 抖音 `douyin-2.0.5`（曾评为风险最高，现已打通，见 6.8.1）
 
 | 项 | 值 |
 |---|---|
@@ -237,7 +240,7 @@ host 清单来自对各包 `index.js` 与登录 preload 中 URL 字面量的静�
 | 保留 preload | `lp_plugin_douyin_1.0.13_login.js`；**先裁掉** `abogus_bdms_env/sdk/bind.js`、`webmssdk.js`、`fflate`、`danmaku` |
 | auth | 必需。`cookieDomains` / `allowedHosts` 取 `www.douyin.com`、`live.douyin.com`、`webcast.amemv.com`、`ttwid.bytedance.com` |
 | loginFlow | 原包**没有** `successURLKeyword`，需要合成：`successUrlPrefixes: ["https://www.douyin.com/"]`（`loginURL` 的 origin），`successCookieNames: ["sessionid","sessionid_ss","sid_guard"]` |
-| 已知坑 | ① 房间列表要 `a_bogus`，优选实现是 `globalThis.__lp_douyin_abogus_sign`（由 abogus/webmssdk 提供），回退是插件自带的纯 JS `sign_datail`，但原包 changelog 写着「classic 164-char sign soft-fails empty data」，即分类/房间列表可能拿到空数据；② 登录 preload 会调 `Host.session.getCookieHeader`，方言里先返回空串，走插件的匿名回退；③ 485KB 的 `webmssdk.js` 若必须保留，需实测 Jint 的语句/内存预算与 `eval`/`require` 分支 |
+| 已知坑 | ① 房间列表要 `a_bogus`，优选实现是 `globalThis.__lp_douyin_abogus_sign`（由 abogus/webmssdk 提供），回退是插件自带的纯 JS `sign_datail`，但原包 changelog 写着「classic 164-char sign soft-fails empty data」，即分类/房间列表可能拿到空数据——**实测：钉单个房间时插件会走 HTML 兜底，不受影响（见 6.8.1）**；② 登录 preload 会调 `Host.session.getCookieHeader`，方言里先返回空串，走插件的匿名回退；③ 485KB 的 `webmssdk.js` 若必须保留，需实测 Jint 的语句/内存预算与 `eval`/`require` 分支 |
 
 ## 6. 风险与缓解
 
@@ -296,7 +299,7 @@ douyin-2.0.5:   liveparse.douyin   | hosts=4 | kept=lp_plugin_douyin_1.0.13_logi
 |---|---|
 | 风险 2（严格模式 + UMD 包） | **消除**：裁掉非登录 preload 后没有 UMD 包进入引擎 |
 | 风险 3（语句 / 内存预算） | **基本消除**：实测初始化 5–12ms |
-| 风险 1（抖音签名） | **确认存在**，且比预估更具体：首选签名返回空串，只剩 classic 回退 |
+| 风险 1（抖音签名） | **确认存在**，且比预估更具体：首选签名返回空串，只剩 classic 回退。**（后续 6.8.1 证明钉房间不受影响：HTML 兜底可用）** |
 | M1 工期 | 不变（3–4 天）；其中转换器由独立脚本改为安装时转换，省掉一个外部工具 |
 | M4 工期 | 维持 3–5 天，但**第一步应是联网实测**，而不是继续写代码 |
 
@@ -428,8 +431,15 @@ FeedPeek validation=ok(1 live items)
 ### 6.8.3 仍未闭合的部分
 
 - **签名路径没有被验证过**：`webcast/room/web/enter` 一直返回空 body，所以「ABogus SDK 能不能在 Jint 里跑」对当前功能**没有实际影响**，也没有必要为此投入。
-- **匿名 HTML 路径的稳定性未知**：它依赖抖音的页面格式与匿名访问策略，可能随对方改版或限流而失效；也覆盖不了必须登录才能看的房间。
+- **匿名 HTML 路径的稳定性未知**：它依赖抖音的页面格式与匿名访问策略，可能随对方改版或限流而失效；也覆盖不了必须登录才能看的房间。（已观测到的行为是正常的：房间下播后插件把状态报成 `liveState=0`，被过滤，见 6.8.7。）
 - **每个房间一次约 1MB 的 HTML 请求**：钉多个房间时要并行拉多份大页面。方言已放宽语句预算与超时，但房间数多时仍需关注耗时（当前上限 20 个）。
+
+### 6.8.4 决策：不做浏览器 API shim
+
+原来的二选一（补 `TextEncoder`/`URL`/`performance`/`crypto` 等 shim 去救签名 SDK，或放弃抖音）现在**可以取消**：真实房间已经能通过 HTML 路径取到数据，不必再赌那 147KB 的混淆 SDK 能否在 Jint 里加载。
+
+保留一个前提：若某天抖音把直播间数据改成必须走签名接口，再回来考虑 shim（或等插件自己更新）。
+
 
 ### 6.8.5 获取直播间与直播状态**不需要登录**
 
@@ -450,12 +460,17 @@ FeedPeek validation=ok(1 live items)
 第一次跑通后，下一轮同一房间号却报 `PLUGIN_MEMORY_LIMIT`（64MB）——说明抖音这条 HTML 路径**在原生预算下是不稳定的**：解析约 1MB 页面时同时持有原始 HTML、正则中间值与解码后的 JSON。
 
 已把方言的内存上限放宽到 256MB；随后**连续 3 次**同一房间探测全部 `FeedPeek validation=ok(1 live items)`。原生契约仍保持 64MB。
-### 6.8.4 决策：不做浏览器 API shim
+### 6.8.7 两个真实房间把过滤的两个方向都验证了
 
-原来的二选一（补 `TextEncoder`/`URL`/`performance`/`crypto` 等 shim 去救签名 SDK，或放弃抖音）现在**可以取消**：真实房间已经能通过 HTML 路径取到数据，不必再赌那 147KB 的混淆 SDK 能否在 Jint 里加载。
+| 房间 | 平台状态（插件透传） | 直播区结果 |
+|---|---|---|
+| `945843973757`（瑞幸咖啡，正在直播） | `liveState=1` | ✅ 显示：`FeedPeek validation=ok(1 live items)`，标题「好咖云集，瑞幸吨吨节开门红！」 |
+| `180109685512`（城阳电工，已下播） | `liveState=0` | ✅ 不显示：`ok(0 live items)`，被「只在播」过滤掉 |
 
-保留一个前提：若某天抖音把直播间数据改成必须走签名接口，再回来考虑 shim（或等插件自己更新）。
+这两条是同一个探针跑出来的，说明：
 
+- **在播 → 显示**、**下播 → 消失**，两个方向都符合要求（原先列在「没验证」清单里的「在播→下播」现已闭合）。
+- 探针会跑两遍：第一遍用**出厂过滤**（`liveStates=1`），第二遍把 `liveStates` 放宽成 `0,1,2,3` 作诊断，因此能区分「房间没开播」和「链路坏了」——下播那次就是靠第二遍看到的 `liveState=0`。
 ## 7. 验收标准
 
 
@@ -472,7 +487,7 @@ FeedPeek validation=ok(1 live items)
 7. 登录链路：`auth.complete` 与 `auth.validate` 在插件返回 `valid` 时归一为 `authenticated`。
 8. 回归：现有原生方言（`mock.feed`）的全部用例保持通过。
 
-### 7.2 手工验收（每个平台一次）
+### 7.2 手工验收（每个平台一次）—— ✅ 用户已验收通过
 
 1. 用转换器产出包，从「设置 → 来源 → 安装插件」安装，插件卡片显示名称/版本/已启用。
 2. 在插件详情页「添加来源」填写直播间 ID（可粘贴链接），来源出现在来源列表。
@@ -487,79 +502,96 @@ FeedPeek validation=ok(1 live items)
 |---|---|---|
 | M0 前置验证 | 用 Jint 单独加载三份 `index.js`（按 4.2 裁剪 preload），确认能解析/执行；单独验证抖音 `sign_datail` 是否能返回非空房间 | ✅ 已完成，见 6.5 |
 | M1 方言与转换器 | 4.5 的第 1–5 项 + 7.1 全部自动化用例 | ✅ 已完成（7.1 的 8 项全部有对应用例；App 构建 0 警告 0 错误） |
-| M2 斗鱼打通 | 转换器数据 + 手工验收 7.2 | ✅ 数据链路已完成并联网实测通过（见 6.6）；仅剩 UI 手工验收 |
+| M2 斗鱼打通 | 转换器数据 + 手工验收 7.2 | ✅ 完成：数据链路联网实测通过（6.6）+ UI 验收通过 |
 | ~~M3 哔哩打通~~ | 用户已有自己的 `feedpeek.bilibili` 插件，**取消** | — |
 | M4 抖音打通 | **已联网实测通过（见 6.8.1）**：走插件自带的匿名 HTML 兜底路径，真实房间能出数据并通过 FeedPeek 校验；签名接口未被使用，也不需要 | ✅ 数据链路完成 |
-| M5 体验收尾（可选） | 直播卡片显示封面/观看数 | 1 天 |
+| M5 体验收尾（唯一未做） | 直播卡片显示封面/观看数（`FeedLiveItemRow` 目前只用头像/名称/标题，DTO 里已有 `CoverUrl`/`ViewerCount`） | 1 天 |
 
-合计：**M0+M1+M2 约 5–6 天可交付「斗鱼能看」**；三平台全通 10–15 天。
+实际结果：**M0/M1/M2/M4 全部完成**（M3 取消），斗鱼与抖音都已联网实测通过，UI 验收也已通过；剩下的只有 M5（卡片封面/热度）与合规问题。
 
 ## 9. 未决问题
 
-1. 抖音 `a_bogus` 是否必须在 Jint 内完成？能否把签名放进宿主 C#（那样就不受 Jint 限制，但要复刻 485KB SDK 的算法，成本高）。
-2. 用户怎么知道要填哪个房间号？现在是自己粘贴直播间链接或房间号（已支持两种）。是否需要「从链接一键添加」的入口？（当前靠用户自己填来源表单）
-3. `Host.session.getCookieHeader` 是否需要真实现？它要求宿主把整条 Cookie 头同步暴露给插件，属于权限放宽；当前先返回空串走插件匿名回退。
-4. 是否允许同一插件添加多个来源（例如「常看的主播」与「赛事房间」各一个）？现有模型允许，需要确认产品上是否接受。
-5. 合规：这三套包是否可以本机使用/是否可以改造后再分发。
+已解决（保留记录）：
 
-## 附录 A：原型验证结论（工作区改动，未提交）
+1. ~~抖音 `a_bogus` 是否必须在 Jint 内完成~~ → **不需要**：真实房间走匿名 HTML 路径即可，签名接口不被使用（6.8.1）；也就不必再讨论把签名下沉到宿主。
+2. ~~`Host.session.getCookieHeader` 是否要真实现~~ → **已实现**：调用前预取凭据 + 平台 id 归属校验（6.7.1）。
+3. ~~用户怎么知道填哪个房间号~~ → 现已支持粘贴直播间链接或直接填房间号；是否再加「从链接一键添加」入口属于体验增强。
 
-本计划的实现已在工作区完成（未提交），用于验证「方言 + 钉房间映射」这条主链路。结论：**成立**，并且已用真实斗鱼房间端到端实测。
+仍然开放：
 
-已改动的文件（如需回退可直接 checkout）：
+1. **是否要把房间分成多个来源**。前提先说清楚：「常看的主播」和「赛事房间」**都是直播间**，FeedPeek 只支持直播间这一类实体，两者没有区别，只是给房间起的**分组名**。所以问题的实质是：
+   - 一个来源里钉所有房间（最简）；还是
+   - 按用途建多个来源（例如来源名「我常看的」填 5 个房间、来源名「赛事」填 3 个房间），以获得分组与排序。
+   模型两者都支持（一个来源 = 一组房间），需要确认产品上要不要鼓励后者。
+2. **合规**：这三套包是否可以本机使用 / 是否可以改造后再分发。本机自用没有问题；一旦要随 FeedPeek 分发，必须先解决授权。
+3. **房间号来源的可持续性**：当前靠用户自己提供；若以后想接 `getRooms` / `search`（分区浏览、搜索），那是另一条产品线（需要分类树 UI，见第 0 节的非目标）。
+
+## 附录 A：实现状态（工作区改动，未提交）
+
+整条链路已在工作区完成：方言 + 转换器 + 探针 + 文档。斗鱼/抖音都做过真实网络端到端验证，UI 验收也已由用户通过。
+
+### A.1 改动文件
 
 | 文件 | 改动 |
 |---|---|
 | `src/FeedPeek.PluginContracts/Manifest/PluginManifest.cs` | 新增可选 `Runtime` 与 `RuntimeOptions` |
 | `src/FeedPeek.PluginContracts/Manifest/PluginManifestRules.cs` | 新增 `NativeRuntime` / `LiveParseRuntime` / `SupportedRuntimes` / `ResolveRuntime` |
 | `src/FeedPeek.PluginRuntime/Manifest/PluginManifestLoader.cs` | 新增 `ValidateRuntime`（`RUNTIME_UNSUPPORTED`、`RUNTIME_OPTIONS_INVALID`、`RUNTIME_VIEW_UNSUPPORTED`） |
-| `src/FeedPeek.PluginRuntime/Execution/LiveParseDialect.cs` | 新增：LiveParse 形状的 bootstrap 脚本 + 适配脚本模板 |
-| `src/FeedPeek.PluginRuntime/Execution/JintPluginTransport.cs` | 按 `runtime` 选 bootstrap，entry 之后注入适配脚本 |
-| `src/FeedPeek.PluginRuntime/Manifest/LiveParsePackageConverter.cs` | 新增：LiveParse 包到 FeedPeek 包的转换（host 推导、preload 裁剪、auth/views/sourceConfiguration 合成） |
-| `src/FeedPeek.App/Services/PluginInstallationService.cs` | 安装时检测 LiveParse 包并先在临时目录转换 |
-| `src/FeedPeek.App/Services/FeedPeekPanelSession.cs` | 去掉 `GetFollowingExtrasAsync` 的「无 updates 订阅即早退」 |
+| `src/FeedPeek.PluginRuntime/Execution/LiveParseDialect.cs` | 新增：按 AngelLive 复刻的 bootstrap（浏览器 shim、`LP_PLUGIN_ERROR` 协议、完整 `Host` 表面）+ 适配脚本模板（`getRoomDetail`、`roomIds`、只在播过滤、v1 名回退） |
+| `src/FeedPeek.PluginRuntime/Execution/JintPluginTransport.cs` | 按 `runtime` 选 bootstrap、entry 后注入适配脚本、cookie 预取 + `base64Decode` 委托、方言预算放宽（**并用生效后的 `_options` 配置引擎**，修掉闭包捕获构造参数的老 bug） |
+| `src/FeedPeek.PluginRuntime/Manifest/LiveParsePackageConverter.cs` | 新增：清单转换（host 审计表、preload 裁剪、auth/views/sourceConfiguration、`liveStates="1"`、登录改为可选） |
+| `src/FeedPeek.PluginRuntime/Host/PluginHostServices.cs` | 新增可选 `IPluginCookieProvider`，支撑同步的 `Host.session.getCookieHeader` |
+| `src/FeedPeek.PluginRuntime/Host/PluginHttpBridge.cs` | 凭据域改为后缀匹配；保留头策略按方言区分（liveparse 放行插件自带的 `Cookie`/`Authorization`） |
+| `src/FeedPeek.App/Services/PluginInstallationService.cs` | 安装时自动转换 LiveParse 包；新增 `ComputeChangeToken` 供热加载判定 |
+| `src/FeedPeek.App/Services/FeedPeekPluginRuntime.cs` | cookie 源注入、插件日志接到 trace、按 change token 做增量重载、暴露 `AvailableProviderIds` |
+| `src/FeedPeek.App/Services/TracePluginLogSink.cs` | 新增：把插件 `console`/`Host.log` 输出接入应用 trace（脱敏已在 transport 完成） |
+| `src/FeedPeek.App/Services/FeedPeekPanelSession.cs` | 去掉「无 updates 订阅即早退」；每次操作都重同步插件（含清理已消失的 provider） |
+| `src/FeedPeek.App/Services/FeedPeekNotificationSession.cs` | 同上：后台监控在下一轮轮询就能看到新装的插件，不必重启应用 |
 | `tests/FeedPeek.Core.Tests/Fixtures/Plugins/mock.live/**` | 新增 LiveParse 形状的 fixture 插件（含 login preload） |
 | `tests/FeedPeek.Core.Tests/PluginRuntimeTests.cs` | 新增 3 个用例 + LiveParse HTTP bridge + 上下文辅助方法 |
-| `tests/FeedPeek.Core.Tests/LiveParseCompatTests.cs` | 新增：转换器用例 + M0 真实包探针（按环境变量开关） |
-| `tests/FeedPeek.Core.Tests/LiveParseSignerProbeTests.cs` | 新增：抖音签名 bundle 探针（按环境变量开关） |
+| `tests/FeedPeek.Core.Tests/LiveParseCompatTests.cs` | 新增：转换器用例（含「登录改为可选」）+ M0 真实包探针（按环境变量开关） |
 | `tests/FeedPeek.Core.Tests/LiveParseNetworkProbeTests.cs` | 新增：M2 斗鱼联网探针（自动找在播房间 + 轮播对照，按环境变量开关） |
-| `src/FeedPeek.PluginRuntime/Host/PluginHostServices.cs` | 新增可选 `IPluginCookieProvider`，支撑同步的 `Host.session.getCookieHeader` |
-| `src/FeedPeek.PluginRuntime/Host/PluginHttpBridge.cs` | 凭据域改为后缀匹配（对齐 AngelLive 的 `host == domain \|\| hasSuffix("." + domain)`） |
-| `src/FeedPeek.App/Services/FeedPeekPluginRuntime.cs` | 把凭据存储同时作为 cookie 源注入宿主服务 |
+| `tests/FeedPeek.Core.Tests/LiveParseDouyinProbeTests.cs` | 新增：M4 抖音联网探针（真实房间 + 请求审计 + 走 FeedPeek 校验层，按环境变量开关） |
+| `tests/FeedPeek.Core.Tests/LiveParseSignerProbeTests.cs` | 新增：抖音签名 bundle 探针（按环境变量开关） |
 
-验证结果：
+### A.2 验证结果
 
-- `tests/FeedPeek.Core.Tests`：**33/33 通过**，0 警告 0 错误。
+- `tests/FeedPeek.Core.Tests`：**34/34 通过**，0 警告 0 错误。
 - `src/FeedPeek.App`：x64 Debug **构建成功，0 警告 0 错误**。
-- M0 真实包探针：三个包全部转换、加载、初始化、握手成功（见 6.5）。
+- M0：三个真实包全部转换、加载、初始化（5–25ms）、握手、`source.create` 成功（6.5）。
+- M2：斗鱼真实房间联网通过，且「只留在播」验证通过（6.6）。
+- M4：抖音真实房间联网通过，`FeedPeek validation=ok(1 live items)`；同一房间连跑 3 次稳定（6.8.1、6.8.6）。
+- UI 手工验收（7.2）：用户已通过。
 
-> 探针是选择性执行的：只在设置了 `FEEDPEEK_LIVEPARSE_REFERENCES`（必要时再加 `FEEDPEEK_LIVEPARSE_DOUYIN_SIGNER=1`）时才会读外部目录，否则直接返回，不影响常规测试。报告写在 `%TEMP%/feedpeek-liveparse-probe.txt` 与 `%TEMP%/feedpeek-liveparse-signer.txt`。
+> 探针是选择性执行的：只在设置了 `FEEDPEEK_LIVEPARSE_REFERENCES`（联网探针再加 `FEEDPEEK_LIVEPARSE_NETWORK=1`；抖音签名探针用 `FEEDPEEK_LIVEPARSE_DOUYIN_SIGNER=1`；房间号可用 `FEEDPEEK_LIVEPARSE_DOUYIN_ROOM` 覆盖）时才会读外部目录，否则空跑。报告写在 `%TEMP%/feedpeek-liveparse-*.txt`。
 
-与计划书仍有差异、实现时按计划书为准的三点：
+### A.3 与计划书不一致的两处（实现为准）
+
+- 转换器的 host 清单对 `bilibili` / `douyin` / `douyu` 使用内置审计表，未知插件回退到从脚本字面量提取（计划书 4.2 未写明）；
+- 房间号解析支持完整直播间链接 / 逗号 / 空格 / 换行，自动去重，上限 20 个（计划书 4.4 已写规则，这里补充上限）。
+
+其余与 AngelLive 的对齐项和有意差异见 6.7.1、6.7.2；仍未实现的宿主能力见 A.4。
 
 - 适配脚本读取 `context.options.roomIds`（与 4.4 一致）；房间号解析支持链接/逗号/空格/换行、去重、上限 20；
-- `Host.http.request` 的 `cookieInject` / `signing` 直接抛 `HOST_FEATURE_UNSUPPORTED`，`Host.session.getCookieHeader` 直接返回空串（与 4.3 一致）；
-- 转换器的 host 清单对 `bilibili` / `douyin` / `douyu` 用的是内置审计表，未知插件回退到从脚本字面量提取（计划书 4.2 未写明这一点，此处补记）。
+### A.4 对照 AngelLive 后仍未实现的宿主能力（都不影响「钉房间 + 只看在播」）
 
-### 附录 A.2 对照 AngelLive 后仍未实现的项（都不影响「钉房间只看在播」）
-
-| 项 | AngelLive 位置 | 本计划是否需要 |
+| 项 | AngelLive 位置 | 现在是否需要 |
 |---|---|---|
-| 错误的关键词兜底映射（无 `LP_PLUGIN_ERROR:` 时按文本猜 `AUTH_REQUIRED`/`RATE_LIMITED`/`TIMEOUT`/`BLOCKED`/…） | `LiveParsePluginError.swift:125-162` | 不需要（目标插件都走 `Host.raise`），但复刻成本低，建议补 |
+| 错误的关键词兜底映射（无 `LP_PLUGIN_ERROR:` 时按文本猜 `AUTH_REQUIRED`/`RATE_LIMITED`/`TIMEOUT`/`BLOCKED` 等） | `LiveParsePluginError.swift:125-162` | 不需要（目标插件都走 `Host.raise`），复刻成本低，可作后续增强 |
 | `Host.ws.*`（WebSocket 桥，弹幕驱动用） | `HostWebSocketBridge.swift` | 不需要（不做弹幕） |
-| `Host.nativeStream.*` / `Host.stream.*`（原生播放流解析） | `NativeStreamBridge.swift` | 不需要（不做播放）；注意 AngelLive 自己的 provider 注册表也是空的 |
-| 登录事务（`authMode: "login_transaction"`、`seedTransactionCookies`、`LoginTransactionStore`） | `LoginTransactionStore.swift` | 不需要（我们只需要 host 自己的 WebView 抓 cookie 流程） |
+| `Host.nativeStream.*` / `Host.stream.*`（原生播放流解析） | `NativeStreamBridge.swift` | 不需要（不做播放）；注意 AngelLive 自己的 provider 注册表也是空数组 |
+| 登录事务（`authMode: "login_transaction"`、`seedTransactionCookies`、`LoginTransactionStore`） | `LoginTransactionStore.swift` | 不需要（只需要宿主自己的 WebView 抓 cookie 流程） |
 | 扫码登录挑战（6 个 `loginChallenge*` 方法 + manifest `loginChallenge`） | `PlatformLoginChallengeService.swift` | 不需要 |
 | 设备码 / apiToken / oauth 凭据种类（`credentialKinds`） | `PlatformDeviceAuthCoordinator.swift`、`PlatformAPITokenVault.swift` | 不需要 |
-| `getHomeFeed`（插件驱动首页：banners + sections，≤8 区块 × ≤20 房间） | `Home/PluginHomeFeed.swift` | 不需要，但它是 AngelLive 里最接近「一个来源=一组房间」的形态，若以后想做「分区/推荐」可参考 |
-| 方法级 v2→v1 回退的其余名字（`getRoomList`/`getPlayArgs`/`searchRooms`/`getRoomInfoFromShareCode`/`getDanmukuArgs`） | `LiveParseJSPlatformManager.swift:344-368` | 本计划只用到 `getRoomDetail`←`getLiveLastestInfo`；其余按需再补 |
-| 逗号分隔的 `capabilities` 对象解析（`{ feature: "available" }`）+ 缺失时扫描 JS 文本判能力 | `PlatformCapability.swift:228-289` | 不需要：FeedPeek 的能力由自己转换出的 manifest 决定 |
+| `getHomeFeed`（插件驱动首页：banners + sections，≤8 区块 × ≤20 房间） | `Home/PluginHomeFeed.swift` | 不需要；它是 AngelLive 里最接近「一个来源 = 一组房间」的形态，若以后做分区/推荐可参考 |
+| 方法级 v2→v1 回退的其余名字（`getRoomList` / `getPlayArgs` / `searchRooms` / `getRoomInfoFromShareCode` / `getDanmukuArgs`） | `LiveParseJSPlatformManager.swift:344-368` | 只实现了 `getRoomDetail` ← `getLiveLastestInfo`，其余按需再补 |
+| 顶层 `capabilities` 对象解析（`{ feature: "available" }`）+ 缺失时扫描入口 JS 文本判能力 | `PlatformCapability.swift:228-289` | 不需要：FeedPeek 的能力由自己转换出的 manifest 决定 |
 
 ## 附录 B：结论的数据来源
 
 - LiveParse 插件规范：`C:\Users\Q\Data\Projects\Live-Sources\PluginAuthoringGuide.md`
-- 三份插件清单：`references/bilibili-2.0.0/manifest.json`、`references/douyin-2.0.5/manifest.json`、`references/douyu-2.0.5/manifest.json`
-- Host API 调用点：各包 `index.js` 与 `lp_plugin_*_login.js`（例如哔哩登录 preload 第 75 行、抖音 `index.js` 第 1308 行）
-- host 清单：对三个 `index.js` 与两个 login preload 中 `https://` 字面量的静态提取
-- FeedPeek 侧约束：`docs/design/plugin-architecture.md` 与 `src/FeedPeek.PluginRuntime` / `src/FeedPeek.App` 源码
+- 三套插件包：`references/bilibili-2.0.0`、`references/douyin-2.0.5`、`references/douyu-2.0.5`（其中 bilibili 因 M3 取消仅作存档）
+- Host API 调用点：各包 `index.js` 与 `lp_plugin_*_login.js`（例如哔哩登录 preload 第 75 行、抖音 `index.js` 第 1308 行的 `Host.session.getCookieHeader`、第 1389 行的 `authMode` 条件）
+- host 清单：对三个 `index.js` 与两个 login preload 中 `https://` 字面量的静态提取，并逐平台审计成表
 - 原宿主实现（6.7 的对照基准）：`C:\Users\Q\Data\Projects\AngelLive`，重点文件 `Shared/AngelLiveCore/Sources/AngelLiveCore/LiveParse/Plugin/JSRuntime.swift`（Host 表面、错误协议、HTTP 信封、凭据注入）、`LiveParsePluginManifest.swift`（清单字段）、`LiveParsePluginManager.swift`（生命周期/凭据）、`LiveModel.swift:275-280`（`LiveState` 枚举）、`Models/PlatformHostBehavior.swift`（`playableLiveStates`）
+- FeedPeek 侧约束：`docs/design/plugin-architecture.md` 与 `src/FeedPeek.PluginRuntime` / `src/FeedPeek.App` 源码

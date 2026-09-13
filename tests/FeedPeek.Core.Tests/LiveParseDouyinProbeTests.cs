@@ -13,13 +13,15 @@ namespace FeedPeek.Core.Tests;
 /// <summary>
 /// M4 of <c>docs/design/liveparse-compat-plan.md</c>: drive the real Douyin package against the live
 /// service. M0 showed the bundled a_bogus SDK does not load in Jint, so this measures what the
-/// plugin's own classic signer can still achieve. Opt-in via FEEDPEEK_LIVEPARSE_NETWORK=1 plus
+/// plugin's own anonymous path achieves. Opt-in via FEEDPEEK_LIVEPARSE_NETWORK=1 plus
 /// FEEDPEEK_LIVEPARSE_REFERENCES; the room can be pinned with FEEDPEEK_LIVEPARSE_DOUYIN_ROOM.
+/// Two passes are reported: the shipping filter (liveStates=1) and an unfiltered diagnostic pass that
+/// exposes the platform's raw liveState, so "off air" can be told apart from "broken".
 /// </summary>
 public sealed class LiveParseDouyinProbeTests
 {
     private const string DouyinPackage = "douyin-2.0.5";
-    private const string FallbackRoom = "7247041636524377637";
+    private const string FallbackRoom = "180109685512";
 
     [Fact]
     public async Task Douyin_RealService_PinnedRoom()
@@ -56,12 +58,39 @@ public sealed class LiveParseDouyinProbeTests
         notes.Add("kept=" + string.Join("+", conversion.Manifest.PreloadScripts));
         notes.Add("dropped=" + conversion.DroppedPreloadScripts.Count);
 
-        var package = await new PluginManifestLoader().LoadAsync(converted.Path);
         var http = new RecordingHttpBridge(new PluginHttpBridge());
+        notes.Add("--- shipping filter (liveStates=1) ---");
+        notes.AddRange(await RunPassAsync(converted.Path, roomId, http, passLabel: null));
+
+        var manifestPath = Path.Combine(converted.Path, PluginManifestRules.FileName);
+        var manifestJson = await File.ReadAllTextAsync(manifestPath);
+        if (manifestJson.Contains("\"liveStates\":\"1\"", StringComparison.Ordinal))
+        {
+            await File.WriteAllTextAsync(
+                manifestPath,
+                manifestJson.Replace("\"liveStates\":\"1\"", "\"liveStates\":\"0,1,2,3\"", StringComparison.Ordinal));
+            notes.Add("--- diagnostic (liveStates=0,1,2,3) ---");
+            notes.AddRange(await RunPassAsync(converted.Path, roomId, http, passLabel: "diagnostic"));
+        }
+
+        notes.Add("requests=" + http.Entries.Count);
+        foreach (var entry in http.Entries)
+            notes.Add("  " + entry);
+        return notes;
+    }
+
+    private static async Task<List<string>> RunPassAsync(
+        string packageRoot,
+        string roomId,
+        RecordingHttpBridge http,
+        string? passLabel)
+    {
+        var lines = new List<string>();
+        var package = await new PluginManifestLoader().LoadAsync(packageRoot);
         await using var runtime = await JintPluginTransport.CreateAsync(package, CreateHost(http));
 
         var handshake = await InvokeAsync(runtime, package.Manifest.PluginId, PluginMethods.Handshake, new { });
-        notes.Add("handshake=" + (handshake.Success ? "ok" : handshake.Error?.Code + ": " + handshake.Error?.Message));
+        lines.Add("handshake=" + (handshake.Success ? "ok" : handshake.Error?.Code + ": " + handshake.Error?.Message));
 
         // FeedPeek's own validation layer: URL shape, unique creator keys, required names.
         var subscription = new FeedSubscription(
@@ -81,22 +110,24 @@ public sealed class LiveParseDouyinProbeTests
                 package.Manifest.PluginId,
                 new PluginClient(new TransportInvoker(runtime)));
             var items = await service.GetLiveAsync(subscription);
-            notes.Add("FeedPeek validation=ok(" + items.Count + " live items)");
+            lines.Add("FeedPeek validation=ok(" + items.Count + " live items)");
             foreach (var item in items.Take(3))
             {
-                notes.Add("  - " + item.DisplayName + " | " + (item.Title ?? "(no title)") + " | " + item.Url
+                var state = item.Metadata is not null && item.Metadata.TryGetValue("liveState", out var value)
+                    ? value
+                    : "(none)";
+                lines.Add("  - " + item.DisplayName + " | " + (item.Title ?? "(no title)") + " | " + item.Url
+                    + " | liveState=" + state
+                    + " | broadcasting=" + (state == "1" ? "yes" : "no")
                     + " | avatar=" + (item.AvatarUrl ?? "(none)"));
             }
         }
         catch (Exception ex)
         {
-            notes.Add("FeedPeek validation=FAILED " + ex.GetType().Name + ": " + ex.Message);
+            lines.Add("FeedPeek validation=FAILED " + ex.GetType().Name + ": " + ex.Message);
         }
 
-        notes.Add("requests=" + http.Entries.Count);
-        foreach (var entry in http.Entries)
-            notes.Add("  " + entry);
-        return notes;
+        return lines;
     }
 
     private static PluginHostServices CreateHost(IPluginHttpBridge http)
@@ -142,13 +173,18 @@ public sealed class LiveParseDouyinProbeTests
             {
                 var response = await inner.SendAsync(manifest, context, request, cancellationToken);
                 var body = (response.Body ?? string.Empty).Replace("\n", " ", StringComparison.Ordinal);
-                Entries.Add(request.Method + " " + Shorten(request.Url, 150)
-                    + " -> " + response.Status + " body=" + Shorten(body, 120));
+                if (Entries.Count < 12)
+                {
+                    Entries.Add(request.Method + " " + Shorten(request.Url, 130)
+                        + " -> " + response.Status + " body=" + Shorten(body, 90));
+                }
+
                 return response;
             }
             catch (Exception ex)
             {
-                Entries.Add(request.Method + " " + Shorten(request.Url, 150) + " -> FAILED " + ex.GetType().Name + ": " + ex.Message);
+                if (Entries.Count < 12)
+                    Entries.Add(request.Method + " " + Shorten(request.Url, 130) + " -> FAILED " + ex.GetType().Name);
                 throw;
             }
         }

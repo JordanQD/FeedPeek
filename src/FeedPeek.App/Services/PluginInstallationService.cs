@@ -54,6 +54,31 @@ internal sealed class PluginInstallationService
         "FeedPeek",
         "plugin-installations.v1.json");
 
+    /// <summary>
+    /// Cheap change token for the plugin install state (state file timestamp plus the plugin directory
+    /// set and their timestamps). Install, enable/disable and uninstall all move one of these, so a
+    /// session can detect a change without re-hashing every plugin package.
+    /// </summary>
+    public string ComputeChangeToken()
+    {
+        var builder = new System.Text.StringBuilder();
+        if (File.Exists(StatePath))
+            builder.Append(File.GetLastWriteTimeUtc(StatePath).Ticks);
+        if (Directory.Exists(UserRoot))
+        {
+            foreach (var directory in Directory.EnumerateDirectories(UserRoot)
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+            {
+                builder.Append('|')
+                    .Append(Path.GetFileName(directory))
+                    .Append(':')
+                    .Append(Directory.GetLastWriteTimeUtc(directory).Ticks);
+            }
+        }
+
+        return builder.ToString();
+    }
+
     public async Task<PluginLoadConfiguration> GetLoadConfigurationAsync(
         CancellationToken cancellationToken = default)
     {
