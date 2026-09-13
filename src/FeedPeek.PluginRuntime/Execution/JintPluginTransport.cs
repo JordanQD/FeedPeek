@@ -1,4 +1,5 @@
 using FeedPeek.PluginContracts.Dtos;
+using FeedPeek.PluginContracts.Manifest;
 using FeedPeek.PluginContracts.Protocol;
 using FeedPeek.PluginRuntime.Host;
 using FeedPeek.PluginRuntime.Manifest;
@@ -82,11 +83,13 @@ public sealed class JintPluginTransport : IPluginTransport
     private readonly PluginPackage _package;
     private readonly PluginHostServices _host;
     private readonly PluginRuntimeOptions _options;
+    private readonly bool _isLiveParseDialect;
     private readonly Engine _engine;
     private readonly SemaphoreSlim _invocationGate;
     private readonly CancellationTokenSource _lifetime = new();
     private readonly CancellationConstraint? _cancellationConstraint;
     private PluginInvocationScope? _activeScope;
+    private string _cookieHeader = string.Empty;
     private int _disposeState;
     private int _faulted;
 
@@ -95,18 +98,43 @@ public sealed class JintPluginTransport : IPluginTransport
         _package = package;
         _host = host;
         _options = options;
-        _invocationGate = new SemaphoreSlim(options.MaxConcurrentInvocations, options.MaxConcurrentInvocations);
+        _isLiveParseDialect = string.Equals(
+            PluginManifestRules.ResolveRuntime(package.Manifest),
+            PluginManifestRules.LiveParseRuntime,
+            StringComparison.Ordinal);
+        if (_isLiveParseDialect)
+        {
+            // The LiveParse host applies no execution budget at all, and a pinned-room source fans out
+            // one HTTP call per room in parallel, so this dialect gets more headroom than the native
+            // contract allows for.
+            _options = options with
+            {
+                InvocationTimeout = TimeSpan.FromSeconds(Math.Max(options.InvocationTimeout.TotalSeconds, 60)),
+                PromiseTimeout = TimeSpan.FromSeconds(Math.Max(options.PromiseTimeout.TotalSeconds, 60)),
+                // Douyin resolves an anonymous room by parsing a ~1 MB HTML page, which costs orders
+                // of magnitude more statements than the native contract's 250k. The invocation timeout
+                // stays the real bound on runaway scripts.
+                MaxStatements = Math.Max(options.MaxStatements, 500_000_000),
+                // Parsing Douyin's ~1 MB room page also holds the raw HTML, regex intermediates and the
+                // decoded JSON, which repeatedly tripped the native 64 MB budget.
+                MemoryLimitBytes = Math.Max(options.MemoryLimitBytes, 256L * 1024 * 1024),
+            };
+        }
+        // The engine must be configured from the effective options, not the constructor argument:
+        // the dialect overrides above (longer timeouts, larger statement budget) only exist on _options.
+        var effective = _options;
+        _invocationGate = new SemaphoreSlim(effective.MaxConcurrentInvocations, effective.MaxConcurrentInvocations);
         _engine = new Engine(engineOptions =>
         {
             engineOptions.Strict();
             engineOptions.ExperimentalFeatures = ExperimentalFeature.TaskInterop;
-            engineOptions.LimitMemory(options.MemoryLimitBytes);
-            engineOptions.TimeoutInterval(options.InvocationTimeout);
-            engineOptions.MaxStatements(options.MaxStatements);
+            engineOptions.LimitMemory(effective.MemoryLimitBytes);
+            engineOptions.TimeoutInterval(effective.InvocationTimeout);
+            engineOptions.MaxStatements(effective.MaxStatements);
             engineOptions.CancellationToken(_lifetime.Token);
-            engineOptions.Constraints.MaxRecursionDepth = options.MaxRecursionDepth;
+            engineOptions.Constraints.MaxRecursionDepth = effective.MaxRecursionDepth;
             engineOptions.Constraints.StackOverflowGuard = true;
-            engineOptions.Constraints.PromiseTimeout = options.PromiseTimeout;
+            engineOptions.Constraints.PromiseTimeout = effective.PromiseTimeout;
         });
         _cancellationConstraint = _engine.Constraints.Find<CancellationConstraint>();
     }
@@ -209,6 +237,16 @@ public sealed class JintPluginTransport : IPluginTransport
             {
                 return SerializeFailure(request.RequestId, "HOST_CONTEXT_INVALID", "The host returned an invalid authoritative invocation context.");
             }
+            if (_isLiveParseDialect)
+            {
+                // Host.session.getCookieHeader is synchronous in the LiveParse dialect, so the
+                // credential for this invocation is resolved before the script starts.
+                _cookieHeader = await LoadCookieHeaderAsync(
+                    request.PluginId,
+                    authorizedContext.CredentialProfileId,
+                    linked.Token);
+            }
+
             var invocationScope = new PluginInvocationScope(authorizedContext, linked.Token);
             _activeScope = invocationScope;
             _cancellationConstraint?.Reset(linked.Token);
@@ -296,7 +334,11 @@ public sealed class JintPluginTransport : IPluginTransport
         _cancellationConstraint?.Reset(linked.Token);
 
         InstallHostDelegates();
-        _engine.Execute(HostBootstrapScript, "feedpeek-host.js");
+        _engine.Execute(
+            _isLiveParseDialect
+                ? LiveParseDialect.BuildBootstrapScript(BuildDialectConfigJson())
+                : HostBootstrapScript,
+            "feedpeek-host.js");
 
         long totalBytes = 0;
         foreach (var relativePath in (_package.Manifest.PreloadScripts ?? []).Append(_package.Manifest.Entry))
@@ -309,6 +351,13 @@ public sealed class JintPluginTransport : IPluginTransport
             _engine.Execute(script, relativePath);
         }
 
+        if (_isLiveParseDialect)
+        {
+            _engine.Execute(
+                LiveParseDialect.BuildAdapterScript(BuildDialectConfigJson()),
+                "feedpeek-liveparse-adapter.js");
+        }
+
         var exportType = _engine.Evaluate("typeof globalThis.FeedPeekPlugin").AsString();
         if (exportType != "object")
             throw new PluginManifestException("PLUGIN_EXPORT_MISSING", "Plugin must export globalThis.FeedPeekPlugin.");
@@ -319,9 +368,108 @@ public sealed class JintPluginTransport : IPluginTransport
             throw new PluginManifestException("PLUGIN_HANDLE_MISSING", "Plugin must export a handle(request) function.");
     }
 
+    private async Task<string> LoadCookieHeaderAsync(
+        string pluginId,
+        string? credentialProfileId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(credentialProfileId))
+            return string.Empty;
+        try
+        {
+            return await _host.CookieProvider.GetCookieHeaderAsync(
+                pluginId,
+                credentialProfileId,
+                CookieScopeUri(),
+                cancellationToken).ConfigureAwait(false) ?? string.Empty;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            // A missing or unreadable credential store must not fail the plugin call itself.
+            return string.Empty;
+        }
+    }
+
+    private Uri CookieScopeUri()
+    {
+        var domain = _package.Manifest.Auth?.CookieDomains.FirstOrDefault(
+            value => !string.IsNullOrWhiteSpace(value));
+        return domain is null ? new Uri("https://localhost/") : new Uri("https://" + domain + "/");
+    }
+
+    private string ReadCookieHeader(string platformId)
+    {
+        _ = RequireActiveScope();
+        if (string.IsNullOrEmpty(_cookieHeader))
+            return string.Empty;
+        return IsOwnPlatformId(platformId) ? _cookieHeader : string.Empty;
+    }
+
+    /// <summary>
+    /// Mirrors the host rule that a plugin can only read its own credential: the requested platform id
+    /// may be empty, the plugin id itself, or its trailing segment (<c>liveparse.douyin</c> to
+    /// <c>douyin</c>, which is how the bundled plugins name themselves).
+    /// </summary>
+    private bool IsOwnPlatformId(string? platformId)
+    {
+        var requested = platformId?.Trim() ?? string.Empty;
+        if (requested.Length == 0)
+            return true;
+        if (string.Equals(requested, PluginId, StringComparison.OrdinalIgnoreCase))
+            return true;
+        var separator = PluginId.LastIndexOf('.');
+        return separator > 0
+            && string.Equals(requested, PluginId[(separator + 1)..], StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ComputeBase64Decode(string input)
+    {
+        try
+        {
+            var decoded = Uri.UnescapeDataString(input ?? string.Empty);
+            var bytes = Convert.FromBase64String(decoded);
+            return new UTF8Encoding(false, true).GetString(bytes);
+        }
+        catch (Exception exception) when (exception is FormatException
+            or DecoderFallbackException
+            or UriFormatException
+            or ArgumentException)
+        {
+            return string.Empty;
+        }
+    }
+
+    private string BuildDialectConfigJson()
+    {
+        var manifest = _package.Manifest;
+        var options = manifest.RuntimeOptions is null
+            ? new Dictionary<string, string>(StringComparer.Ordinal)
+            : new Dictionary<string, string>(manifest.RuntimeOptions, StringComparer.Ordinal);
+        var json = JsonSerializer.Serialize(
+            new
+            {
+                pluginId = manifest.PluginId,
+                displayName = manifest.DisplayName,
+                apiVersion = manifest.ApiVersion,
+                capabilities = manifest.Capabilities,
+                runtimeOptions = options,
+                cookieDomains = manifest.Auth?.CookieDomains ?? [],
+            },
+            PluginJson.SerializerOptions);
+        // The default JavaScriptEncoder escapes every non-ASCII character (including the
+        // U+2028/U+2029 line separators), so the JSON text is always a valid JS literal.
+        return json;
+    }
+
     private void InstallHostDelegates()
     {
         _engine.SetValue("__feedpeekHttp", new Func<string, Task<string>>(BeginHttpCall));
+        _engine.SetValue("__feedpeekCookieHeader", new Func<string, string>(ReadCookieHeader));
+        _engine.SetValue("__feedpeekBase64Decode", new Func<string, string>(ComputeBase64Decode));
         _engine.SetValue("__feedpeekCredential", new Func<string, string, Task<string>>(BeginCredentialCall));
         _engine.SetValue("__feedpeekLog", new Action<string, string>(WriteLog));
         _engine.SetValue("__feedpeekMd5", new Func<string, string>(ComputeMd5));
@@ -343,7 +491,19 @@ public sealed class JintPluginTransport : IPluginTransport
             var request = JsonSerializer.Deserialize<HostHttpRequest>(requestJson, PluginJson.SerializerOptions)
                 ?? throw new PluginHostBridgeException("HTTP_REQUEST_INVALID", "Host.http.request requires an options object.");
             var result = await _host.Http.SendAsync(_package.Manifest, scope.Context, request, scope.Token);
-            return SerializeBridgeSuccess(result);
+            var isText = string.Equals(result.BodyEncoding, "utf8", StringComparison.OrdinalIgnoreCase);
+            // The host always exposes the raw bytes as base64 in addition to bodyText.
+            return SerializeBridgeSuccess(new
+            {
+                status = result.Status,
+                finalUrl = result.FinalUrl,
+                headers = result.Headers,
+                body = result.Body,
+                bodyEncoding = result.BodyEncoding,
+                bodyBase64 = isText
+                    ? Convert.ToBase64String(Encoding.UTF8.GetBytes(result.Body ?? string.Empty))
+                    : result.Body,
+            });
         }
         catch (Exception ex)
         {
@@ -471,10 +631,14 @@ public sealed class JintPluginTransport : IPluginTransport
             "for(const key of Object.keys(value))validate(value[key],seen);}seen.delete(value);};",
             "try{const result=await globalThis.FeedPeekPlugin.handle(request);validate(result,new WeakSet());",
             "return JSON.stringify({requestId:request.requestId,success:true,result});}",
-            "catch(error){const raw=error&&typeof error==='object'?error:{};const rawContext=raw.context;",
+            "catch(error){const raw=error&&typeof error==='object'?error:{};",
+            "let code=raw.code,message=raw.message,retryable=raw.retryable===true,rawContext=raw.context;",
+            "const marker='LP_PLUGIN_ERROR:';const text=String(raw.message||'');const at=text.indexOf(marker);",
+            "if(at>=0){try{const parsed=JSON.parse(text.slice(at+marker.length));",
+            "code=parsed.code;message=parsed.message;retryable=parsed.retryable===true;rawContext=parsed.context;}catch(ignored){}}",
             "const context=rawContext&&typeof rawContext==='object'?Object.fromEntries(Object.entries(rawContext).map(([k,v])=>[k,String(v)])):null;",
-            "return JSON.stringify({requestId:request.requestId,success:false,error:{code:String(raw.code||'PLUGIN_ERROR'),",
-            "message:String(raw.message||error||'Plugin error'),retryable:raw.retryable===true,context}});}})()"
+            "return JSON.stringify({requestId:request.requestId,success:false,error:{code:String(code||'PLUGIN_ERROR'),",
+            "message:String(message||error||'Plugin error'),retryable,context}});}})()"
         );
     }
 

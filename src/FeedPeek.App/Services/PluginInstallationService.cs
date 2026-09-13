@@ -127,7 +127,8 @@ internal sealed class PluginInstallationService
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceDirectory);
-        var sourcePackage = await _loader.LoadAsync(sourceDirectory, cancellationToken: cancellationToken)
+        using var prepared = await PrepareSourceAsync(sourceDirectory, cancellationToken).ConfigureAwait(false);
+        var sourcePackage = await _loader.LoadAsync(prepared.Path, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -266,6 +267,63 @@ internal sealed class PluginInstallationService
         finally
         {
             _gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// A LiveParse plugin folder has no <c>plugin.json</c>; it is converted into a FeedPeek package in
+    /// a temporary folder so the user can install it straight from its original directory.
+    /// </summary>
+    private async Task<PreparedSource> PrepareSourceAsync(
+        string sourceDirectory,
+        CancellationToken cancellationToken)
+    {
+        if (!LiveParsePackageConverter.CanConvert(sourceDirectory))
+            return new PreparedSource(sourceDirectory, null);
+
+        var temporary = Path.Combine(
+            Path.GetTempPath(),
+            "FeedPeek.PluginConversion",
+            Guid.NewGuid().ToString("N"));
+        try
+        {
+            var conversion = await LiveParsePackageConverter
+                .TryConvertAsync(sourceDirectory, temporary, cancellationToken)
+                .ConfigureAwait(false);
+            if (conversion is null)
+                throw new InvalidOperationException("该文件夹不是可转换的 LiveParse 插件包。");
+            return new PreparedSource(temporary, temporary);
+        }
+        catch
+        {
+            DeleteDirectoryIfExists(temporary);
+            throw;
+        }
+    }
+
+    private static void DeleteDirectoryIfExists(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+                Directory.Delete(path, recursive: true);
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+    }
+
+    private sealed class PreparedSource(string path, string? temporaryRoot) : IDisposable
+    {
+        public string Path { get; } = path;
+
+        public void Dispose()
+        {
+            if (temporaryRoot is not null)
+                DeleteDirectoryIfExists(temporaryRoot);
         }
     }
 

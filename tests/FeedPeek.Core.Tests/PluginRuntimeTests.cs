@@ -309,8 +309,141 @@ public sealed class PluginRuntimeTests
         Assert.Equal("safe", values["message"]);
     }
 
+    [Fact]
+    public async Task ManifestLoader_RejectsUnsupportedRuntime()
+    {
+        using var temporary = CopyFixturePlugin();
+        var manifestPath = Path.Combine(temporary.Path, PluginManifestRules.FileName);
+        var node = JsonNode.Parse(await File.ReadAllTextAsync(manifestPath))!.AsObject();
+        node["runtime"] = "unknown-v1";
+        await File.WriteAllTextAsync(manifestPath, node.ToJsonString());
+
+        var error = await Assert.ThrowsAsync<PluginManifestException>(
+            () => new PluginManifestLoader().LoadAsync(temporary.Path));
+        Assert.Equal("RUNTIME_UNSUPPORTED", error.Code);
+    }
+
+    [Fact]
+    public async Task ManifestLoader_RequiresALiveViewForLiveParseRuntime()
+    {
+        using var temporary = CopyFixturePlugin(LiveFixturePluginRoot);
+        var manifestPath = Path.Combine(temporary.Path, PluginManifestRules.FileName);
+        var node = JsonNode.Parse(await File.ReadAllTextAsync(manifestPath))!.AsObject();
+        node["capabilities"] = new JsonArray("feed.updates", "source.configuration");
+        await File.WriteAllTextAsync(manifestPath, node.ToJsonString());
+
+        var error = await Assert.ThrowsAsync<PluginManifestException>(
+            () => new PluginManifestLoader().LoadAsync(temporary.Path));
+        Assert.Equal("RUNTIME_VIEW_UNSUPPORTED", error.Code);
+    }
+
+    [Fact]
+    public async Task LiveParsePlugin_ServesLiveRoomsThroughTheDialect()
+    {
+        var package = await new PluginManifestLoader().LoadAsync(LiveFixturePluginRoot);
+        Assert.Equal(PluginManifestRules.LiveParseRuntime, PluginManifestRules.ResolveRuntime(package.Manifest));
+
+        var http = new RecordingLiveHttpBridge();
+        await using var runtime = await JintPluginTransport.CreateAsync(package, CreateHost(http: http));
+
+        var handshake = await InvokeAsync(runtime, LivePluginId, PluginMethods.Handshake, new { });
+        Assert.True(handshake.Success);
+        Assert.Equal(LivePluginId, handshake.Result.GetProperty("providerId").GetString());
+
+        var created = await InvokeAsync(runtime, LivePluginId, PluginMethods.SourceCreate, new
+        {
+            context = LiveInvocationContext(),
+            displayName = "Mock category",
+            options = new { categoryId = "100" },
+        });
+        Assert.True(created.Success);
+        var definition = created.Result.Deserialize<PluginSourceDefinition>(PluginJson.SerializerOptions)!;
+        Assert.Equal(LivePluginId, definition.ProviderId);
+        Assert.Equal("live", Assert.Single(definition.Feeds).FeedId);
+
+        var live = await InvokeAsync(runtime, LivePluginId, PluginMethods.FeedGetLive, new
+        {
+            context = LiveInvocationContext() with
+            {
+                Options = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    // A pasted link and a duplicate id fold into unique pinned rooms; 9999 is a
+                    // re-broadcast and 7777 is offline, so both must be filtered out.
+                    ["roomIds"] = "12345, https://live.example.test/room/9999, 12345, 7777",
+                },
+            },
+        });
+        Assert.True(live.Success, live.Error?.Code + ": " + live.Error?.Message);
+        var room = Assert.Single(live.Result.Deserialize<PluginLivePage>(PluginJson.SerializerOptions)!.Items);
+        Assert.Equal("12345", room.CreatorKey);
+        Assert.Equal("Streamer", room.DisplayName);
+        Assert.Equal("Mock stream", room.Title);
+        Assert.Equal("https://live.example.test/room/12345", room.Url);
+        Assert.Equal("https://i0.example.test/face.jpg", room.AvatarUrl);
+        Assert.Equal("https://i0.example.test/cover.jpg", room.CoverUrl);
+        Assert.Equal(12_000, room.ViewerCount);
+
+        // The LiveParse call shape was translated into FeedPeek host requests: seconds to
+        // milliseconds, headers passed through, one detail request per pinned room.
+        Assert.Equal(3, http.RequestedUrls.Count);
+        Assert.Contains("https://live.example.test/room?id=12345", http.RequestedUrls);
+        Assert.Contains("https://live.example.test/room?id=9999", http.RequestedUrls);
+        Assert.Contains("https://live.example.test/room?id=7777", http.RequestedUrls);
+        Assert.Equal(20_000, http.LastRequest?.TimeoutMs);
+        Assert.Equal("mock-agent", http.LastRequest?.Headers?["User-Agent"]);
+
+        var missingOption = await InvokeAsync(runtime, LivePluginId, PluginMethods.FeedGetLive, new
+        {
+            context = LiveInvocationContext(),
+        });
+        Assert.False(missingOption.Success);
+        Assert.Equal("SOURCE_OPTION_MISSING", missingOption.Error?.Code);
+
+        // A source whose rooms are all off air succeeds with an empty strip instead of showing them.
+        var offAir = await InvokeAsync(runtime, LivePluginId, PluginMethods.FeedGetLive, new
+        {
+            context = LiveInvocationContext() with
+            {
+                Options = new Dictionary<string, string>(StringComparer.Ordinal) { ["roomIds"] = "9999,7777" },
+            },
+        });
+        Assert.True(offAir.Success);
+        Assert.Empty(offAir.Result.Deserialize<PluginLivePage>(PluginJson.SerializerOptions)!.Items);
+
+        var pluginFailure = await InvokeAsync(runtime, LivePluginId, PluginMethods.FeedGetLive, new
+        {
+            context = LiveInvocationContext() with
+            {
+                Options = new Dictionary<string, string>(StringComparer.Ordinal) { ["roomIds"] = "404" },
+            },
+        });
+        Assert.False(pluginFailure.Success);
+        Assert.Equal("MOCK_LIVE_FAILURE", pluginFailure.Error?.Code);
+
+        var completed = await InvokeAsync(runtime, LivePluginId, PluginMethods.AuthComplete, new
+        {
+            context = LiveInvocationContext(),
+        });
+        Assert.Equal(
+            "authenticated",
+            completed.Result.Deserialize<PluginAuthState>(PluginJson.SerializerOptions)!.State);
+
+        var validated = await InvokeAsync(runtime, LivePluginId, PluginMethods.AuthValidate, new
+        {
+            context = LiveInvocationContext(),
+        });
+        Assert.Equal(
+            "authenticated",
+            validated.Result.Deserialize<PluginAuthState>(PluginJson.SerializerOptions)!.State);
+    }
+
+    private const string LivePluginId = "mock.live";
+
     private static string FixturePluginRoot
         => Path.Combine(AppContext.BaseDirectory, "Fixtures", "Plugins", "mock.feed");
+
+    private static string LiveFixturePluginRoot
+        => Path.Combine(AppContext.BaseDirectory, "Fixtures", "Plugins", "mock.live");
 
     private static object FeedPayload(string? cursor, int pageSize) => new
     {
@@ -327,6 +460,14 @@ public sealed class PluginRuntimeTests
         "credential-01",
         null);
 
+    private static PluginInvocationContext LiveInvocationContext() => new(
+        "subscription-live",
+        LivePluginId,
+        "source-01",
+        "live",
+        "credential-01",
+        null);
+
     private static PluginHostServices CreateHost(
         IPluginHttpBridge? http = null,
         IPluginCredentialStore? credentials = null)
@@ -336,8 +477,16 @@ public sealed class PluginRuntimeTests
             NullPluginLogSink.Instance,
             new FixedInvocationAuthorizer());
 
+    private static Task<PluginResponseEnvelope<JsonElement>> InvokeAsync(
+        IPluginTransport transport,
+        string method,
+        object payload,
+        CancellationToken cancellationToken = default)
+        => InvokeAsync(transport, "mock.feed", method, payload, cancellationToken);
+
     private static async Task<PluginResponseEnvelope<JsonElement>> InvokeAsync(
         IPluginTransport transport,
+        string pluginId,
         string method,
         object payload,
         CancellationToken cancellationToken = default)
@@ -345,7 +494,7 @@ public sealed class PluginRuntimeTests
         var request = new PluginRequestEnvelope<JsonElement>(
             Guid.NewGuid().ToString("N"),
             PluginProtocolVersion.Current,
-            "mock.feed",
+            pluginId,
             method,
             JsonSerializer.SerializeToElement(payload, PluginJson.SerializerOptions));
         var requestJson = JsonSerializer.Serialize(request, PluginJson.SerializerOptions);
@@ -354,9 +503,12 @@ public sealed class PluginRuntimeTests
     }
 
     private static TemporaryDirectory CopyFixturePlugin()
+        => CopyFixturePlugin(FixturePluginRoot);
+
+    private static TemporaryDirectory CopyFixturePlugin(string source)
     {
         var temporary = TemporaryDirectory.Create();
-        CopyDirectory(FixturePluginRoot, temporary.Path);
+        CopyDirectory(source, temporary.Path);
         return temporary;
     }
 
@@ -397,6 +549,41 @@ public sealed class PluginRuntimeTests
                     null)),
             }, PluginJson.SerializerOptions);
             return new HostHttpResponse(200, request.Url, new Dictionary<string, string>(), body, "utf8");
+        }
+    }
+
+    private sealed class RecordingLiveHttpBridge : IPluginHttpBridge
+    {
+        public List<string> RequestedUrls { get; } = [];
+
+        public HostHttpRequest? LastRequest { get; private set; }
+
+        public Task<HostHttpResponse> SendAsync(
+            PluginManifest manifest,
+            PluginHostContext context,
+            HostHttpRequest request,
+            CancellationToken cancellationToken)
+        {
+            RequestedUrls.Add(request.Url);
+            LastRequest = request;
+            var roomId = request.Url.Split("id=", StringSplitOptions.RemoveEmptyEntries).Last();
+            var body = JsonSerializer.Serialize(new
+            {
+                userName = roomId == "12345" ? "Streamer" : "Room " + roomId,
+                roomTitle = roomId == "12345" ? "Mock stream" : "Idle room",
+                roomCover = roomId == "12345" ? "http://i0.example.test/cover.jpg" : null,
+                userHeadImg = roomId == "12345" ? "//i0.example.test/face.jpg" : null,
+                userId = "999",
+                // 9999 is a re-broadcast and 7777 is offline, so neither may reach the live strip.
+                liveState = roomId == "12345" ? "1" : roomId == "9999" ? "2" : "0",
+                liveWatchedCount = "1.2万",
+            }, PluginJson.SerializerOptions);
+            return Task.FromResult(new HostHttpResponse(
+                200,
+                request.Url,
+                new Dictionary<string, string>(),
+                body,
+                "utf8"));
         }
     }
 

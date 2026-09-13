@@ -40,7 +40,7 @@ public sealed class PluginHttpBridge : IPluginHttpBridge, IDisposable
         if (!Uri.TryCreate(request.Url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
             throw new PluginHostBridgeException("HTTP_URL_INVALID", "Plugin HTTP requests require an absolute HTTPS URL.");
         EnsureHostAllowed(uri, manifest.Network.AllowedHosts, "HTTP_HOST_FORBIDDEN");
-        ValidateHeaders(request.Headers);
+        ValidateHeaders(request.Headers, PluginManifestRules.ResolveRuntime(manifest));
 
         var maxBytes = Math.Clamp(request.MaxResponseBytes ?? DefaultMaxResponseBytes, 1, AbsoluteMaxResponseBytes);
         var timeout = TimeSpan.FromMilliseconds(Math.Clamp(request.TimeoutMs ?? 15_000, 100, 60_000));
@@ -59,7 +59,7 @@ public sealed class PluginHttpBridge : IPluginHttpBridge, IDisposable
             AddHeaders(message, request.Headers);
 
             if (!string.IsNullOrWhiteSpace(context.CredentialProfileId)
-                && manifest.Auth?.CookieDomains.Contains(currentUri.IdnHost, StringComparer.OrdinalIgnoreCase) == true)
+                && IsCredentialDomain(manifest.Auth?.CookieDomains, currentUri.IdnHost))
             {
                 var cookie = await _cookies.GetCookieHeaderAsync(
                     context.PluginId,
@@ -117,16 +117,55 @@ public sealed class PluginHttpBridge : IPluginHttpBridge, IDisposable
 
     public void Dispose() => _client.Dispose();
 
+    /// <summary>
+    /// A declared credential domain also covers its subdomains, matching the LiveParse host rule
+    /// (<c>host == domain || host.hasSuffix("." + domain)</c>). Request routing still uses the exact
+    /// <c>network.allowedHosts</c> list.
+    /// </summary>
+    private static bool IsCredentialDomain(IReadOnlyList<string>? cookieDomains, string host)
+    {
+        if (cookieDomains is null || host.Length == 0)
+            return false;
+        foreach (var domain in cookieDomains)
+        {
+            if (string.IsNullOrWhiteSpace(domain))
+                continue;
+            if (string.Equals(host, domain, StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (host.Length > domain.Length
+                && host.EndsWith("." + domain, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static void EnsureHostAllowed(Uri uri, IEnumerable<string> allowedHosts, string errorCode)
     {
         if (!allowedHosts.Contains(uri.IdnHost, StringComparer.OrdinalIgnoreCase))
             throw new PluginHostBridgeException(errorCode, "The requested host is not declared by the plugin manifest.");
     }
 
-    private static void ValidateHeaders(IReadOnlyDictionary<string, string>? headers)
+    /// <summary>
+    /// The LiveParse host lets a plugin set its own <c>Cookie</c>/<c>Authorization</c> headers; it only
+    /// strips them for credential-bearing requests (which the dialect already does before calling here).
+    /// Anonymous Douyin calls depend on that: they carry a self-managed ttwid cookie.
+    /// </summary>
+    private static readonly HashSet<string> LiveParseCredentialHeaders = new(StringComparer.OrdinalIgnoreCase)
+        { "Cookie", "Cookie2", "Authorization" };
+
+    private static void ValidateHeaders(IReadOnlyDictionary<string, string>? headers, string runtime)
     {
+        var allowsCredentialHeaders = string.Equals(
+            runtime,
+            PluginManifestRules.LiveParseRuntime,
+            StringComparison.Ordinal);
         foreach (var name in headers?.Keys ?? [])
         {
+            if (allowsCredentialHeaders && LiveParseCredentialHeaders.Contains(name))
+                continue;
             if (ForbiddenHeaders.Contains(name)
                 || name.StartsWith("Proxy-", StringComparison.OrdinalIgnoreCase)
                 || name.StartsWith("Sec-", StringComparison.OrdinalIgnoreCase))

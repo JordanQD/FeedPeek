@@ -50,7 +50,8 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
             _httpBridge,
             _credentials,
             NullPluginLogSink.Instance,
-            _invocations));
+            _invocations,
+            _credentials));
         _client = new PluginClient(new PluginRuntimeCatalogInvoker(_catalog));
     }
 

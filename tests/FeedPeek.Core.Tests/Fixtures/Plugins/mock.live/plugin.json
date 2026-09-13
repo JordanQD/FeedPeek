@@ -1,0 +1,60 @@
+{
+  "pluginId": "mock.live",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "displayName": "Mock Live",
+  "entry": "index.js",
+  "preloadScripts": [
+    "login.js"
+  ],
+  "capabilities": [
+    "feed.live",
+    "account.auth",
+    "source.configuration"
+  ],
+  "auth": {
+    "required": false,
+    "kind": "webview-cookie",
+    "cookieDomains": [
+      "live.example.test"
+    ],
+    "authSignalCookies": [
+      "SESSION"
+    ],
+    "exposedCookieNames": [],
+    "loginFlow": null
+  },
+  "network": {
+    "allowedHosts": [
+      "live.example.test"
+    ],
+    "allowRedirectHosts": []
+  },
+  "views": [
+    {
+      "id": "live",
+      "kind": "live",
+      "title": "Live"
+    }
+  ],
+  "sourceConfiguration": {
+    "fields": [
+      {
+        "key": "roomIds",
+        "label": "Rooms",
+        "kind": "text",
+        "required": true,
+        "placeholder": null,
+        "defaultValue": null
+      }
+    ],
+    "defaultFeedIds": [
+      "live"
+    ]
+  },
+  "runtime": "liveparse-v1",
+  "runtimeOptions": {
+    "roomUrlTemplate": "https://live.example.test/room/{roomId}",
+    "liveStates": "1"
+  }
+}

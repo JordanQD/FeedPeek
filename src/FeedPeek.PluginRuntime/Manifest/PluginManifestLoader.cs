@@ -132,11 +132,43 @@ public sealed partial class PluginManifestLoader
         }
 
         ValidateSourceConfiguration(manifest);
+        ValidateRuntime(manifest);
 
         foreach (var file in EnumeratePackageFiles(root))
         {
             if (ForbiddenExtensions.Contains(Path.GetExtension(file)))
                 throw new PluginManifestException("EXECUTABLE_CONTENT_FORBIDDEN", $"Executable content is not allowed: {Path.GetFileName(file)}");
+        }
+    }
+
+    private static void ValidateRuntime(PluginManifest manifest)
+    {
+        var runtime = PluginManifestRules.ResolveRuntime(manifest);
+        if (!PluginManifestRules.SupportedRuntimes.Contains(runtime))
+            throw new PluginManifestException("RUNTIME_UNSUPPORTED", $"Unsupported plugin runtime: {runtime}");
+
+        if (manifest.RuntimeOptions is not null)
+        {
+            if (manifest.RuntimeOptions.Count > 16)
+                throw new PluginManifestException("RUNTIME_OPTIONS_INVALID", "runtimeOptions may contain at most 16 entries.");
+            foreach (var (key, value) in manifest.RuntimeOptions)
+            {
+                if (string.IsNullOrWhiteSpace(key) || key.Length > 64)
+                    throw new PluginManifestException("RUNTIME_OPTIONS_INVALID", "runtimeOptions keys must be non-empty and no longer than 64 characters.");
+                if (value is null || value.Length > 2048)
+                    throw new PluginManifestException("RUNTIME_OPTIONS_INVALID", $"runtimeOptions value for '{key}' is missing or too long.");
+            }
+        }
+
+        if (string.Equals(runtime, PluginManifestRules.LiveParseRuntime, StringComparison.Ordinal))
+        {
+            if (!manifest.Capabilities.Contains("feed.live", StringComparer.Ordinal)
+                || !manifest.Views.Any(view => string.Equals(view.Kind, "live", StringComparison.Ordinal)))
+            {
+                throw new PluginManifestException(
+                    "RUNTIME_VIEW_UNSUPPORTED",
+                    "The liveparse-v1 runtime currently only serves the feed.live capability with a live view.");
+            }
         }
     }
 

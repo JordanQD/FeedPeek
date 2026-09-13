@@ -260,14 +260,10 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
                 await EnsureInitializedAsync(operationToken).ConfigureAwait(false);
                 var subscriptions = await _feedSession.GetSubscriptionsAsync(operationToken)
                     .ConfigureAwait(false);
+                // A plugin source may expose only the live view (no updates feed at all), so the
+                // live strip is collected even when there is nothing to ask for a following list.
                 var updateSubscriptions = subscriptions.Where(item =>
                     IsPluginFeed(item, PluginFeedIds.Updates)).ToArray();
-                if (updateSubscriptions.Length == 0)
-                {
-                    FollowingCreators = [];
-                    return;
-                }
-
                 var following = new List<CreatorDescriptor>();
                 foreach (var subscription in updateSubscriptions)
                 {

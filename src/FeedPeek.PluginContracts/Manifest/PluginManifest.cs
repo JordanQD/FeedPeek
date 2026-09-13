@@ -11,7 +11,9 @@ public sealed record PluginManifest(
     PluginAuthManifest? Auth,
     PluginNetworkManifest Network,
     IReadOnlyList<PluginViewManifest> Views,
-    PluginSourceConfigurationManifest? SourceConfiguration = null);
+    PluginSourceConfigurationManifest? SourceConfiguration = null,
+    string? Runtime = null,
+    IReadOnlyDictionary<string, string>? RuntimeOptions = null);
 
 public sealed record PluginAuthManifest(
     bool Required,

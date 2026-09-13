@@ -4,6 +4,19 @@ public static class PluginManifestRules
 {
     public const string FileName = "plugin.json";
 
+    /// <summary>Native FeedPeek plugin contract: <c>globalThis.FeedPeekPlugin.handle(request)</c>.</summary>
+    public const string NativeRuntime = "feedpeek-v1";
+
+    /// <summary>LiveParse-compatible plugin contract: <c>globalThis.LiveParsePlugin.*</c> methods.</summary>
+    public const string LiveParseRuntime = "liveparse-v1";
+
+    public static IReadOnlySet<string> SupportedRuntimes { get; } =
+        new HashSet<string>(StringComparer.Ordinal) { NativeRuntime, LiveParseRuntime };
+
+    public static string ResolveRuntime(PluginManifest manifest)
+        => string.IsNullOrWhiteSpace(manifest.Runtime) ? NativeRuntime : manifest.Runtime;
+
+
     public static IReadOnlySet<string> SupportedCapabilities { get; } =
         new HashSet<string>(StringComparer.Ordinal)
         {
