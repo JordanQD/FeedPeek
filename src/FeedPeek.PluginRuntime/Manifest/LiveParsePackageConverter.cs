@@ -1,6 +1,7 @@
 using FeedPeek.PluginContracts.Manifest;
 using FeedPeek.PluginContracts.Protocol;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 namespace FeedPeek.PluginRuntime.Manifest;
@@ -18,10 +19,19 @@ public sealed record LiveParsePackageConversion(
 /// <summary>
 /// Turns a LiveParse plugin folder into a FeedPeek plugin package by writing a
 /// <c>plugin.json</c> next to the untouched plugin files. Only the live view is mapped: the
-/// converted package declares <c>feed.live</c> and asks the user for one category id per source.
+/// converted package declares <c>feed.live</c> and asks the user for the live room ids to pin per source.
 /// </summary>
 public static partial class LiveParsePackageConverter
 {
+    /// <summary>
+    /// The converted manifest is written for a human to read (and to diff against the source package), so
+    /// unset optional fields such as <c>icon</c> are omitted instead of serialized as null.
+    /// </summary>
+    private static readonly JsonSerializerOptions ManifestJsonOptions = new(PluginJson.SerializerOptions)
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    };
+
     public const string SourceManifestFileName = "manifest.json";
     private const int MaxManifestBytes = 256 * 1024;
 
@@ -124,10 +134,46 @@ public static partial class LiveParsePackageConverter
         var targetManifestPath = Path.Combine(targetDirectory, PluginManifestRules.FileName);
         await File.WriteAllTextAsync(
                 targetManifestPath,
-                JsonSerializer.Serialize(conversion.Manifest, PluginJson.SerializerOptions) + Environment.NewLine,
+                JsonSerializer.Serialize(conversion.Manifest, ManifestJsonOptions) + Environment.NewLine,
                 cancellationToken)
             .ConfigureAwait(false);
         return conversion;
+    }
+
+    /// <summary>
+    /// Picks the small square icon LiveParse packages ship next to their oversized TV artwork. The
+    /// assets are what the AngelLive host renders in its list, so reusing one keeps FeedPeek's rows
+    /// visually identical to the platform it was converted from; <c>*_dark</c> and <c>tv_*</c> art is
+    /// only used when nothing better exists.
+    /// </summary>
+    private static string? ResolveIcon(string sourceDirectory)
+    {
+        var candidates = new List<(int Rank, string RelativePath)>();
+        foreach (var file in Directory.EnumerateFiles(sourceDirectory, "*", SearchOption.AllDirectories))
+        {
+            var name = Path.GetFileName(file);
+            if (!PluginManifestRules.SupportedIconExtensions.Contains(Path.GetExtension(name)))
+                continue;
+            if (name.Contains("_dark", StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (new FileInfo(file).Length > PluginManifestRules.MaxIconBytes)
+                continue;
+
+            var rank = name.Contains("pad_live_card", StringComparison.OrdinalIgnoreCase) ? 1
+                : name.Contains("mini_live_card", StringComparison.OrdinalIgnoreCase) ? 2
+                : name.Contains("live_card", StringComparison.OrdinalIgnoreCase) ? 0
+                : name.Contains("logo", StringComparison.OrdinalIgnoreCase) ? 1
+                : name.Contains("tv_", StringComparison.OrdinalIgnoreCase) ? 4
+                : 3;
+            candidates.Add((rank, Path.GetRelativePath(sourceDirectory, file)));
+        }
+
+        return candidates
+            .OrderBy(item => item.Rank)
+            .ThenBy(item => item.RelativePath.Length)
+            .ThenBy(item => item.RelativePath, StringComparer.OrdinalIgnoreCase)
+            .Select(item => item.RelativePath.Replace('\\', '/'))
+            .FirstOrDefault();
     }
 
     private static LiveParsePackageConversion BuildConversion(string sourceDirectory, LiveParseManifest source)
@@ -203,7 +249,8 @@ public static partial class LiveParsePackageConverter
             {
                 ["roomUrlTemplate"] = roomUrlTemplate,
                 ["liveStates"] = LiveStateBroadcasting,
-            });
+            },
+            ResolveIcon(sourceDirectory));
 
         return new LiveParsePackageConversion(manifest, scripts, dropped, hosts);
     }

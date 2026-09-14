@@ -133,6 +133,7 @@ public sealed partial class PluginManifestLoader
 
         ValidateSourceConfiguration(manifest);
         ValidateRuntime(manifest);
+        ValidateIcon(root, manifest);
 
         foreach (var file in EnumeratePackageFiles(root))
         {
@@ -170,6 +171,23 @@ public sealed partial class PluginManifestLoader
                     "The liveparse-v1 runtime currently only serves the feed.live capability with a live view.");
             }
         }
+    }
+
+    private static void ValidateIcon(string root, PluginManifest manifest)
+    {
+        if (string.IsNullOrWhiteSpace(manifest.Icon))
+            return;
+
+        var iconPath = ResolveContainedPath(root, manifest.Icon, requireJavaScript: false);
+        if (!PluginManifestRules.SupportedIconExtensions.Contains(Path.GetExtension(iconPath)))
+        {
+            throw new PluginManifestException(
+                "ICON_EXTENSION_INVALID",
+                $"Unsupported plugin icon format '{Path.GetExtension(iconPath)}': {manifest.Icon}");
+        }
+
+        if (new FileInfo(iconPath).Length > PluginManifestRules.MaxIconBytes)
+            throw new PluginManifestException("ICON_TOO_LARGE", $"The plugin icon must not exceed {PluginManifestRules.MaxIconBytes} bytes.");
     }
 
     private static void ValidateSourceConfiguration(PluginManifest manifest)

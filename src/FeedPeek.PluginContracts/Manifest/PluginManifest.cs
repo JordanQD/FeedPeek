@@ -13,7 +13,8 @@ public sealed record PluginManifest(
     IReadOnlyList<PluginViewManifest> Views,
     PluginSourceConfigurationManifest? SourceConfiguration = null,
     string? Runtime = null,
-    IReadOnlyDictionary<string, string>? RuntimeOptions = null);
+    IReadOnlyDictionary<string, string>? RuntimeOptions = null,
+    string? Icon = null);
 
 public sealed record PluginAuthManifest(
     bool Required,

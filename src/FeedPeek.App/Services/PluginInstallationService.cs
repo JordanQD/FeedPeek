@@ -28,7 +28,8 @@ internal sealed record PluginManagementEntry(
     bool IsEnabled,
     PluginManifest? Manifest,
     string? ErrorCode,
-    string? ErrorMessage);
+    string? ErrorMessage,
+    string? IconUri = null);
 
 internal sealed record PluginLoadConfiguration(
     IReadOnlyList<string> Roots,
@@ -143,8 +144,28 @@ internal sealed class PluginInstallationService
                 !disabledIds.Contains(pluginId) && record?.IsEnabled == true,
                 package?.Manifest,
                 result.ErrorCode,
-                result.ErrorMessage);
+                result.ErrorMessage,
+                ResolvePackageIconUri(result.DirectoryPath, package?.Manifest));
         }).ToArray();
+    }
+
+    /// <summary>
+    /// Turns a manifest icon into a URI the UI can load. Icons only resolve for plugins installed under
+    /// the user root, because <c>ms-appdata</c> cannot reach an arbitrary development folder.
+    /// </summary>
+    private string? ResolvePackageIconUri(string directoryPath, PluginManifest? manifest)
+    {
+        if (manifest is null || string.IsNullOrWhiteSpace(manifest.Icon))
+            return null;
+
+        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(UserRoot));
+        var directory = Path.TrimEndingDirectorySeparator(Path.GetFullPath(directoryPath));
+        if (!directory.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var relativeDirectory = Path.GetRelativePath(root, directory).Replace('\\', '/');
+        var relativeIcon = manifest.Icon.Replace('\\', '/').TrimStart('/');
+        return $"ms-appdata:///local/FeedPeek/Plugins/{relativeDirectory}/{relativeIcon}";
     }
 
     public async Task<PluginManagementEntry> InstallAsync(
@@ -213,7 +234,8 @@ internal sealed class PluginInstallationService
                     IsEnabled: true,
                     stagedPackage.Manifest,
                     null,
-                    null);
+                    null,
+                    ResolvePackageIconUri(targetPath, stagedPackage.Manifest));
             }
             finally
             {
@@ -275,6 +297,9 @@ internal sealed class PluginInstallationService
                     Directory.Move(backupPath, targetPath);
                 throw;
             }
+
+            // A reinstall should be able to create its default source again.
+            AppSettings.ClearAutoCreatedPluginSource(pluginId);
 
             if (Directory.Exists(backupPath))
             {

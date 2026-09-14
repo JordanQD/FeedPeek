@@ -126,6 +126,7 @@ PluginLiveItem -> FeedLiveItemRow（关注页直播横向区域）
 | `sourceConfiguration.defaultFeedIds` | `["live"]` |
 | `runtime` | `"liveparse-v1"` |
 | `runtimeOptions` | `{ "roomUrlTemplate": "<原 hostBehavior.externalRoomURLTemplate>" }` |
+| `icon` | 从包内资产里自动挑一个小方形图：`*live_card*.png`（128×128）优先，其次 `pad_live_card_*`（50×50）/ `*logo*`，再次 `mini_live_card_*`（30×30），再其次其它图片，`tv_*`（320×192）最后；跳过 `*_dark` 与超过 512 KB 的文件。**计划书未列此项**，见 A.3 |
 
 > `externalRoomURLTemplate` 形如 `https://live.bilibili.com/{roomId}`，适配脚本用它把 `roomId` 拼成直播卡片点击后打开的地址。
 
@@ -197,6 +198,7 @@ PluginLiveItem -> FeedLiveItemRow（关注页直播横向区域）
 | 4 | 放开「没有 updates 订阅就早退」 | `FeedPeekPanelSession.GetFollowingExtrasAsync` | 现状：没有任何 `feed.updates` 订阅时直接返回空，纯直播来源永远不会出现在直播区 |
 | 5 | 安装时自动转换 | `PluginRuntime/Manifest/LiveParsePackageConverter.cs` + `PluginInstallationService.InstallAsync` | 用户直接选原始 LiveParse 文件夹安装：检测到 `manifest.json` 且没有 `plugin.json` 时，在临时目录里产出 FeedPeek 包再走原有安装流程。**不需要额外工具**（原方案的 `tools/` 脚本已取消） |
 | 6 | （可选）直播卡片展示封面与观看数 | `FeedLiveItemRow` | 现在只渲染头像、名称、标题；`PluginLiveItem` 里已经有 `CoverUrl`/`ViewerCount` |
+| 7 | 插件图标：清单可选 `icon` + 用户自定义覆盖 | `PluginManifest`、`PluginManifestRules`、`PluginManifestLoader`、`LiveParsePackageConverter.ResolveIcon`、`PluginDetailPage`、`AppSettings` | 转换器自动挑包内图标；插件详情页顶部可换图标，「已添加来源」的插件行用它当 `HeaderIcon`。细节见 `plugin-architecture.md` 2.5 |
 
 > 第 4 条是本计划里唯一会改变现有产品行为的改动；如果不做，纯直播来源不会显示任何内容。第 6 条纯属体验增强，可以先不做。
 
@@ -534,12 +536,12 @@ FeedPeek validation=ok(1 live items)
 
 | 文件 | 改动 |
 |---|---|
-| `src/FeedPeek.PluginContracts/Manifest/PluginManifest.cs` | 新增可选 `Runtime` 与 `RuntimeOptions` |
-| `src/FeedPeek.PluginContracts/Manifest/PluginManifestRules.cs` | 新增 `NativeRuntime` / `LiveParseRuntime` / `SupportedRuntimes` / `ResolveRuntime` |
-| `src/FeedPeek.PluginRuntime/Manifest/PluginManifestLoader.cs` | 新增 `ValidateRuntime`（`RUNTIME_UNSUPPORTED`、`RUNTIME_OPTIONS_INVALID`、`RUNTIME_VIEW_UNSUPPORTED`） |
+| `src/FeedPeek.PluginContracts/Manifest/PluginManifest.cs` | 新增可选 `Runtime`、`RuntimeOptions` 与 `Icon` |
+| `src/FeedPeek.PluginContracts/Manifest/PluginManifestRules.cs` | 新增 `NativeRuntime` / `LiveParseRuntime` / `SupportedRuntimes` / `ResolveRuntime` / `SupportedIconExtensions` / `MaxIconBytes` |
+| `src/FeedPeek.PluginRuntime/Manifest/PluginManifestLoader.cs` | 新增 `ValidateRuntime`（`RUNTIME_UNSUPPORTED`、`RUNTIME_OPTIONS_INVALID`、`RUNTIME_VIEW_UNSUPPORTED`）与 `ValidateIcon`（`ICON_EXTENSION_INVALID`、`ICON_TOO_LARGE`） |
 | `src/FeedPeek.PluginRuntime/Execution/LiveParseDialect.cs` | 新增：按 AngelLive 复刻的 bootstrap（浏览器 shim、`LP_PLUGIN_ERROR` 协议、完整 `Host` 表面）+ 适配脚本模板（`getRoomDetail`、`roomIds`、只在播过滤、v1 名回退） |
 | `src/FeedPeek.PluginRuntime/Execution/JintPluginTransport.cs` | 按 `runtime` 选 bootstrap、entry 后注入适配脚本、cookie 预取 + `base64Decode` 委托、方言预算放宽（**并用生效后的 `_options` 配置引擎**，修掉闭包捕获构造参数的老 bug） |
-| `src/FeedPeek.PluginRuntime/Manifest/LiveParsePackageConverter.cs` | 新增：清单转换（host 审计表、preload 裁剪、auth/views/sourceConfiguration、`liveStates="1"`、登录改为可选） |
+| `src/FeedPeek.PluginRuntime/Manifest/LiveParsePackageConverter.cs` | 新增：清单转换（host 审计表、preload 裁剪、auth/views/sourceConfiguration、`liveStates="1"`、登录改为可选、`ResolveIcon` 自动挑包内图标） |
 | `src/FeedPeek.PluginRuntime/Host/PluginHostServices.cs` | 新增可选 `IPluginCookieProvider`，支撑同步的 `Host.session.getCookieHeader` |
 | `src/FeedPeek.PluginRuntime/Host/PluginHttpBridge.cs` | 凭据域改为后缀匹配；保留头策略按方言区分（liveparse 放行插件自带的 `Cookie`/`Authorization`） |
 | `src/FeedPeek.App/Services/PluginInstallationService.cs` | 安装时自动转换 LiveParse 包；新增 `ComputeChangeToken` 供热加载判定 |
@@ -554,21 +556,36 @@ FeedPeek validation=ok(1 live items)
 | `tests/FeedPeek.Core.Tests/LiveParseDouyinProbeTests.cs` | 新增：M4 抖音联网探针（真实房间 + 请求审计 + 走 FeedPeek 校验层，按环境变量开关） |
 | `tests/FeedPeek.Core.Tests/LiveParseSignerProbeTests.cs` | 新增：抖音签名 bundle 探针（按环境变量开关） |
 
+同一批未提交改动里还有两组（不在上表）：
+
+| 文件 | 改动 |
+|---|---|
+| `src/FeedPeek.App/Services/PluginInstallationService.cs` | `PluginManagementEntry` 增加 `IconUri`；`ResolvePackageIconUri` 把包内 `icon` 变成 `ms-appdata` URI（仅用户插件根） |
+| `src/FeedPeek.App/Models/PluginSettingsRow.cs` | 新增 `DefaultIconUri`（包内图标）与 `IconUri`（用户自定义优先） |
+| `src/FeedPeek.App/Models/AddedSourceEntry.cs` | 插件行改用插件的 `IconUri` 当 `HeaderIcon`（没有图标时回退字形） |
+| `src/FeedPeek.App/Services/AppSettings.cs` | 新增 `GetPluginIcon` / `SetPluginIcon`（键 `PluginIcon.<pluginId>`） |
+| `src/FeedPeek.App/Pages/PluginDetailPage.xaml(.cs)` | 顶部新增 96×96 图标 + `MenuFlyout`（从文件选择图标 / 恢复默认图标）+ 悬停浮层；`PluginCard` 改为显示插件标识 |
+| `src/FeedPeek.App/Pages/SourcesSettingsPage.xaml(.cs)` | 「已添加来源」合并显示插件与 RSS 来源；订阅地址卡与安装插件卡重排 |
+| `src/FeedPeek.App/Pages/SourceDetailPage.xaml(.cs)` | 来源详情页顶部图标可自定义（`LocalFolder/source-icons/`） |
+| `C:\Users\Q\Data\Projects\FeedPeek-Plugin\bilibili-1.3.0` | 自带插件：复制 `bilibili.ico` 进包并在 `plugin.json` 登记 `"icon": "bilibili.ico"` |
+
 ### A.2 验证结果
 
-- `tests/FeedPeek.Core.Tests`：**34/34 通过**，0 警告 0 错误。
+- `tests/FeedPeek.Core.Tests`：**35/35 通过**，0 警告 0 错误（新增 `ManifestLoader_ValidatesTheOptionalPluginIcon`；转换器用例同时断言 `manifest.Icon == "assets/live_card_demo.png"`，即优先小卡片图并跳过 `*_dark`）。
 - `src/FeedPeek.App`：x64 Debug **构建成功，0 警告 0 错误**。
 - M0：三个真实包全部转换、加载、初始化（5–25ms）、握手、`source.create` 成功（6.5）。
 - M2：斗鱼真实房间联网通过，且「只留在播」验证通过（6.6）。
 - M4：抖音真实房间联网通过，`FeedPeek validation=ok(1 live items)`；同一房间连跑 3 次稳定（6.8.1、6.8.6）。
 - UI 手工验收（7.2）：用户已通过。
+- 插件图标：转换后的清单带上 `icon` 并通过完整校验。三个真实包（`FEEDPEEK_LIVEPARSE_REFERENCES` 探针）分别得到 `assets/live_card_douyu.png` / `assets/live_card_bilibili.png` / `assets/live_card_douyin.png`，即正确避开了 `tv_*` 大图与 `*_dark`；`bilibili.ico`（217 KB）在 512 KB 限制内，自带插件与 LiveParse 转换包都走同一条 `ValidateIcon` 路径。
 
 > 探针是选择性执行的：只在设置了 `FEEDPEEK_LIVEPARSE_REFERENCES`（联网探针再加 `FEEDPEEK_LIVEPARSE_NETWORK=1`；抖音签名探针用 `FEEDPEEK_LIVEPARSE_DOUYIN_SIGNER=1`；房间号可用 `FEEDPEEK_LIVEPARSE_DOUYIN_ROOM` 覆盖）时才会读外部目录，否则空跑。报告写在 `%TEMP%/feedpeek-liveparse-*.txt`。
 
-### A.3 与计划书不一致的两处（实现为准）
+### A.3 与计划书不一致的三处（实现为准）
 
 - 转换器的 host 清单对 `bilibili` / `douyin` / `douyu` 使用内置审计表，未知插件回退到从脚本字面量提取（计划书 4.2 未写明）；
-- 房间号解析支持完整直播间链接 / 逗号 / 空格 / 换行，自动去重，上限 20 个（计划书 4.4 已写规则，这里补充上限）。
+- 房间号解析支持完整直播间链接 / 逗号 / 空格 / 换行，自动去重，上限 20 个（计划书 4.4 已写规则，这里补充上限）；
+- 清单转换额外产出一个 `icon`（计划书 4.2 未列）：LiveParse 包里的平台图标只服务于宿主列表，转换后同一张图直接给 FeedPeek 的插件行和插件详情页用，避免「装完插件只看到一个通用字形」。
 
 其余与 AngelLive 的对齐项和有意差异见 6.7.1、6.7.2；仍未实现的宿主能力见 A.4。
 

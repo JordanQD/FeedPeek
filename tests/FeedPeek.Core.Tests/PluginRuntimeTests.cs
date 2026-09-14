@@ -40,6 +40,46 @@ public sealed class PluginRuntimeTests
     }
 
     [Fact]
+    public async Task ManifestLoader_ValidatesTheOptionalPluginIcon()
+    {
+        var loader = new PluginManifestLoader();
+        using var root = TemporaryDirectory.Create();
+        await File.WriteAllTextAsync(Path.Combine(root.Path, "index.js"), "globalThis.FeedPeekPlugin = { apiVersion: 1 };");
+        await File.WriteAllTextAsync(Path.Combine(root.Path, "icon.txt"), "not an image");
+
+        var manifestPath = Path.Combine(root.Path, PluginManifestRules.FileName);
+        await File.WriteAllTextAsync(manifestPath, IconManifest("icon.txt"));
+        var unsupported = await Assert.ThrowsAsync<PluginManifestException>(() => loader.LoadAsync(root.Path));
+        Assert.Equal("ICON_EXTENSION_INVALID", unsupported.Code);
+
+        await File.WriteAllTextAsync(manifestPath, IconManifest("../icon.png"));
+        var traversal = await Assert.ThrowsAsync<PluginManifestException>(() => loader.LoadAsync(root.Path));
+        Assert.Equal("PLUGIN_PATH_TRAVERSAL", traversal.Code);
+
+        // A valid icon resolves, and the manifest keeps the package-relative path.
+        await File.WriteAllBytesAsync(Path.Combine(root.Path, "icon.png"), [1, 2, 3]);
+        await File.WriteAllTextAsync(manifestPath, IconManifest("icon.png"));
+        var package = await loader.LoadAsync(root.Path);
+        Assert.Equal("icon.png", package.Manifest.Icon);
+    }
+
+    private static string IconManifest(string icon) => $$"""
+        {
+          "pluginId": "demo.icon",
+          "version": "1.0.0",
+          "apiVersion": 1,
+          "displayName": "Demo Icon",
+          "entry": "index.js",
+          "preloadScripts": [],
+          "capabilities": [],
+          "auth": null,
+          "network": { "allowedHosts": ["api.demo.test"], "allowRedirectHosts": [] },
+          "views": [{ "id": "feed", "kind": "feed", "title": "更新" }],
+          "icon": "{{icon}}"
+        }
+        """;
+
+    [Fact]
     public async Task Discovery_DisablesValidPluginAndIsolatesBrokenPlugin()
     {
         using var root = TemporaryDirectory.Create();

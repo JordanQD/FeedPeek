@@ -85,9 +85,17 @@ public sealed class FeedSourceRow : INotifyPropertyChanged
         }
     }
 
+    /// <summary>
+    /// What kind of source this is, shown on the settings rows. RSS and Atom are kept apart because the
+    /// stored format is known from discovery.
+    /// </summary>
     public string Category => string.Equals(ProviderId, RssProviderInfo.ProviderId, StringComparison.Ordinal)
-        ? "RSS / Atom"
+        ? IsAtom ? "Atom" : "RSS"
         : "插件";
+
+    private bool IsAtom => Source.Options is not null
+        && Source.Options.TryGetValue(Services.FeedPeekPanelSession.RssFormatOption, out var format)
+        && string.Equals(format, "atom", StringComparison.OrdinalIgnoreCase);
 
     public IconElement SourceIcon => CreateSourceIcon(IconUrl);
 

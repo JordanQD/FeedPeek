@@ -10,7 +10,8 @@ public sealed record RssDiscoveryResult(
     Uri FeedUri,
     string Title,
     string SourceId,
-    string? IconUrl);
+    string? IconUrl,
+    string Format);
 
 public sealed partial class RssFeedProvider : IFeedProvider, IDisposable
 {
@@ -76,7 +77,7 @@ public sealed partial class RssFeedProvider : IFeedProvider, IDisposable
         var limit = IsHtml(mediaType) ? RssProviderInfo.MaxHtmlDiscoveryBytes : RssProviderInfo.MaxFeedBytes;
         var bytes = await ReadLimitedAsync(initialResponse.Content, limit, cancellationToken);
         if (!IsHtml(mediaType) && TryParse(bytes, effectiveUri, out var parsed))
-            return Result(effectiveUri, parsed.Title, parsed.IconUrl);
+            return Result(effectiveUri, parsed.Title, parsed.IconUrl, parsed.Format);
 
         var discoveredUri = FindAlternateFeedUri(effectiveUri, Encoding.UTF8.GetString(bytes))
             ?? throw new InvalidOperationException("No RSS or Atom feed was found at this address.");
@@ -87,7 +88,7 @@ public sealed partial class RssFeedProvider : IFeedProvider, IDisposable
         var finalUri = feedResponse.RequestMessage?.RequestUri ?? discoveredUri;
         if (!TryParse(feedBytes, finalUri, out parsed))
             throw new InvalidOperationException("The discovered document is not a supported RSS or Atom feed.");
-        return Result(finalUri, parsed.Title, parsed.IconUrl);
+        return Result(finalUri, parsed.Title, parsed.IconUrl, parsed.Format);
     }
 
     public void Dispose()
@@ -177,8 +178,8 @@ public sealed partial class RssFeedProvider : IFeedProvider, IDisposable
         }
     }
 
-    private static RssDiscoveryResult Result(Uri uri, string title, string? iconUrl)
-        => new(uri, title, RssFeedParser.CreateSourceId(uri), iconUrl);
+    private static RssDiscoveryResult Result(Uri uri, string title, string? iconUrl, string format)
+        => new(uri, title, RssFeedParser.CreateSourceId(uri), iconUrl, format);
 
     private static Uri NormalizeInput(string input)
     {

@@ -215,40 +215,75 @@ internal sealed class PluginCredentialProfileStore : IPluginCredentialStore, IPl
 
     private CredentialPayload? ReadCore(string userName)
     {
+        var credential = FindCredential(userName);
+        if (credential is null)
+        {
+            return null;
+        }
+
         try
         {
-            var credential = _vault.Retrieve(ResourceName, userName);
             credential.RetrievePassword();
             return JsonSerializer.Deserialize<CredentialPayload>(credential.Password, JsonOptions);
-        }
-        catch (COMException)
-        {
-            return null;
-        }
-        catch (KeyNotFoundException)
-        {
-            return null;
         }
         catch (JsonException)
         {
             RemoveCredential(userName);
             return null;
         }
+        catch (Exception exception) when (IsVaultMiss(exception))
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Finds a stored credential by name. This deliberately does not use
+    /// <see cref="PasswordVault.Retrieve(string, string)"/>, which throws "无法从保管库获取凭据" for a
+    /// missing entry: a plugin that has never been signed in is a normal state, and the throw showed up
+    /// as first-chance exception noise under the debugger. <c>FindAllByResource</c> just returns nothing.
+    /// </summary>
+    private PasswordCredential? FindCredential(string userName)
+    {
+        try
+        {
+            foreach (var candidate in _vault.FindAllByResource(ResourceName))
+            {
+                if (string.Equals(candidate.UserName, userName, StringComparison.Ordinal))
+                {
+                    return candidate;
+                }
+            }
+        }
+        catch (Exception exception) when (IsVaultMiss(exception))
+        {
+        }
+
+        return null;
     }
 
     private void RemoveCredential(string userName)
     {
+        var credential = FindCredential(userName);
+        if (credential is null)
+        {
+            return;
+        }
+
         try
         {
-            _vault.Remove(_vault.Retrieve(ResourceName, userName));
+            _vault.Remove(credential);
         }
-        catch (COMException)
-        {
-        }
-        catch (KeyNotFoundException)
+        catch (Exception exception) when (IsVaultMiss(exception))
         {
         }
     }
+
+    private static bool IsVaultMiss(Exception exception)
+        => exception is COMException
+            or KeyNotFoundException
+            or ArgumentException
+            or InvalidOperationException;
 
     private static void ValidateKey(string pluginId, string credentialProfileId)
     {

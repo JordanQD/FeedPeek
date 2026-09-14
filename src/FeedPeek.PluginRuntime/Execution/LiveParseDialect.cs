@@ -454,6 +454,14 @@ public static class LiveParseDialect
 
             'plugin.getStatus': () => ({ state: 'ready', message: null, details: null }),
 
+            // A LiveParse plugin has no remote source object: a source is only the pinned room list the
+            // host keeps, so deleting one is a local operation that always succeeds.
+            'source.delete': () => ({ deleted: true }),
+
+            // The host's following list comes from the plugin, but a pinned-room source has no feed to
+            // derive it from, so an empty list is the correct answer rather than an unsupported method.
+            'creator.getFollowing': () => ({ creators: [] }),
+
             'source.create': payload => {
               const context = payload.context || {};
               return {

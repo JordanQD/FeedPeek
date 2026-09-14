@@ -46,6 +46,10 @@ public sealed record FeedFollowingExtras(
 public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, IAsyncDisposable
 {
     private const string RssEndpointOption = "rss.endpoint";
+    internal const string RssFormatOption = "rss.format";
+    private const string PluginRoomIdsOption = "roomIds";
+    private const string PluginRoomUrlTemplateOption = "roomUrlTemplate";
+    private const string DefaultCredentialProfileId = "default";
     private const string RssIconOption = "rss.icon";
     private static readonly TimeSpan DefaultRefreshInterval = TimeSpan.FromMinutes(15);
 
@@ -126,6 +130,181 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
             },
             cancellationToken);
 
+    /// <summary>
+    /// Adds a source from an address the user typed: when the address is a live room link a plugin
+    /// recognises, the plugin owns it; anything else is treated as an RSS/Atom feed. Adding by a bare
+    /// room number is deliberately not supported yet.
+    /// </summary>
+    public async Task<FeedSourceRow> AddSourceFromAddressAsync(
+        string address,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(address);
+        var trimmed = address.Trim();
+        var room = await ResolvePluginRoomAddressAsync(trimmed, cancellationToken).ConfigureAwait(false);
+        if (room is null)
+        {
+            return await AddRssSubscriptionAsync(trimmed, cancellationToken).ConfigureAwait(false);
+        }
+
+        return await AddPluginSourceAsync(
+            room.PluginId,
+            room.DisplayName,
+            new Dictionary<string, string>(StringComparer.Ordinal) { [PluginRoomIdsOption] = room.RoomId },
+            room.CredentialProfileId,
+            selectedFeedIds: null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private sealed record PluginRoomAddress(
+        string PluginId,
+        string DisplayName,
+        string RoomId,
+        string? CredentialProfileId);
+
+    private async Task<PluginRoomAddress?> ResolvePluginRoomAddressAsync(
+        string address,
+        CancellationToken cancellationToken)
+    {
+        if (address.All(char.IsDigit))
+        {
+            throw new InvalidOperationException(
+                "暂时只支持粘贴完整的直播间链接，例如 https://live.douyin.com/123456。");
+        }
+
+        if (!Uri.TryCreate(address, UriKind.Absolute, out var uri)
+            && !Uri.TryCreate("https://" + address, UriKind.Absolute, out uri))
+        {
+            return null;
+        }
+
+        if (uri.Scheme is not ("http" or "https"))
+        {
+            return null;
+        }
+
+        var entries = await GetPluginsAsync(cancellationToken).ConfigureAwait(false);
+        var matchedDisabledPlugin = false;
+        foreach (var entry in entries)
+        {
+            if (entry.Manifest?.RuntimeOptions is null
+                || !entry.Manifest.RuntimeOptions.TryGetValue(PluginRoomUrlTemplateOption, out var template)
+                || string.IsNullOrWhiteSpace(template)
+                || !TryMatchRoomTemplate(template, uri, out var roomId))
+            {
+                continue;
+            }
+
+            if (!entry.IsEnabled)
+            {
+                matchedDisabledPlugin = true;
+                continue;
+            }
+
+            string? credentialProfileId = null;
+            if (entry.Manifest.Auth is not null)
+            {
+                if (await HasCredentialsSafeAsync(entry.PluginId, cancellationToken).ConfigureAwait(false))
+                {
+                    credentialProfileId = DefaultCredentialProfileId;
+                }
+                else if (entry.Manifest.Auth.Required)
+                {
+                    throw new InvalidOperationException("此网站来源需要先登录，请先在插件页面完成登录。");
+                }
+            }
+
+            var sources = await GetSourcesAsync(cancellationToken).ConfigureAwait(false);
+            if (sources.Any(source => IsSameRoom(source, entry.PluginId, roomId)))
+            {
+                throw new InvalidOperationException("这个直播间已经添加过了。");
+            }
+
+            return new PluginRoomAddress(
+                entry.PluginId,
+                $"{entry.DisplayName} · {roomId}",
+                roomId,
+                credentialProfileId);
+        }
+
+        if (matchedDisabledPlugin)
+        {
+            throw new InvalidOperationException("对应的网站插件已被停用：请重新安装该插件以启用它。");
+        }
+
+        // A bare room link is not an RSS feed; saying so beats letting feed discovery fail with a
+        // confusing "response too large" or "no feed found" error.
+        if (LooksLikeRoomLink(uri))
+        {
+            throw new InvalidOperationException(
+                "没有已安装的插件支持这个直播间链接。请先在「安装插件」中安装对应网站的插件。");
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Heuristic for "this address is a live room, not a feed": a single path segment that is a number
+    /// (for example <c>https://live.douyin.com/945843973757</c> or <c>https://www.douyu.com/74751</c>).
+    /// </summary>
+    private static bool LooksLikeRoomLink(Uri uri)
+    {
+        var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return segments.Length == 1
+            && segments[0].Length >= 4
+            && segments[0].All(char.IsDigit);
+    }
+
+    private static bool IsSameRoom(FeedSourceRow source, string pluginId, string roomId)
+        => string.Equals(source.ProviderId, pluginId, StringComparison.Ordinal)
+            && source.Source.Options is not null
+            && source.Source.Options.TryGetValue(PluginRoomIdsOption, out var existing)
+            && existing
+                .Split([',', ' ', ';', '\n', '\r', '\t'], StringSplitOptions.RemoveEmptyEntries)
+                .Contains(roomId, StringComparer.Ordinal);
+
+    /// <summary>Matches a plugin's room URL template (for example <c>https://live.douyin.com/{roomId}</c>).</summary>
+    private static bool TryMatchRoomTemplate(string template, Uri address, out string roomId)
+    {
+        roomId = string.Empty;
+        const string marker = "{roomId}";
+        var markerIndex = template.IndexOf(marker, StringComparison.Ordinal);
+        if (markerIndex < 0
+            || !Uri.TryCreate(template[..markerIndex], UriKind.Absolute, out var templateBase)
+            || !string.Equals(templateBase.Host, address.Host, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var prefix = template[..markerIndex];
+        var suffix = template[(markerIndex + marker.Length)..];
+        var candidate = address.GetLeftPart(UriPartial.Path);
+        if (!candidate.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var remainder = candidate[prefix.Length..];
+        if (suffix.Length > 0)
+        {
+            if (!remainder.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            remainder = remainder[..^suffix.Length];
+        }
+
+        remainder = remainder.Trim('/');
+        if (remainder.Length == 0 || !remainder.All(char.IsDigit))
+        {
+            return false;
+        }
+
+        roomId = remainder;
+        return true;
+    }
+
     public async Task<FeedSourceRow> AddRssSubscriptionAsync(
         string endpoint,
         CancellationToken cancellationToken = default)
@@ -142,6 +321,9 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
                 var options = new Dictionary<string, string>(StringComparer.Ordinal)
                 {
                     [RssEndpointOption] = discovery.FeedUri.AbsoluteUri,
+                    [RssFormatOption] = string.Equals(discovery.Format, "atom", StringComparison.OrdinalIgnoreCase)
+                        ? "atom"
+                        : "rss",
                 };
                 if (!string.IsNullOrWhiteSpace(discovery.IconUrl))
                 {
@@ -305,6 +487,98 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
             },
             cancellationToken);
         return result;
+    }
+
+    /// <summary>
+    /// Creates the default source for plugins whose manifest asks for nothing else. Plugins that declare
+    /// required source fields (the live-room plugins pin room ids that way) are skipped because only the
+    /// user can supply them. Creation happens at most once per plugin, and never before the credentials a
+    /// plugin requires actually exist.
+    /// </summary>
+    private async Task CreateAutomaticSourcesAsync(CancellationToken cancellationToken)
+    {
+        var sources = await _feedSession.GetSourceSummariesAsync(cancellationToken).ConfigureAwait(false);
+        var withSource = sources
+            .Select(summary => summary.Source.ProviderId)
+            .ToHashSet(StringComparer.Ordinal);
+        foreach (var provider in _pluginRuntime.FeedProviders)
+        {
+            var pluginId = provider.ProviderId;
+            if (withSource.Contains(pluginId) || AppSettings.HasAutoCreatedPluginSource(pluginId))
+            {
+                continue;
+            }
+
+            var manifest = _pluginRuntime.GetManifest(pluginId);
+            if (manifest?.SourceConfiguration is null
+                || manifest.SourceConfiguration.Fields.Any(field => field.Required))
+            {
+                continue;
+            }
+
+            try
+            {
+                string? credentialProfileId = null;
+                if (manifest.Auth is not null)
+                {
+                    if (await HasCredentialsSafeAsync(pluginId, cancellationToken).ConfigureAwait(false))
+                    {
+                        credentialProfileId = DefaultCredentialProfileId;
+                    }
+                    else if (manifest.Auth.Required)
+                    {
+                        continue;   // wait until the user has signed in
+                    }
+                }
+
+                var created = await _pluginRuntime.CreateSourceAsync(
+                    pluginId,
+                    manifest.DisplayName,
+                    options: null,
+                    credentialProfileId,
+                    manifest.SourceConfiguration.DefaultFeedIds,
+                    cancellationToken).ConfigureAwait(false);
+                foreach (var subscription in created.Subscriptions)
+                {
+                    await _feedSession.AddSubscriptionAsync(
+                        created.Source,
+                        subscription,
+                        cancellationToken).ConfigureAwait(false);
+                }
+
+                AppSettings.MarkAutoCreatedPluginSource(pluginId);
+                withSource.Add(pluginId);
+            }
+            catch (Exception exception)
+            {
+                RaiseStatus(
+                    $"自动添加 {manifest.DisplayName} 来源失败：{DescribeError(exception)}",
+                    InfoBarSeverity.Warning);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Credential lookup that cannot take the app down: the Windows credential vault reports a missing
+    /// entry as an ArgumentException, and any other read failure means the same thing to us - the user
+    /// is not signed in.
+    /// </summary>
+    private async Task<bool> HasCredentialsSafeAsync(string pluginId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _pluginRuntime
+                .HasCredentialsAsync(pluginId, DefaultCredentialProfileId, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static string DescribeError(Exception exception)
@@ -900,6 +1174,11 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
 
         foreach (var provider in _pluginRuntime.FeedProviders)
             _registeredPluginProviders.Add(provider.ProviderId);
+
+        // Plugins that need no user input get their default source created here, so installing one is
+        // enough for it to show up in the main window.
+        await CreateAutomaticSourcesAsync(cancellationToken).ConfigureAwait(false);
+
         foreach (var subscription in await _feedSession.GetSubscriptionsAsync(cancellationToken)
             .ConfigureAwait(false))
         {

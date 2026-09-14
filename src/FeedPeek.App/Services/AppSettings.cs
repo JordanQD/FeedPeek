@@ -18,6 +18,7 @@ public static class AppSettings
     private const string NotificationCheckIntervalMinutesKey = "NotificationCheckIntervalMinutes";
     private const string KnownVideoUpdateIdsKey = "KnownVideoUpdateIds";
     private const string KnownLiveRoomIdsKey = "KnownLiveRoomIds";
+    private const string AutoCreatedPluginSourcesKey = "AutoCreatedPluginSources";
     private const string VideoNotificationBaselineInitializedKey = "VideoNotificationBaselineInitialized";
     private const string LiveNotificationBaselineInitializedKey = "LiveNotificationBaselineInitialized";
     private const string NotificationTargetModeKey = "NotificationTargetMode";
@@ -29,6 +30,7 @@ public static class AppSettings
     private const string MainPanelHeightKey = "MainPanelHeight";
     private const string CustomNotificationCreatorsKey = "CustomNotificationCreators";
     private const string AppLanguageKey = "AppLanguage";
+    private const string PluginIconKeyPrefix = "PluginIcon.";
     private const string DefaultCustomLaunchWebPageUrl = "https://github.com/JordanQD/FeedPeek";
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -203,6 +205,55 @@ public static class AppSettings
     {
         get => ReadStringList(KnownLiveRoomIdsKey);
         set => WriteStringList(KnownLiveRoomIdsKey, value);
+    }
+
+    /// <summary>
+    /// Plugins whose default source FeedPeek created automatically. A plugin is only ever auto-created
+    /// once, so deleting the source stays deleted instead of reappearing on the next launch.
+    /// </summary>
+    public static bool HasAutoCreatedPluginSource(string pluginId)
+        => ReadStringList(AutoCreatedPluginSourcesKey).Contains(pluginId, StringComparer.Ordinal);
+
+    public static void MarkAutoCreatedPluginSource(string pluginId)
+    {
+        var ids = ReadStringList(AutoCreatedPluginSourcesKey);
+        if (ids.Contains(pluginId, StringComparer.Ordinal))
+        {
+            return;
+        }
+
+        WriteStringList(AutoCreatedPluginSourcesKey, [.. ids, pluginId]);
+    }
+
+    public static void ClearAutoCreatedPluginSource(string pluginId)
+    {
+        var ids = ReadStringList(AutoCreatedPluginSourcesKey);
+        if (!ids.Contains(pluginId, StringComparer.Ordinal))
+        {
+            return;
+        }
+
+        WriteStringList(
+            AutoCreatedPluginSourcesKey,
+            ids.Where(item => !string.Equals(item, pluginId, StringComparison.Ordinal)).ToArray());
+    }
+
+    /// <summary>
+    /// Icon the user picked for an installed plugin, or null while the plugin package's own icon
+    /// (manifest <c>icon</c>) is used.
+    /// </summary>
+    public static string? GetPluginIcon(string pluginId)
+        => LocalSettings.Values[PluginIconKeyPrefix + pluginId] as string;
+
+    public static void SetPluginIcon(string pluginId, string? iconUri)
+    {
+        if (string.IsNullOrWhiteSpace(iconUri))
+        {
+            LocalSettings.Values.Remove(PluginIconKeyPrefix + pluginId);
+            return;
+        }
+
+        LocalSettings.Values[PluginIconKeyPrefix + pluginId] = iconUri;
     }
 
     public static IReadOnlyList<NotificationCreatorSubscription> CustomNotificationCreators

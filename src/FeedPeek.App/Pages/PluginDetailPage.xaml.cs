@@ -1,14 +1,21 @@
 using FeedPeek.Helpers;
 using FeedPeek.Models;
 using FeedPeek.Services;
-using FeedPeek.PluginContracts.Manifest;
+using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Navigation;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Windows.Storage;
+using Windows.Storage.Pickers;
+using WinRT.Interop;
 
 namespace FeedPeek.Pages;
 
@@ -20,6 +27,7 @@ public sealed partial class PluginDetailPage : Page, IDisposable
     private readonly PluginInstallationService _installations = new();
     private PluginSettingsRow? _plugin;
     private string? _pluginId;
+    private string? _defaultIconUri;
     private WebSignInWindow? _signInWindow;
     private bool _disposed;
 
@@ -66,16 +74,17 @@ public sealed partial class PluginDetailPage : Page, IDisposable
             }
 
             _plugin = new PluginSettingsRow(entry);
-            PluginCard.Header = _plugin.DisplayName;
-            PluginCard.Description = $"版本 {_plugin.Version}";
+            _defaultIconUri = _plugin.DefaultIconUri;
+            HeroName.Text = _plugin.DisplayName;
+            HeroVersion.Text = string.IsNullOrWhiteSpace(_plugin.Version) ? string.Empty : $"版本 {_plugin.Version}";
+            PluginCard.Header = "插件标识";
+            PluginCard.Description = _plugin.PluginId;
+            IconPicture.ProfilePicture = CreateImageSource(_plugin.IconUri);
 
             var hasLogin = _plugin.Manifest?.Auth?.LoginFlow is not null;
-            var canConfigureSource = _plugin.Manifest?.Capabilities?.Contains("source.configuration", StringComparer.Ordinal) == true;
 
             LoginCard.Visibility = hasLogin ? Visibility.Visible : Visibility.Collapsed;
             LoginCard.IsEnabled = _plugin.IsEnabled;
-            AddSourceCard.Visibility = canConfigureSource ? Visibility.Visible : Visibility.Collapsed;
-            AddSourceCard.IsEnabled = _plugin.IsEnabled;
 
             if (hasLogin)
             {
@@ -123,73 +132,81 @@ public sealed partial class PluginDetailPage : Page, IDisposable
         catch (Exception ex) { ShowStatus(ex.Message, InfoBarSeverity.Error); }
     }
 
-    private async void AddSourceButton_Click(object sender, RoutedEventArgs e)
+    private async void PickIconFile_Click(object sender, RoutedEventArgs e)
     {
-        if (_plugin?.Manifest is null) return;
-        var displayName = new TextBox { Header = "来源名称", Text = _plugin.DisplayName };
-        var fields = new Dictionary<PluginSourceFieldManifest, TextBox>();
-        var panel = new StackPanel { Spacing = 12, MinWidth = 360 };
-        panel.Children.Add(displayName);
-        foreach (var field in _plugin.Manifest.SourceConfiguration?.Fields ?? [])
+        if (_plugin is null) return;
+        var picker = new FileOpenPicker();
+        picker.ViewMode = PickerViewMode.Thumbnail;
+        foreach (var ext in new[] { ".png", ".jpg", ".jpeg", ".ico", ".bmp", ".gif", ".webp" })
         {
-            var input = new TextBox
-            {
-                Header = field.Required ? $"{field.Label} *" : field.Label,
-                PlaceholderText = field.Placeholder,
-                Text = field.DefaultValue ?? string.Empty,
-            };
-            fields[field] = input;
-            panel.Children.Add(input);
+            picker.FileTypeFilter.Add(ext);
         }
-        var dialog = new ContentDialog
-        {
-            XamlRoot = XamlRoot,
-            Title = $"添加 {_plugin.DisplayName} 来源",
-            Content = panel,
-            PrimaryButtonText = "添加",
-            CloseButtonText = "取消",
-            DefaultButton = ContentDialogButton.Primary,
-        };
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
 
-        var options = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var (field, input) in fields)
-        {
-            var value = input.Text.Trim();
-            if (field.Required && string.IsNullOrWhiteSpace(value))
-            {
-                ShowStatus($"请填写“{field.Label}”。", InfoBarSeverity.Warning);
-                return;
-            }
-            if (field.Kind == "url" && value.Length > 0
-                && (!Uri.TryCreate(value, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps))
-            {
-                ShowStatus($"“{field.Label}”需要填写 HTTPS 地址。", InfoBarSeverity.Warning);
-                return;
-            }
-            if (value.Length > 0) options[field.Key] = value;
-        }
-        string? profileId = null;
-        if (_plugin.Manifest.Auth is not null)
-        {
-            var sharedProfileId = GetSharedCredentialProfileId(_plugin.PluginId);
-            if (await _accountRuntime.HasCredentialsAsync(_plugin.PluginId, sharedProfileId))
-                profileId = sharedProfileId;
-            else if (_plugin.Manifest.Auth.Required)
-            {
-                ShowStatus("此网站来源需要先登录。", InfoBarSeverity.Warning);
-                return;
-            }
-        }
+        var hwnd = Win32Interop.GetWindowFromWindowId(XamlRoot.ContentIslandEnvironment.AppWindowId);
+        InitializeWithWindow.Initialize(picker, hwnd);
+        var file = await picker.PickSingleFileAsync();
+        if (file is null) return;
+
         await RunBusyAsync(async () =>
         {
-            await _session.AddPluginSourceAsync(
-                _plugin.PluginId,
-                string.IsNullOrWhiteSpace(displayName.Text) ? _plugin.DisplayName : displayName.Text.Trim(),
-                options,
-                profileId);
-            ShowStatus("网站来源已添加。", InfoBarSeverity.Success);
+            var iconUri = await StoreIconFileAsync(file);
+            AppSettings.SetPluginIcon(_plugin.PluginId, iconUri);
+            IconPicture.ProfilePicture = CreateImageSource(iconUri);
+            ShowStatus("图标已更新。", InfoBarSeverity.Success);
         });
+    }
+
+    private async void ResetIcon_Click(object sender, RoutedEventArgs e)
+    {
+        if (_plugin is null) return;
+        await RunBusyAsync(() =>
+        {
+            AppSettings.SetPluginIcon(_plugin.PluginId, null);
+            IconPicture.ProfilePicture = CreateImageSource(_defaultIconUri);
+            ShowStatus("已恢复默认图标。", InfoBarSeverity.Success);
+            return Task.CompletedTask;
+        });
+    }
+
+    private async Task<string> StoreIconFileAsync(StorageFile file)
+    {
+        var folder = await ApplicationData.Current.LocalFolder
+            .CreateFolderAsync("plugin-icons", CreationCollisionOption.OpenIfExists);
+        var ext = Path.GetExtension(file.Name);
+        if (string.IsNullOrWhiteSpace(ext))
+        {
+            ext = ".png";
+        }
+
+        // 用唯一文件名，避免覆盖被 BitmapImage 占用的旧文件导致“文件被占用”错误。
+        var fileName = $"{SanitizeFileName(_plugin!.PluginId)}_{Guid.NewGuid():N}{ext}";
+        await file.CopyAsync(folder, fileName, NameCollisionOption.ReplaceExisting);
+        return $"ms-appdata:///local/plugin-icons/{fileName}";
+    }
+
+    private static string SanitizeFileName(string name)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        return new string(name.Select(c => invalid.Contains(c) ? '_' : c).ToArray());
+    }
+
+    private void IconGrid_PointerEntered(object sender, PointerRoutedEventArgs e)
+        => EditOverlay.Visibility = Visibility.Visible;
+
+    private void IconGrid_PointerExited(object sender, PointerRoutedEventArgs e)
+        => EditOverlay.Visibility = Visibility.Collapsed;
+
+    private static ImageSource? CreateImageSource(string? imageUrl)
+    {
+        if (!Uri.TryCreate(imageUrl, UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps
+                && !string.Equals(uri.Scheme, "ms-appdata", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(uri.Scheme, "file", StringComparison.OrdinalIgnoreCase)))
+        {
+            return null;
+        }
+
+        return new BitmapImage(uri);
     }
 
     private async void DeletePluginButton_Click(object sender, RoutedEventArgs e)
@@ -258,8 +275,8 @@ public sealed partial class PluginDetailPage : Page, IDisposable
     private void SetBusy(bool isBusy)
     {
         LoginButton.IsEnabled = !isBusy;
-        AddSourceButton.IsEnabled = !isBusy;
         DeletePluginButton.IsEnabled = !isBusy;
+        IconButton.IsEnabled = !isBusy;
     }
 
     public void Dispose()

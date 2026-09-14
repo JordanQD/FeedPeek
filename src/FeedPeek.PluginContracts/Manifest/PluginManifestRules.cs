@@ -41,4 +41,14 @@ public static class PluginManifestRules
 
     public static IReadOnlySet<string> SupportedSourceFieldKinds { get; } =
         new HashSet<string>(StringComparer.Ordinal) { "text", "url" };
+
+    /// <summary>Image formats accepted for the optional manifest <c>icon</c>.</summary>
+    public static IReadOnlySet<string> SupportedIconExtensions { get; } =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".png", ".jpg", ".jpeg", ".ico", ".bmp", ".gif", ".webp",
+        };
+
+    /// <summary>Largest plugin icon FeedPeek accepts, so a package cannot bloat the manifest load.</summary>
+    public const int MaxIconBytes = 512 * 1024;
 }

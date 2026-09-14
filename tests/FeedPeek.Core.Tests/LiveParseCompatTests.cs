@@ -50,6 +50,11 @@ public sealed class LiveParseCompatTests
         await File.WriteAllTextAsync(Path.Combine(source.Path, "danmaku.js"), "globalThis.demoDanmaku = {};");
         await File.WriteAllTextAsync(Path.Combine(source.Path, "webmssdk.js"), "globalThis.demoSigner = {};");
 
+        Directory.CreateDirectory(Path.Combine(source.Path, "assets"));
+        await File.WriteAllBytesAsync(Path.Combine(source.Path, "assets", "tv_demo.png"), [1, 2, 3]);
+        await File.WriteAllBytesAsync(Path.Combine(source.Path, "assets", "live_card_demo_dark.png"), [1, 2, 3]);
+        await File.WriteAllBytesAsync(Path.Combine(source.Path, "assets", "live_card_demo.png"), [1, 2, 3]);
+
         Assert.True(LiveParsePackageConverter.CanConvert(source.Path));
 
         using var target = TemporaryDirectory.Create();
@@ -69,6 +74,9 @@ public sealed class LiveParseCompatTests
         Assert.True(Assert.Single(manifest.SourceConfiguration.Fields).Required);
         Assert.Equal("roomIds", Assert.Single(manifest.SourceConfiguration.Fields).Key);
         Assert.Equal("https://live.demo.test/{roomId}", manifest.RuntimeOptions!["roomUrlTemplate"]);
+
+        // The platform's own list icon wins over the oversized TV artwork, and *_dark art is ignored.
+        Assert.Equal("assets/live_card_demo.png", manifest.Icon);
 
         // Hosts come from the script literals (plus the login and success URLs) for unknown plugins.
         Assert.Contains("api.demo.test", manifest.Network.AllowedHosts);
@@ -176,6 +184,7 @@ public sealed class LiveParseCompatTests
             notes.Add("kept=" + string.Join('+', conversion.Manifest.PreloadScripts));
             notes.Add("dropped=" + conversion.DroppedPreloadScripts.Count);
             notes.Add("auth=" + (conversion.Manifest.Auth?.Required == true ? "required" : "none"));
+            notes.Add("icon=" + (conversion.Manifest.Icon ?? "none"));
         }
         catch (Exception ex)
         {

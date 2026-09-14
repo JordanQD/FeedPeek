@@ -34,11 +34,9 @@
         <!-- Wrapped in a Grid to work around the SettingsExpander ItemsRepeater + parent MaxWidth layout bug -->
         <Grid x:Name="SettingsContent" Margin="24,16,24,36">
             <StackPanel Margin="0" MaxWidth="1000" Spacing="{StaticResource SettingsCardSpacing}">
-                <TextBlock Margin="0,0,0,4" Style="{StaticResource SettingsSectionHeaderTextBlockStyle}" Text="添加来源" />
-
-                <!-- RSS 订阅（第一位） -->
+                <!-- 添加来源（第一位）：RSS / Atom，或插件支持的直播间链接 -->
                 <controls:SettingsCard
-                    Description="输入网站地址或 RSS / Atom 地址，FeedPeek 会自动发现可用订阅。"
+                    Description="输入网站地址、RSS / Atom 地址，或直接粘贴插件支持的直播间链接。"
                     Header="订阅地址"
                     HorizontalContentAlignment="Stretch">
                     <controls:SettingsCard.HeaderIcon>
@@ -70,51 +68,40 @@
                     </Grid>
                 </controls:SettingsCard>
 
-                <!-- 网站插件（第二位） -->
+                <!-- 安装插件（第二位）：与「订阅地址」同级的独立卡片 -->
+                <controls:SettingsCard
+                    Description="选择一个插件目录进行安装。"
+                    Header="安装插件">
+                    <controls:SettingsCard.HeaderIcon>
+                        <FontIcon Glyph="&#xE8B7;" />
+                    </controls:SettingsCard.HeaderIcon>
+                    <Button
+                        x:Name="InstallPluginButton"
+                        VerticalAlignment="Center"
+                        Click="InstallPluginButton_Click"
+                        Content="从文件夹选择" />
+                </controls:SettingsCard>
+
+                <!-- 已添加来源（第三位）：已安装插件 + 已添加的 RSS / 插件来源 -->
                 <controls:SettingsExpander
-                    x:Name="PluginsExpander"
-                    Description="安装、启用或管理网站插件；插件启用后即可添加对应网站来源。"
-                    Header="已安装插件"
+                    x:Name="AddedSourcesExpander"
+                    Description="已安装的插件，以及已添加的 RSS 与插件来源。"
+                    Header="已添加来源"
                     IsExpanded="True">
                     <controls:SettingsExpander.HeaderIcon>
                         <FontIcon Glyph="&#xE74C;" />
                     </controls:SettingsExpander.HeaderIcon>
                     <controls:SettingsExpander.ItemTemplate>
-                        <DataTemplate x:DataType="models:PluginSettingsRow">
+                        <DataTemplate x:DataType="models:AddedSourceEntry">
                             <controls:SettingsCard
                                 Description="{x:Bind Detail}"
                                 Header="{x:Bind DisplayName}"
+                                HeaderIcon="{x:Bind Icon}"
                                 DataContext="{x:Bind}"
                                 IsClickEnabled="True"
-                                Click="PluginCard_Click">
-                                <ToggleSwitch
-                                    IsOn="{x:Bind IsEnabled}"
-                                    OffContent=""
-                                    OnContent=""
-                                    Toggled="PluginSwitch_Toggled" />
-                            </controls:SettingsCard>
+                                Click="AddedSourceCard_Click" />
                         </DataTemplate>
                     </controls:SettingsExpander.ItemTemplate>
-                    <controls:SettingsExpander.ItemsFooter>
-                        <controls:SettingsCard
-                            BorderThickness="0,1,0,0"
-                            CornerRadius="0"
-                            Description="从文件夹安装"
-                            Header="安装插件"
-                            MinHeight="52"
-                            Padding="58,8,44,8">
-                            <Button
-                                x:Name="InstallPluginButton"
-                                Width="32"
-                                Height="32"
-                                Padding="0"
-                                VerticalAlignment="Center"
-                                Click="InstallPluginButton_Click"
-                                ToolTipService.ToolTip="从文件夹安装插件">
-                                <FontIcon Glyph="&#xE8B7;" />
-                            </Button>
-                        </controls:SettingsCard>
-                    </controls:SettingsExpander.ItemsFooter>
                 </controls:SettingsExpander>
 
                 <!-- 提示条与紧随其后的分节标题放在同一个 Grid 里，作为 StackPanel 的单个子元素：

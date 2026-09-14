@@ -15,6 +15,8 @@ public sealed class PluginSettingsRow
         IsEnabled = entry.IsEnabled;
         Manifest = entry.Manifest;
         ErrorMessage = entry.ErrorMessage;
+        DefaultIconUri = entry.IconUri;
+        IconUri = Services.AppSettings.GetPluginIcon(entry.PluginId) ?? entry.IconUri;
     }
 
     public string PluginId { get; }
@@ -29,12 +31,9 @@ public sealed class PluginSettingsRow
 
     public string? ErrorMessage { get; }
 
-    public string Detail => ErrorMessage is not null
-        ? ErrorMessage
-        : $"版本 {Version} · {(IsEnabled ? "已启用" : "已停用")}";
+    /// <summary>The plugin package's own icon, or null when it does not ship one.</summary>
+    public string? DefaultIconUri { get; }
 
-    public bool CanConfigureSource => IsEnabled
-        && Manifest?.Capabilities.Contains("source.configuration", StringComparer.Ordinal) == true;
-
-    public bool HasLogin => IsEnabled && Manifest?.Auth?.LoginFlow is not null;
+    /// <summary>The icon the user chose for this plugin, falling back to the package icon.</summary>
+    public string? IconUri { get; }
 }

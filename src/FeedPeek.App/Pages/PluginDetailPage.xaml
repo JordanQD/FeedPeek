@@ -9,6 +9,18 @@
     <Page.Resources>
         <!-- BreadcrumbBar 的箭头（chevron）字号由这个主题资源控制（见 generic.xaml） -->
         <x:Double x:Key="BreadcrumbBarChevronFontSize">20</x:Double>
+        <Style x:Key="IconButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <ContentPresenter />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Page.Resources>
 
     <ScrollView
@@ -37,6 +49,43 @@
         </VisualStateManager.VisualStateGroups>
 
         <StackPanel x:Name="DetailContent" Margin="24,16,24,36" MaxWidth="1000" Spacing="{StaticResource SettingsCardSpacing}">
+            <StackPanel Orientation="Horizontal" Spacing="16" Margin="0,8,0,16">
+                <Button
+                    x:Name="IconButton"
+                    Style="{StaticResource IconButtonStyle}"
+                    ToolTipService.ToolTip="修改图标">
+                    <Button.Flyout>
+                        <MenuFlyout>
+                            <MenuFlyoutItem Text="从文件选择图标" Click="PickIconFile_Click" />
+                            <MenuFlyoutItem Text="恢复默认图标" Click="ResetIcon_Click" />
+                        </MenuFlyout>
+                    </Button.Flyout>
+                    <Grid Width="96" Height="96" PointerEntered="IconGrid_PointerEntered" PointerExited="IconGrid_PointerExited">
+                        <PersonPicture x:Name="IconPicture" Width="96" Height="96" />
+                        <Border
+                            x:Name="EditOverlay"
+                            Width="96"
+                            Height="96"
+                            CornerRadius="48"
+                            Background="#66000000"
+                            Visibility="Collapsed">
+                            <FontIcon
+                                Glyph="&#xE70F;"
+                                FontSize="28"
+                                Foreground="White"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center" />
+                        </Border>
+                    </Grid>
+                </Button>
+                <StackPanel VerticalAlignment="Center" Spacing="4">
+                    <TextBlock x:Name="HeroName" Style="{ThemeResource TitleTextBlockStyle}" />
+                    <TextBlock
+                        x:Name="HeroVersion"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+            </StackPanel>
+
             <controls:SettingsCard
                 x:Name="PluginCard"
                 Description="版本"
@@ -48,16 +97,6 @@
                 <Button
                     x:Name="LoginButton"
                     Click="LoginButton_Click" />
-            </controls:SettingsCard>
-
-            <controls:SettingsCard
-                x:Name="AddSourceCard"
-                Description="为该网站插件添加订阅来源"
-                Header="添加来源">
-                <Button
-                    x:Name="AddSourceButton"
-                    Content="添加来源"
-                    Click="AddSourceButton_Click" />
             </controls:SettingsCard>
 
             <controls:SettingsCard

@@ -55,6 +55,9 @@ FeedPeek.Core            FeedPeek.PluginContracts
 | `network` | object | `{ allowedHosts, allowRedirectHosts }` |
 | `views` | object[] | `{ id, kind, title }`，kind 取 `feed` / `collection` / `live` |
 | `sourceConfiguration` | object? | `{ fields, defaultFeedIds }` |
+| `icon` | string? | 包内相对路径的插件图标，见 2.5 |
+
+新增字段都带默认值，因此旧清单（没有 `runtime` / `runtimeOptions` / `icon`）继续可用。
 
 `auth` 子结构：
 
@@ -84,6 +87,7 @@ FeedPeek.Core            FeedPeek.PluginContracts
 | 全部脚本合计 | <= 4 MB |
 | 脚本编码 | 严格 UTF-8，非法字节报 `PLUGIN_SCRIPT_ENCODING_INVALID` |
 | 包内禁止的扩展名 | `.exe .dll .com .bat .cmd .ps1 .msi .msix .appx .scr`，报 `EXECUTABLE_CONTENT_FORBIDDEN` |
+| 插件图标（`icon`） | <= 512 KB（`PluginManifestRules.MaxIconBytes`） |
 
 结构与安全校验：
 
@@ -95,12 +99,28 @@ FeedPeek.Core            FeedPeek.PluginContracts
 - URL 字段必须是绝对 HTTPS（`URL_INVALID`）。
 - `view.id` 非空且唯一，`view.title` 非空。
 - `sourceConfiguration.defaultFeedIds` 必须是已声明的 view id（`SOURCE_DEFAULT_FEED_INVALID`）；`url` 类型字段的 `defaultValue` 必须是 HTTPS。
+- `icon` 走和脚本同一条路径校验（落在插件根内、拒绝 reparse point），扩展名必须命中 `SupportedIconExtensions`（`.png .jpg .jpeg .ico .bmp .gif .webp`，`ICON_EXTENSION_INVALID`），大小受 `MaxIconBytes` 限制（`ICON_TOO_LARGE`）。
 
 包哈希（`PluginPackage.PackageHash`）：
 
 - 算法 **SHA-256**（`IncrementalHash`），对包内**所有文件**按相对路径（`/` 分隔）ordinal-ignore-case 排序，先 append 相对路径的 UTF-8 字节，再 append 文件内容字节。
 - 发现阶段与安装记录比对，失配报 `PACKAGE_HASH_MISMATCH`；比对用 `CryptographicOperations.FixedTimeEquals`。
 - 结果是 `PluginPackage(RootPath, ManifestPath, Manifest, PackageHash, Scripts)`，其中 `Scripts` 是**加载时快照的脚本文本**，执行阶段只读快照，不再回读磁盘。
+
+### 2.5 插件图标
+
+插件包可以自带一个图标（`icon`，包内相对路径，例如 `bilibili.ico` 或 `assets/live_card_douyu.png`），用户在插件详情页顶部还能换掉它。生效顺序：
+
+| 优先级 | 来源 | 位置 |
+|---|---|---|
+| 1 | 用户自定义图标 | `AppSettings` 的 `PluginIcon.<pluginId>`，文件复制到 `LocalFolder/plugin-icons/<pluginId>_<guid><ext>` |
+| 2 | 插件包自带图标 | 清单 `icon`，运行时拼成 `ms-appdata:///local/FeedPeek/Plugins/<目录>/<icon>` |
+| 3 | 字形回退 | `PluginGlyph`（`\uE74C`），用于没有图标的插件 |
+
+- URI 只在插件位于用户插件根之内时生成（`PluginInstallationService.ResolvePackageIconUri`）：`ms-appdata` 到不了任意的开发目录，开发根里的插件继续走字形回退。
+- 图标是**每个插件一份**，不是每个来源一份；来源自己的图标仍由 `iconUrl` 字段和来源详情页管理（见第 12 节）。
+- 插件详情页顶部与来源详情页同构：96×96 `PersonPicture` + `MenuFlyout`（从文件选择图标 / 恢复默认图标）+ 悬停编辑浮层；「已添加来源」列表里的插件行用同一个 URI 作为 `HeaderIcon`。
+- LiveParse 包不需要手写这个字段：转换器从包内资产里挑一个小方形图（`*live_card*` 优先，避开 `*_dark`，`tv_*` 最后），见 `docs/design/liveparse-compat-plan.md` 4.2。
 
 ## 3. 协议
 
@@ -274,6 +294,7 @@ Host 之外没有网络出口：插件脚本里的 URL 只有经过这个桥才�
 ## 10. 安装 / 启停 / 升级 / 卸载（`PluginInstallationService`）
 
 - 用户插件根：`ApplicationData.Current.LocalFolder/FeedPeek/Plugins`。
+- `GetPluginsAsync` / `InstallAsync` 返回的 `PluginManagementEntry` 带上 `IconUri`（插件包图标，见 2.5）；`PluginSettingsRow.IconUri` 再叠加用户自定义图标。
 - 安装记录：`ApplicationData.Current.LocalFolder/FeedPeek/plugin-installations.v1.json`，元素是 `PluginInstallationRecord(PluginId, Version, PackageHash, DirectoryName, IsEnabled, InstalledAt)`；写入走 `.tmp` 加 `File.Move(overwrite: true)`。
 - **默认关闭面**：目录里存在但没有安装记录的插件会被强制加入停用集合，不会被加载（`GetLoadConfigurationAsync`）；以 `.` 开头的目录被忽略；多个目录声明同一 `pluginId` 时全部判为 `PLUGIN_ID_DUPLICATE` 并拒绝加载。
 - 安装 / 升级（同一 `pluginId` 即升级）：
@@ -339,6 +360,7 @@ Host 之外没有网络出口：插件脚本里的 URL 只有经过这个桥才�
 | 8 | `Host.http.request` 不接受 `authMode` / `cookieInject` / `signing`，只有「按域自动注入整条 Cookie header」加受限的 opaque secret | `JintPluginTransport` 与 `PluginHttpBridge` |
 | 9 | 没有 Host 侧图片代理，`ImageUrl` / `AvatarUrl` 直接由 WinUI 绑定联网，图片请求不经过 `allowedHosts` 校验 | `FeedLiveItemRow` 与 `FeedItemRow` |
 | 10 | 凭据生命周期只有 `auth.begin/complete/validate/clear`，没有 `setCredential` / `getCredentialStatus` 这类按需回写的接口，登出完全靠宿主删 profile | `PluginMethods` |
+| 11 | 清单以前没有图标字段，插件行与插件详情页只有字形、顶部没有图标 | `PluginManifest.Icon` / `PluginDetailPage`，现已在 2.5 实现 |
 
 
 
