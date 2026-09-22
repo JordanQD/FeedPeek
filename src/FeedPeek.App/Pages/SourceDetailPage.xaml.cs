@@ -41,10 +41,72 @@ public sealed partial class SourceDetailPage : Page, IDisposable
     private async void SourceDetailPage_Loaded(object sender, RoutedEventArgs e)
     {
         _session.StatusRaised += Session_StatusRaised;
+        AppSettings.WebsiteSettingsChanged += OnWebsiteSettingsChanged;
         await LoadAsync();
     }
 
+    private void OnWebsiteSettingsChanged(object? sender, EventArgs e)
+    {
+        if (_source is null || _disposed)
+        {
+            return;
+        }
+
+        _ = DispatcherQueue.TryEnqueue(async () =>
+        {
+            if (_disposed || _source is null)
+            {
+                return;
+            }
+
+            try
+            {
+                var sources = await _session.GetSourcesAsync();
+                var row = sources.FirstOrDefault(item =>
+                    string.Equals(item.ProviderId, _source.ProviderId, StringComparison.Ordinal)
+                    && string.Equals(item.SourceId, _source.SourceId, StringComparison.Ordinal));
+                if (row is null || _disposed)
+                {
+                    return;
+                }
+
+                _source = row;
+                WebsiteBox.Text = row.Source.Options is not null
+                    && row.Source.Options.TryGetValue("source.website", out var website)
+                        ? website
+                        : string.Empty;
+            }
+            catch
+            {
+                // Keep the current text if a refresh fails.
+            }
+        });
+    }
+
     private void SourceDetailPage_Unloaded(object sender, RoutedEventArgs e) => Dispose();
+
+    private async void SaveWebsiteButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_source is null || _disposed)
+        {
+            return;
+        }
+
+        try
+        {
+            await _session.UpdateSourceWebsiteAsync(
+                _source.ProviderId,
+                _source.SourceId,
+                WebsiteBox.Text);
+            var trimmed = WebsiteBox.Text?.Trim();
+            WebsiteBox.Text = trimmed ?? string.Empty;
+            ShowStatus("已保存打开的网页。", InfoBarSeverity.Success);
+        }
+        catch (Exception ex)
+        {
+            ShowStatus(ex.Message, InfoBarSeverity.Error);
+        }
+    }
 
     private async Task LoadAsync()
     {
@@ -62,6 +124,10 @@ public sealed partial class SourceDetailPage : Page, IDisposable
             HeroCategory.Text = _source.Category;
             IconPicture.ProfilePicture = CreateImageSource(_source.IconUrl);
             IconPicture.Initials = GetInitials(_source.DisplayName);
+            WebsiteBox.Text = _source.Source.Options is not null
+                && _source.Source.Options.TryGetValue("source.website", out var website)
+                    ? website
+                    : string.Empty;
 
             if (string.Equals(_source.ProviderId, RssProviderInfo.ProviderId, StringComparison.Ordinal))
             {
@@ -236,6 +302,7 @@ public sealed partial class SourceDetailPage : Page, IDisposable
         Loaded -= SourceDetailPage_Loaded;
         Unloaded -= SourceDetailPage_Unloaded;
         _session.StatusRaised -= Session_StatusRaised;
+        AppSettings.WebsiteSettingsChanged -= OnWebsiteSettingsChanged;
         _session.Dispose();
     }
 }

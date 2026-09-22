@@ -71,6 +71,8 @@ public partial class App : Application
 
     private void InitializeTrayAndData()
     {
+        _ = SourceDirectory.LoadAsync();
+
         if (_backgroundNotificationMonitor is null)
         {
             _backgroundNotificationMonitor = new BackgroundNotificationMonitor(_cookieStore);

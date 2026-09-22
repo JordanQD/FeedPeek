@@ -412,6 +412,7 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
                     string.Equals(item.Source.ProviderId, source.ProviderId, StringComparison.Ordinal)
                     && string.Equals(item.Source.SourceId, source.SourceId, StringComparison.Ordinal));
                 result = new FeedSourceRow(summary ?? new FeedSourceSummary(source, 0, 0));
+                SourceDirectory.Refresh();
             },
             cancellationToken);
 
@@ -1067,6 +1068,7 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
                     source.ProviderId,
                     source.SourceId,
                     operationToken).ConfigureAwait(false);
+                SourceDirectory.Refresh();
             },
             cancellationToken);
     }
@@ -1171,6 +1173,63 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
                         subscription,
                         operationToken).ConfigureAwait(false);
                 }
+
+                SourceDirectory.Refresh();
+            },
+            cancellationToken);
+    }
+
+    public async Task UpdateSourceWebsiteAsync(
+        string providerId,
+        string sourceId,
+        string? websiteUrl,
+        CancellationToken cancellationToken = default)
+    {
+        await RunExclusiveAsync(
+            async operationToken =>
+            {
+                await EnsureInitializedAsync(operationToken).ConfigureAwait(false);
+
+                var summaries = await _feedSession.GetSourceSummariesAsync(operationToken)
+                    .ConfigureAwait(false);
+                var summary = summaries.FirstOrDefault(item =>
+                        string.Equals(item.Source.ProviderId, providerId, StringComparison.Ordinal)
+                        && string.Equals(item.Source.SourceId, sourceId, StringComparison.Ordinal))
+                    ?? throw new InvalidOperationException("来源不存在。");
+
+                var options = new Dictionary<string, string>(StringComparer.Ordinal);
+                if (summary.Source.Options is not null)
+                {
+                    foreach (var pair in summary.Source.Options)
+                    {
+                        options[pair.Key] = pair.Value;
+                    }
+                }
+
+                if (string.IsNullOrWhiteSpace(websiteUrl))
+                {
+                    options.Remove("source.website");
+                }
+                else
+                {
+                    options["source.website"] = websiteUrl.Trim();
+                }
+
+                var updatedSource = summary.Source with { Options = options };
+                var subscriptions = await _feedSession.GetSubscriptionsAsync(operationToken)
+                    .ConfigureAwait(false);
+                var subscription = subscriptions.FirstOrDefault(item =>
+                    string.Equals(item.ProviderId, providerId, StringComparison.Ordinal)
+                    && string.Equals(item.SourceId, sourceId, StringComparison.Ordinal));
+                if (subscription is not null)
+                {
+                    await _feedSession.AddSubscriptionAsync(
+                        updatedSource,
+                        subscription,
+                        operationToken).ConfigureAwait(false);
+                }
+
+                AppSettings.NotifyWebsiteSettingsChanged();
             },
             cancellationToken);
     }

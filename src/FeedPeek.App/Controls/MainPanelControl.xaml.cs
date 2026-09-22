@@ -21,7 +21,7 @@ namespace FeedPeek.Controls;
 public sealed partial class MainPanelControl : UserControl, IDisposable
 {
     private readonly HashSet<IDisposable> _initializedPages = [];
-    private readonly List<(string Key, string Text, string? IconUrl)> _filterEntries = [];
+    private readonly List<(string Key, string Text, string? IconUrl, string? WebsiteUrl, string? SuggestedUrl)> _filterEntries = [];
     private CancellationTokenSource? _flyoutCts;
     private double _hostHeight = double.NaN;
     private int _previousSelectedPageIndex = -1;
@@ -42,6 +42,8 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
         Session = new FeedPeekPanelSession();
         InitializeComponent();
         ApplyPersistedSourceFilter();
+        ApplySourceDirectory(SourceDirectory.Current);
+        SourceDirectory.Updated += OnSourceDirectoryUpdated;
         Session.StatusRaised += Session_StatusRaised;
         Session.BackgroundOpenRequested += Session_BackgroundOpenRequested;
         Session.PropertyChanged += Session_PropertyChanged;
@@ -50,6 +52,51 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
         Loaded += MainPanelControl_Loaded;
         ApplyBusyState();
         SelectDefaultPage();
+    }
+
+    private void OnSourceDirectoryUpdated(object? sender, EventArgs e)
+    {
+        if (_isDisposed)
+        {
+            return;
+        }
+
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (_isDisposed)
+            {
+                return;
+            }
+
+            ApplySourceDirectory(SourceDirectory.Current);
+        });
+    }
+
+    private void ApplySourceDirectory(IReadOnlyList<SourceCatalogEntry> catalog)
+    {
+        var current = Session.SourceFilter ?? AppSettings.PanelSourceFilter;
+        _filterEntries.Clear();
+        foreach (var entry in catalog)
+        {
+            _filterEntries.Add((
+                $"{entry.ProviderId}|{entry.SourceId}",
+                entry.DisplayName,
+                entry.IconUrl,
+                entry.WebsiteUrl,
+                entry.SuggestedSiteRoot));
+        }
+
+        RebuildFilterMenuFromCache();
+        if (!string.IsNullOrWhiteSpace(current)
+            && _filterEntries.Count > 0
+            && _filterEntries.All(item => !string.Equals(item.Key, current, StringComparison.Ordinal)))
+        {
+            AppSettings.PanelSourceFilter = null;
+            Session.SourceFilter = null;
+        }
+
+        RebuildFilterMenuFromCache();
+        UpdateFilterButtonVisual();
     }
 
     private void ApplyPersistedSourceFilter()
@@ -61,6 +108,202 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
     private static bool IsFilterableSource(FeedSourceRow row)
         => string.Equals(row.ProviderId, RssProviderInfo.ProviderId, StringComparison.Ordinal)
             || row.Feeds.Any(feed => !string.Equals(feed.FeedId, PluginFeedIds.Live, StringComparison.Ordinal));
+
+    private static string? InferSiteRoot(FeedSourceRow source)
+    {
+        // Site root guess for the website prompt only — never used as the open target by itself.
+        if (string.Equals(source.ProviderId, RssProviderInfo.ProviderId, StringComparison.Ordinal)
+            && Uri.TryCreate(source.Endpoint, UriKind.Absolute, out var endpoint)
+            && endpoint.Scheme is "http" or "https")
+        {
+            return new UriBuilder(endpoint.Scheme, endpoint.Host, endpoint.IsDefaultPort ? -1 : endpoint.Port)
+            {
+                Path = "/",
+            }.Uri.AbsoluteUri;
+        }
+
+        return null;
+    }
+
+    private static string? ResolveWebsiteUrl(FeedSourceRow source, IReadOnlyDictionary<string, string?> pluginWebsites)
+    {
+        var options = source.Source.Options;
+        if (options is not null)
+        {
+            foreach (var key in new[] { "source.website", "website", "homepage", "home" })
+            {
+                if (options.TryGetValue(key, out var site)
+                    && Uri.TryCreate(site, UriKind.Absolute, out var siteUri)
+                    && siteUri.Scheme is "http" or "https")
+                {
+                    return siteUri.AbsoluteUri;
+                }
+            }
+        }
+
+        if (pluginWebsites.TryGetValue(source.ProviderId, out var pluginWebsite)
+            && Uri.TryCreate(pluginWebsite, UriKind.Absolute, out var pluginUri)
+            && pluginUri.Scheme is "http" or "https")
+        {
+            return pluginUri.AbsoluteUri;
+        }
+
+        // No configured website — caller must prompt instead of guessing.
+        return null;
+    }
+
+    private async void OpenSiteButton_Click(object sender, RoutedEventArgs e)
+    {
+        var current = Session.SourceFilter;
+        if (!string.IsNullOrWhiteSpace(current))
+        {
+            foreach (var (key, text, _, website, suggested) in _filterEntries)
+            {
+                if (string.Equals(key, current, StringComparison.Ordinal))
+                {
+                    await OpenOrPromptWebsiteAsync(key, text, website, suggested);
+                    return;
+                }
+            }
+        }
+
+        ShowOpenSiteMenu();
+    }
+
+    private void ShowOpenSiteMenu()
+    {
+        var menu = new MenuFlyout();
+        if (_filterEntries.Count == 0)
+        {
+            menu.Items.Add(new MenuFlyoutItem { Text = "暂无可用来源", IsEnabled = false });
+        }
+        else
+        {
+            foreach (var (key, text, _, website, suggested) in _filterEntries)
+            {
+                var item = new MenuFlyoutItem { Text = text };
+                var entryKey = key;
+                var entryText = text;
+                var entryWebsite = website;
+                var entrySuggested = suggested;
+                item.Click += async (_, _) => await OpenOrPromptWebsiteAsync(entryKey, entryText, entryWebsite, entrySuggested);
+                menu.Items.Add(item);
+            }
+        }
+
+        menu.ShowAt(OpenSiteButton);
+    }
+
+    private async Task OpenOrPromptWebsiteAsync(string key, string displayName, string? websiteUrl, string? suggestedUrl = null)
+    {
+        if (IsUsableWebsite(websiteUrl))
+        {
+            await OpenWebsiteAsync(websiteUrl!);
+            return;
+        }
+
+        await PromptWebsiteAsync(key, displayName, suggestedUrl);
+    }
+
+    private static bool IsUsableWebsite(string? websiteUrl)
+        => Uri.TryCreate(websiteUrl, UriKind.Absolute, out var uri)
+            && uri.Scheme is "http" or "https";
+
+    private TaskCompletionSource<WebsiteDialogResult>? _websiteDialogTcs;
+    private string? _websiteDialogKey;
+    private string? _websiteDialogName;
+
+    private sealed record WebsiteDialogResult(bool Save, string? Url);
+
+    private async Task PromptWebsiteAsync(string key, string displayName, string? suggestedUrl)
+    {
+        if (_isDisposed)
+        {
+            return;
+        }
+
+        _websiteDialogKey = key;
+        _websiteDialogName = displayName;
+        WebsiteDialogTitle.Text = $"打开「{displayName}」";
+        WebsiteDialogInput.Text = suggestedUrl ?? string.Empty;
+        WebsiteDialogLayer.Visibility = Visibility.Visible;
+        _websiteDialogTcs = new TaskCompletionSource<WebsiteDialogResult>();
+        WebsiteDialogInput.Focus(FocusState.Programmatic);
+
+        WebsiteDialogResult result;
+        try
+        {
+            result = await _websiteDialogTcs.Task;
+        }
+        finally
+        {
+            WebsiteDialogLayer.Visibility = Visibility.Collapsed;
+            _websiteDialogTcs = null;
+            _websiteDialogKey = null;
+            _websiteDialogName = null;
+        }
+
+        if (!result.Save || !IsUsableWebsite(result.Url))
+        {
+            return;
+        }
+
+        var website = result.Url!;
+        var parts = key.Split('|');
+        if (parts.Length != 2)
+        {
+            return;
+        }
+
+        var providerId = parts[0];
+        var sourceId = parts[1];
+        try
+        {
+            await Session.UpdateSourceWebsiteAsync(providerId, sourceId, website);
+            if (!string.Equals(providerId, RssProviderInfo.ProviderId, StringComparison.Ordinal))
+            {
+                AppSettings.SetPluginWebsite(providerId, website);
+            }
+        }
+        catch
+        {
+            // Session already surfaces actionable errors.
+        }
+
+        for (var i = 0; i < _filterEntries.Count; i++)
+        {
+            var entry = _filterEntries[i];
+            if (string.Equals(entry.Key, key, StringComparison.Ordinal))
+            {
+                _filterEntries[i] = (entry.Key, entry.Text, entry.IconUrl, website, entry.SuggestedUrl);
+                break;
+            }
+        }
+
+        await OpenWebsiteAsync(website);
+    }
+
+    private void WebsiteDialogConfirmButton_Click(object sender, RoutedEventArgs e)
+        => _websiteDialogTcs?.TrySetResult(new WebsiteDialogResult(true, WebsiteDialogInput.Text?.Trim()));
+
+    private void WebsiteDialogCancelButton_Click(object sender, RoutedEventArgs e)
+        => _websiteDialogTcs?.TrySetResult(new WebsiteDialogResult(false, null));
+
+    private static async Task OpenWebsiteAsync(string websiteUrl)
+    {
+        if (!Uri.TryCreate(websiteUrl, UriKind.Absolute, out var uri))
+        {
+            return;
+        }
+
+        try
+        {
+            await Windows.System.Launcher.LaunchUriAsync(uri);
+        }
+        catch
+        {
+        }
+    }
 
     private async void FilterMenuFlyout_Opening(object sender, object e)
     {
@@ -78,46 +321,8 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
         }
     }
 
-    private async Task RefreshFilterEntriesAsync()
-    {
-        if (_isDisposed) return;
-
-        var sources = await Session.GetSourcesAsync(_flyoutCts?.Token ?? CancellationToken.None);
-        if (_isDisposed) return;
-
-        // Plugin package / user plugin icons live on PluginManagementEntry, not Source.Options.
-        // Settings > Sources shows those via PluginSettingsRow; the filter must use the same path.
-        var pluginIcons = new Dictionary<string, string?>(StringComparer.Ordinal);
-        try
-        {
-            foreach (var plugin in await Session.GetPluginsAsync(_flyoutCts?.Token ?? CancellationToken.None))
-            {
-                pluginIcons[plugin.PluginId] = AppSettings.GetPluginIcon(plugin.PluginId) ?? plugin.IconUri;
-            }
-        }
-        catch
-        {
-            // Plugin listing is optional for the filter list itself.
-        }
-
-        if (_isDisposed) return;
-
-        _filterEntries.Clear();
-        foreach (var source in sources.Where(IsFilterableSource)
-            .OrderBy(item => item.DisplayName, StringComparer.CurrentCultureIgnoreCase))
-        {
-            var iconUrl = source.IconUrl;
-            if (string.IsNullOrWhiteSpace(iconUrl)
-                && pluginIcons.TryGetValue(source.ProviderId, out var pluginIcon))
-            {
-                iconUrl = pluginIcon;
-            }
-
-            _filterEntries.Add(($"{source.ProviderId}|{source.SourceId}", source.DisplayName, iconUrl));
-        }
-
-        RebuildFilterMenuFromCache();
-    }
+    private Task RefreshFilterEntriesAsync()
+        => SourceDirectory.LoadAsync(_flyoutCts?.Token ?? CancellationToken.None);
 
     private void RebuildFilterMenuFromCache()
     {
@@ -138,7 +343,7 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
 
         FilterAllItem.IsChecked = string.IsNullOrWhiteSpace(current);
 
-        foreach (var (key, text, _) in _filterEntries)
+        foreach (var (key, text, _, _, _) in _filterEntries)
         {
             var item = new RadioMenuFlyoutItem
             {
@@ -182,7 +387,7 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
         string? iconUrl = null;
         if (filtered)
         {
-            foreach (var (key, _, url) in _filterEntries)
+            foreach (var (key, _, url, _, _) in _filterEntries)
             {
                 if (string.Equals(key, current, StringComparison.Ordinal))
                 {
@@ -378,9 +583,6 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
         (ContentFrame.Content as ViewLaterPage)?.ResetScrollPosition();
     }
 
-    private async void RefreshButton_Click(object sender, RoutedEventArgs e)
-        => await RefreshCurrentPageAsync();
-
     private void Session_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(FeedPeekPanelSession.IsBusy))
@@ -448,6 +650,7 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
         _flyoutCts?.Dispose();
         _flyoutCts = null;
         Loaded -= MainPanelControl_Loaded;
+        SourceDirectory.Updated -= OnSourceDirectoryUpdated;
         PluginAccountEvents.Changed -= PluginAccountEvents_Changed;
         Session.StatusRaised -= Session_StatusRaised;
         Session.BackgroundOpenRequested -= Session_BackgroundOpenRequested;

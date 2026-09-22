@@ -48,10 +48,41 @@ public sealed partial class PluginDetailPage : Page, IDisposable
     private async void PluginDetailPage_Loaded(object sender, RoutedEventArgs e)
     {
         _session.StatusRaised += Session_StatusRaised;
+        AppSettings.WebsiteSettingsChanged += OnWebsiteSettingsChanged;
         await LoadAsync();
     }
 
     private void PluginDetailPage_Unloaded(object sender, RoutedEventArgs e) => Dispose();
+
+    private void SaveWebsiteButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_pluginId))
+        {
+            return;
+        }
+
+        AppSettings.SetPluginWebsite(_pluginId, WebsiteBox.Text);
+        WebsiteBox.Text = AppSettings.GetPluginWebsite(_pluginId) ?? string.Empty;
+        ShowStatus("已保存打开的网页。", InfoBarSeverity.Success);
+    }
+
+    private void OnWebsiteSettingsChanged(object? sender, EventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_pluginId) || _disposed)
+        {
+            return;
+        }
+
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            WebsiteBox.Text = AppSettings.GetPluginWebsite(_pluginId) ?? string.Empty;
+        });
+    }
 
     private async Task LoadAsync()
     {
@@ -77,6 +108,7 @@ public sealed partial class PluginDetailPage : Page, IDisposable
             _defaultIconUri = _plugin.DefaultIconUri;
             HeroName.Text = _plugin.DisplayName;
             HeroVersion.Text = string.IsNullOrWhiteSpace(_plugin.Version) ? string.Empty : $"版本 {_plugin.Version}";
+            WebsiteBox.Text = AppSettings.GetPluginWebsite(_pluginId) ?? string.Empty;
             PluginCard.Header = "插件标识";
             PluginCard.Description = _plugin.PluginId;
             IconPicture.ProfilePicture = CreateImageSource(_plugin.IconUri);
@@ -276,6 +308,7 @@ public sealed partial class PluginDetailPage : Page, IDisposable
         Loaded -= PluginDetailPage_Loaded;
         Unloaded -= PluginDetailPage_Unloaded;
         _session.StatusRaised -= Session_StatusRaised;
+        AppSettings.WebsiteSettingsChanged -= OnWebsiteSettingsChanged;
         if (_signInWindow is not null)
         {
             _signInWindow.SignInSucceeded -= SignInWindow_SignInSucceeded;

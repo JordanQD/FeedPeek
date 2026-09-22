@@ -86,6 +86,9 @@
                 x:Name="RssCard"
                 Description="修改源链接后点击保存"
                 Header="源链接">
+                <controls:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE71B;" />
+                </controls:SettingsCard.HeaderIcon>
                 <Grid MinWidth="360" ColumnSpacing="8">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -103,8 +106,36 @@
             </controls:SettingsCard>
 
             <controls:SettingsCard
+                x:Name="WebsiteCard"
+                Description="主面板「打开源网站」使用的网址。未设置时打开前会询问。"
+                Header="打开的网页">
+                <controls:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE8A7;" />
+                </controls:SettingsCard.HeaderIcon>
+                <Grid MinWidth="360" ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox
+                        x:Name="WebsiteBox"
+                        PlaceholderText="https://"
+                        AutomationProperties.AutomationId="SourceWebsiteBox"
+                        AutomationProperties.Name="打开的网页" />
+                    <Button
+                        x:Name="SaveWebsiteButton"
+                        Grid.Column="1"
+                        Click="SaveWebsiteButton_Click"
+                        Content="保存" />
+                </Grid>
+            </controls:SettingsCard>
+
+            <controls:SettingsCard
                 x:Name="PluginCard"
                 Header="插件">
+                <controls:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE74C;" />
+                </controls:SettingsCard.HeaderIcon>
                 <StackPanel>
                     <TextBlock x:Name="PluginNameText" FontWeight="SemiBold" />
                     <TextBlock
@@ -116,6 +147,9 @@
             <controls:SettingsCard
                 Description="删除该来源及其本地缓存"
                 Header="删除来源">
+                <controls:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE74D;" />
+                </controls:SettingsCard.HeaderIcon>
                 <Button
                     x:Name="DeleteSourceButton"
                     Content="删除来源"

@@ -22,6 +22,9 @@
             <SolidColorBrush x:Key="OverlayButtonBorderPointerOverBrush" Color="#66000000" />
             <SolidColorBrush x:Key="OverlayButtonBorderPressedBrush" Color="#80000000" />
             <SolidColorBrush x:Key="OverlayButtonBorderDisabledBrush" Color="#1A000000" />
+
+            <SolidColorBrush x:Key="ModalDialogBackgroundBrush" Color="#FFF9F9F9" />
+            <SolidColorBrush x:Key="ModalDialogBorderBrush" Color="#33000000" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="Dark">
             <SolidColorBrush x:Key="OverlayButtonBackgroundBrush" Color="#995C5C5C" />
@@ -38,6 +41,9 @@
             <SolidColorBrush x:Key="OverlayButtonBorderPointerOverBrush" Color="#87FFFFFF" />
             <SolidColorBrush x:Key="OverlayButtonBorderPressedBrush" Color="#B4FFFFFF" />
             <SolidColorBrush x:Key="OverlayButtonBorderDisabledBrush" Color="#26FFFFFF" />
+
+            <SolidColorBrush x:Key="ModalDialogBackgroundBrush" Color="#FF2C2C2C" />
+            <SolidColorBrush x:Key="ModalDialogBorderBrush" Color="#50FFFFFF" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="HighContrast">
             <StaticResource x:Key="OverlayButtonBackgroundBrush" ResourceKey="SystemColorButtonFaceColorBrush" />
@@ -54,6 +60,9 @@
             <StaticResource x:Key="OverlayButtonBorderPointerOverBrush" ResourceKey="SystemColorHighlightTextColorBrush" />
             <StaticResource x:Key="OverlayButtonBorderPressedBrush" ResourceKey="SystemColorHighlightTextColorBrush" />
             <StaticResource x:Key="OverlayButtonBorderDisabledBrush" ResourceKey="SystemColorGrayTextColorBrush" />
+
+            <StaticResource x:Key="ModalDialogBackgroundBrush" ResourceKey="SystemColorButtonFaceColorBrush" />
+            <StaticResource x:Key="ModalDialogBorderBrush" ResourceKey="SystemColorButtonTextColorBrush" />
         </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
 

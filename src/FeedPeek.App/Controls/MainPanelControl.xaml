@@ -72,14 +72,14 @@
                     </Button.Flyout>
                 </Button>
                 <Button
-                    x:Name="RefreshButton"
+                    x:Name="OpenSiteButton"
                     Width="32"
                     Height="32"
                     Padding="0"
-                    Click="RefreshButton_Click"
+                    Click="OpenSiteButton_Click"
                     Style="{StaticResource SubtleButtonStyle}"
-                    ToolTipService.ToolTip="刷新更新">
-                    <FontIcon FontSize="15" Glyph="&#xE72C;" />
+                    ToolTipService.ToolTip="打开源网站">
+                    <FontIcon FontSize="15" Glyph="&#xE8A7;" />
                 </Button>
             </StackPanel>
         </Grid>
@@ -130,5 +130,48 @@
             VerticalAlignment="Top"
             IsIndeterminate="True"
             Visibility="Collapsed" />
+
+        <!-- In-panel modal. ContentDialog on this XAML island leaves its smoke layer outside the
+             DesktopFlyout, so the prompt is hosted here. Span all rows so it floats over the whole
+             panel like a dialog, not just the header strip. -->
+        <Grid
+            x:Name="WebsiteDialogLayer"
+            Grid.Row="0"
+            Grid.RowSpan="2"
+            Canvas.ZIndex="40"
+            Background="#99000000"
+            Visibility="Collapsed">
+            <Border
+                Width="320"
+                Margin="24"
+                Padding="20"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Background="{ThemeResource ModalDialogBackgroundBrush}"
+                BorderBrush="{ThemeResource ModalDialogBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="8">
+                <StackPanel Spacing="16">
+                    <TextBlock
+                        x:Name="WebsiteDialogTitle"
+                        Style="{ThemeResource SubtitleTextBlockStyle}"
+                        Text="打开源网站" />
+                    <TextBox
+                        x:Name="WebsiteDialogInput"
+                        PlaceholderText="https://" />
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                        <Button
+                            x:Name="WebsiteDialogCancelButton"
+                            Content="取消"
+                            Click="WebsiteDialogCancelButton_Click" />
+                        <Button
+                            x:Name="WebsiteDialogConfirmButton"
+                            Content="保存并打开"
+                            Style="{StaticResource AccentButtonStyle}"
+                            Click="WebsiteDialogConfirmButton_Click" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
     </Grid>
 </UserControl>

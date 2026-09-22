@@ -31,6 +31,7 @@ public static class AppSettings
     private const string CustomNotificationCreatorsKey = "CustomNotificationCreators";
     private const string AppLanguageKey = "AppLanguage";
     private const string PluginIconKeyPrefix = "PluginIcon.";
+    private const string PluginWebsiteKeyPrefix = "PluginWebsite.";
     private const string PanelSourceFilterKey = "PanelSourceFilter";
     private const string KeepPanelSourceFilterKey = "KeepPanelSourceFilter";
     private const string DefaultCustomLaunchWebPageUrl = "https://github.com/JordanQD/FeedPeek";
@@ -43,6 +44,9 @@ public static class AppSettings
     private static ApplicationDataContainer LocalSettings => ApplicationData.Current.LocalSettings;
 
     public static event EventHandler? NotificationSettingsChanged;
+
+    /// <summary>Raised when a source/plugin "open website" URL is saved from any surface.</summary>
+    public static event EventHandler? WebsiteSettingsChanged;
 
     public static bool VideoNotificationsEnabled
     {
@@ -291,15 +295,43 @@ public static class AppSettings
     public static string? GetPluginIcon(string pluginId)
         => LocalSettings.Values[PluginIconKeyPrefix + pluginId] as string;
 
+    /// <summary>Website opened by the panel's "open source site" action for this plugin.</summary>
+    public static string? GetPluginWebsite(string pluginId)
+        => LocalSettings.Values[PluginWebsiteKeyPrefix + pluginId] as string;
+
+    public static void SetPluginWebsite(string pluginId, string? website)
+    {
+        if (string.IsNullOrWhiteSpace(website))
+        {
+            LocalSettings.Values.Remove(PluginWebsiteKeyPrefix + pluginId);
+        }
+        else
+        {
+            LocalSettings.Values[PluginWebsiteKeyPrefix + pluginId] = website.Trim();
+        }
+
+        WebsiteSettingsChanged?.Invoke(null, EventArgs.Empty);
+        SourceDirectory.Refresh();
+    }
+
+    public static void NotifyWebsiteSettingsChanged()
+    {
+        WebsiteSettingsChanged?.Invoke(null, EventArgs.Empty);
+        SourceDirectory.Refresh();
+    }
+
     public static void SetPluginIcon(string pluginId, string? iconUri)
     {
         if (string.IsNullOrWhiteSpace(iconUri))
         {
             LocalSettings.Values.Remove(PluginIconKeyPrefix + pluginId);
-            return;
+        }
+        else
+        {
+            LocalSettings.Values[PluginIconKeyPrefix + pluginId] = iconUri;
         }
 
-        LocalSettings.Values[PluginIconKeyPrefix + pluginId] = iconUri;
+        SourceDirectory.Refresh();
     }
 
     public static IReadOnlyList<NotificationCreatorSubscription> CustomNotificationCreators
