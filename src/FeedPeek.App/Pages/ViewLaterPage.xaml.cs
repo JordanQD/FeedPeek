@@ -42,11 +42,11 @@ public sealed partial class ViewLaterPage : Page, IMainPanelPage, IDisposable
         if (_session is null || _isDisposed) return;
         var result = await _session.GetViewLaterPageAsync(cancellationToken);
         if (_isDisposed) return;
-        _items.Replace(result.Items, result.HasMore);
+        _items.Reset(result.Items, result.HasMore);
         EmptyPanel.Visibility = _items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private async Task<FeedItemLoadResult> LoadMoreAsync(CancellationToken cancellationToken)
+    private async Task<FeedItemLoadResult> LoadMoreAsync(int offset, CancellationToken cancellationToken)
     {
         var session = _session;
         if (session is null || _isDisposed)
@@ -56,7 +56,7 @@ public sealed partial class ViewLaterPage : Page, IMainPanelPage, IDisposable
 
         try
         {
-            return await session.LoadMoreViewLaterItemsAsync(cancellationToken);
+            return await session.LoadMoreViewLaterItemsAsync(offset, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -64,7 +64,7 @@ public sealed partial class ViewLaterPage : Page, IMainPanelPage, IDisposable
         }
         catch
         {
-            return new FeedItemLoadResult([.. _items], false);
+            return new FeedItemLoadResult([], false);
         }
     }
 

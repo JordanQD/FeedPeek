@@ -159,10 +159,7 @@
                             <Border Background="{ThemeResource ControlFillColorSecondaryBrush}" CornerRadius="{ThemeResource ListViewItemCornerRadius}">
                                 <Image Source="{x:Bind ImageSource}" Stretch="UniformToFill" />
                             </Border>
-                            <Button Width="28" Height="28" MinWidth="0" Margin="5" Padding="0" HorizontalAlignment="Right" VerticalAlignment="Top" Click="SaveButton_Click" DataContext="{x:Bind}" ToolTipService.ToolTip="稍后再看">
-                                <Button.Resources>
-                                    <ResourceDictionary Source="/Styles/OverlayButtonResources.xaml" />
-                                </Button.Resources>
+                            <Button Width="28" Height="28" MinWidth="0" Margin="5" Padding="0" HorizontalAlignment="Right" VerticalAlignment="Top" Click="SaveButton_Click" DataContext="{x:Bind}" Style="{StaticResource OverlayIconButtonStyle}" ToolTipService.ToolTip="稍后再看">
                                 <FontIcon FontSize="14" Glyph="&#xE710;" />
                             </Button>
                             <Border Margin="5" Padding="4,1" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="{ThemeResource DurationBadgeBackgroundBrush}" CornerRadius="4" Visibility="{x:Bind DurationVisibility}">

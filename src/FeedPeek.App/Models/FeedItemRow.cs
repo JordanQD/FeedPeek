@@ -1,7 +1,7 @@
 using FeedPeek.Core.Models;
+using FeedPeek.Helpers;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Media.Imaging;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -13,6 +13,12 @@ public sealed class FeedItemRow : INotifyPropertyChanged
 {
     private bool _isRead;
     private bool _isSaved;
+    private readonly bool _preferAuthorAttribution;
+    private readonly string? _sourceIconUrl;
+    private ImageSource? _imageSource;
+    private ImageSource? _sourceIconSource;
+    private ImageSource? _attributionIconSource;
+    private bool _imagesResolved;
 
     public FeedItemRow(
         StoredFeedItem storedItem,
@@ -28,12 +34,9 @@ public sealed class FeedItemRow : INotifyPropertyChanged
         _isRead = storedItem.IsRead;
         _isSaved = storedItem.IsSaved;
         SourceName = string.IsNullOrWhiteSpace(sourceName) ? Item.SourceId : sourceName;
-        ImageSource = CreateImageSource(Item.ImageUrl);
-        SourceIconSource = CreateImageSource(sourceIconUrl);
         AttributionName = preferAuthorAttribution ? Item.AuthorName : SourceName;
-        AttributionIconSource = preferAuthorAttribution
-            ? CreateImageSource(Item.AuthorImageUrl)
-            : SourceIconSource;
+        _preferAuthorAttribution = preferAuthorAttribution;
+        _sourceIconUrl = sourceIconUrl;
     }
 
     public FeedItem Item { get; }
@@ -70,13 +73,53 @@ public sealed class FeedItemRow : INotifyPropertyChanged
 
     public string ImageUrl => Item.ImageUrl ?? string.Empty;
 
-    public ImageSource? ImageSource { get; }
+    public ImageSource? ImageSource
+    {
+        get
+        {
+            EnsureImages();
+            return _imageSource;
+        }
+    }
 
-    public ImageSource? SourceIconSource { get; }
+    public ImageSource? SourceIconSource
+    {
+        get
+        {
+            EnsureImages();
+            return _sourceIconSource;
+        }
+    }
 
     public string AttributionName { get; }
 
-    public ImageSource? AttributionIconSource { get; }
+    public ImageSource? AttributionIconSource
+    {
+        get
+        {
+            EnsureImages();
+            return _attributionIconSource;
+        }
+    }
+
+    /// <summary>
+    /// BitmapImage must be created on the UI thread. Rows are often built on the thread
+    /// pool after ConfigureAwait(false); creating images in the constructor throws COMException.
+    /// </summary>
+    private void EnsureImages()
+    {
+        if (_imagesResolved)
+        {
+            return;
+        }
+
+        _imagesResolved = true;
+        _imageSource = ImageSourceCache.GetCover(Item.ImageUrl);
+        _sourceIconSource = ImageSourceCache.GetIcon(_sourceIconUrl);
+        _attributionIconSource = _preferAuthorAttribution
+            ? ImageSourceCache.GetIcon(Item.AuthorImageUrl)
+            : _sourceIconSource;
+    }
 
     public string AuthorImageUrl => Item.AuthorImageUrl ?? string.Empty;
 
@@ -153,18 +196,7 @@ public sealed class FeedItemRow : INotifyPropertyChanged
             : localTime.ToString("yyyy-M-d HH:mm");
     }
 
-    private static ImageSource? CreateImageSource(string? imageUrl)
-    {
-        if (!Uri.TryCreate(imageUrl, UriKind.Absolute, out var uri)
-            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps
-                && !string.Equals(uri.Scheme, "ms-appdata", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(uri.Scheme, "file", StringComparison.OrdinalIgnoreCase)))
-        {
-            return null;
-        }
 
-        return new BitmapImage(uri);
-    }
 
     private void SetProperty<T>(ref T storage, T value, [CallerMemberName] string? propertyName = null)
     {

@@ -1,12 +1,15 @@
+using FeedPeek.Helpers;
 using FeedPeek.PluginContracts.Dtos;
 using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Media.Imaging;
 using System;
 
 namespace FeedPeek.Models;
 
 public sealed class FeedLiveItemRow
 {
+    private readonly string? _avatarUrl;
+    private ImageSource? _avatarSource;
+
     public FeedLiveItemRow(PluginLiveItem item)
     {
         ArgumentNullException.ThrowIfNull(item);
@@ -14,7 +17,7 @@ public sealed class FeedLiveItemRow
         DisplayName = item.DisplayName;
         Url = item.Url;
         Title = item.Title ?? string.Empty;
-        AvatarSource = CreateImageSource(item.AvatarUrl);
+        _avatarUrl = item.AvatarUrl;
     }
 
     public string CreatorKey { get; }
@@ -25,13 +28,16 @@ public sealed class FeedLiveItemRow
 
     public string Title { get; }
 
-    public ImageSource? AvatarSource { get; }
+    public ImageSource? AvatarSource
+    {
+        get
+        {
+            // BitmapImage must be created on the UI thread (lazy bind).
+            _avatarSource ??= ImageSourceCache.GetAvatar(_avatarUrl);
+            return _avatarSource;
+        }
+    }
 
     public string ToolTipText => string.IsNullOrWhiteSpace(Title) ? DisplayName : Title;
 
-    private static ImageSource? CreateImageSource(string? url)
-        => Uri.TryCreate(url, UriKind.Absolute, out var uri)
-            && uri.Scheme is "http" or "https"
-                ? new BitmapImage(uri)
-                : null;
 }

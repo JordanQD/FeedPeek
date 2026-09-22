@@ -1,8 +1,7 @@
 namespace FeedPeek.Models;
 
+using FeedPeek.Helpers;
 using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Media.Imaging;
-using System;
 using System.Text.Json.Serialization;
 
 public sealed class NotificationCreatorSubscription
@@ -53,7 +52,7 @@ public sealed class NotificationCreatorSubscription
                 return null;
             }
 
-            _avatarImage = new BitmapImage(new Uri(_avatarUrl));
+            _avatarImage = ImageSourceCache.GetSettingsAvatar(_avatarUrl);
             return _avatarImage;
         }
     }

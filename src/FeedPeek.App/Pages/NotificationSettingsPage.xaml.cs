@@ -315,9 +315,7 @@ public sealed partial class NotificationSettingsPage : Page
                 }
 
                 avatarPicture.Initials = string.IsNullOrWhiteSpace(resolvedCreator.DisplayName) ? "UP" : resolvedCreator.DisplayName[..1];
-                avatarPicture.ProfilePicture = string.IsNullOrWhiteSpace(resolvedCreator.AvatarUrl)
-                    ? null
-                    : new BitmapImage(new Uri(resolvedCreator.AvatarUrl));
+                avatarPicture.ProfilePicture = ImageSourceCache.GetSettingsAvatar(resolvedCreator.AvatarUrl);
                 creatorNameText.Text = resolvedCreator.DisplayName;
                 creatorDetailText.Text = $"{resolvedCreator.ProviderId} · {resolvedCreator.CreatorKey}";
                 dialog.IsPrimaryButtonEnabled = true;

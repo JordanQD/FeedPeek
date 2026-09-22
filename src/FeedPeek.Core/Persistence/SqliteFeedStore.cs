@@ -288,7 +288,7 @@ public sealed class SqliteFeedStore : IFeedStore
               AND (@source_id IS NULL OR i.source_id = @source_id)
               AND (@feed_id IS NULL OR i.feed_id = @feed_id)
             ORDER BY i.published_at DESC, i.item_id COLLATE NOCASE
-            LIMIT @limit;
+            LIMIT @limit OFFSET @offset;
             """);
         AddParameter(command, "@unread_only", ToSqliteBoolean(query.UnreadOnly));
         AddParameter(command, "@read_only", ToSqliteBoolean(query.ReadOnly));
@@ -297,6 +297,7 @@ public sealed class SqliteFeedStore : IFeedStore
         AddParameter(command, "@source_id", query.SourceId);
         AddParameter(command, "@feed_id", query.FeedId);
         AddParameter(command, "@limit", NormalizeLimit(query.Limit));
+        AddParameter(command, "@offset", Math.Max(0, query.Offset));
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         var items = new List<StoredFeedItem>();

@@ -197,17 +197,7 @@ public sealed partial class PluginDetailPage : Page, IDisposable
         => EditOverlay.Visibility = Visibility.Collapsed;
 
     private static ImageSource? CreateImageSource(string? imageUrl)
-    {
-        if (!Uri.TryCreate(imageUrl, UriKind.Absolute, out var uri)
-            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps
-                && !string.Equals(uri.Scheme, "ms-appdata", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(uri.Scheme, "file", StringComparison.OrdinalIgnoreCase)))
-        {
-            return null;
-        }
-
-        return new BitmapImage(uri);
-    }
+        => ImageSourceCache.GetSettingsAvatar(imageUrl);
 
     private async void DeletePluginButton_Click(object sender, RoutedEventArgs e)
     {

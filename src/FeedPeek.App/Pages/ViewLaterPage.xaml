@@ -40,8 +40,7 @@
                         </Grid>
                         <Grid Grid.Column="1" Width="128" Height="72" VerticalAlignment="Center">
                             <Border Background="{ThemeResource ControlFillColorSecondaryBrush}" CornerRadius="{ThemeResource ListViewItemCornerRadius}"><Image Source="{x:Bind ImageSource}" Stretch="UniformToFill" /></Border>
-                            <Button Width="28" Height="28" MinWidth="0" Margin="5" Padding="0" HorizontalAlignment="Right" VerticalAlignment="Top" Click="RemoveButton_Click" DataContext="{x:Bind}" ToolTipService.ToolTip="从稍后再看移除">
-                                <Button.Resources><ResourceDictionary Source="/Styles/OverlayButtonResources.xaml" /></Button.Resources>
+                            <Button Width="28" Height="28" MinWidth="0" Margin="5" Padding="0" HorizontalAlignment="Right" VerticalAlignment="Top" Click="RemoveButton_Click" DataContext="{x:Bind}" Style="{StaticResource OverlayIconButtonStyle}" ToolTipService.ToolTip="从稍后再看移除">
                                 <FontIcon FontSize="14" Glyph="&#xE74D;" />
                             </Button>
                             <Border Margin="5" Padding="4,1" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="{ThemeResource DurationBadgeBackgroundBrush}" CornerRadius="4" Visibility="{x:Bind DurationVisibility}"><TextBlock FontSize="11" Foreground="{ThemeResource DurationBadgeForegroundBrush}" Text="{x:Bind DurationText}" /></Border>

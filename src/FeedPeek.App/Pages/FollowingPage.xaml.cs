@@ -43,7 +43,7 @@ public sealed partial class FollowingPage : Page, IMainPanelPage, IDisposable
         if (session is null || _isDisposed) return;
         var result = await session.GetFollowingPageAsync(cancellationToken);
         if (_isDisposed) return;
-        _items.Replace(result.Items, result.HasMore);
+        _items.Reset(result.Items, result.HasMore);
         EmptyPanel.Visibility = _items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         var extras = await session.GetFollowingExtrasAsync(cancellationToken);
         if (_isDisposed) return;
@@ -141,7 +141,7 @@ public sealed partial class FollowingPage : Page, IMainPanelPage, IDisposable
             : Visibility.Collapsed;
     }
 
-    private async Task<FeedItemLoadResult> LoadMoreAsync(CancellationToken cancellationToken)
+    private async Task<FeedItemLoadResult> LoadMoreAsync(int offset, CancellationToken cancellationToken)
     {
         var session = _session;
         if (session is null || _isDisposed)
@@ -151,7 +151,7 @@ public sealed partial class FollowingPage : Page, IMainPanelPage, IDisposable
 
         try
         {
-            return await session.LoadMoreFollowingItemsAsync(cancellationToken);
+            return await session.LoadMoreFollowingItemsAsync(offset, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -159,7 +159,7 @@ public sealed partial class FollowingPage : Page, IMainPanelPage, IDisposable
         }
         catch
         {
-            return new FeedItemLoadResult([.. _items], false);
+            return new FeedItemLoadResult([], false);
         }
     }
 

@@ -296,5 +296,7 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
         foreach (var page in _initializedPages) page.Dispose();
         _initializedPages.Clear();
         Session.Dispose();
+        ImageSourceCache.Clear();
+        WorkingSetTrimmer.RequestTrim();
     }
 }

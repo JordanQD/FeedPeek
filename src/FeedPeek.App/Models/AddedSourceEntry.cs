@@ -1,5 +1,5 @@
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media.Imaging;
+using FeedPeek.Helpers;
 using System;
 
 namespace FeedPeek.Models;
@@ -56,10 +56,10 @@ public sealed class AddedSourceEntry
 
     private IconElement CreateIcon()
     {
-        if (Uri.TryCreate(IconUrl, UriKind.Absolute, out var uri)
-            && uri.Scheme is "http" or "https" or "ms-appdata" or "file")
+        var image = ImageSourceCache.GetIcon(IconUrl);
+        if (image is not null)
         {
-            return new ImageIcon { Source = new BitmapImage(uri) };
+            return new ImageIcon { Source = image };
         }
 
         return new FontIcon { Glyph = Glyph, FontSize = 16 };

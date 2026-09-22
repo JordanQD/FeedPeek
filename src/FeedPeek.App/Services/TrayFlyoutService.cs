@@ -292,6 +292,7 @@ internal sealed class TrayFlyoutService : IDisposable
             closedPanel.OnFlyoutClosed();
             closedPanel.Dispose();
             _mainFlyoutIsland.Content = null;
+            Helpers.WorkingSetTrimmer.RequestTrim();
         }
 
         QueuePendingContextMenuShow();

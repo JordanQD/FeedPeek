@@ -1,8 +1,8 @@
 using FeedPeek.Core.Models;
+using FeedPeek.Helpers;
 using FeedPeek.Rss;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Media.Imaging;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -111,17 +111,7 @@ public sealed class FeedSourceRow : INotifyPropertyChanged
     }
 
     private static ImageSource? CreateImageSource(string? imageUrl)
-    {
-        if (!Uri.TryCreate(imageUrl, UriKind.Absolute, out var uri)
-            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps
-                && !string.Equals(uri.Scheme, "ms-appdata", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(uri.Scheme, "file", StringComparison.OrdinalIgnoreCase)))
-        {
-            return null;
-        }
-
-        return new BitmapImage(uri);
-    }
+        => ImageSourceCache.GetIcon(imageUrl);
 
     public event PropertyChangedEventHandler? PropertyChanged;
 

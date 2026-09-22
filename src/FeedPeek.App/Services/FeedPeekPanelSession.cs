@@ -52,6 +52,7 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
     private const string DefaultCredentialProfileId = "default";
     private const string RssIconOption = "rss.icon";
     private static readonly TimeSpan DefaultRefreshInterval = TimeSpan.FromMinutes(15);
+    internal const int PanelPageSize = 30;
 
     private readonly SqliteFeedStore _store;
     private readonly CookieStore _cookieStore;
@@ -431,7 +432,9 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
 
     public Task<IReadOnlyList<FeedItemRow>> GetFollowingItemsAsync(
         CancellationToken cancellationToken = default)
-        => GetItemsAsync(new FeedQuery(FeedId: PluginFeedIds.Updates), cancellationToken);
+        => GetItemsAsync(
+            new FeedQuery(FeedId: PluginFeedIds.Updates, Limit: PanelPageSize, Offset: 0),
+            cancellationToken);
 
     public async Task<FeedFollowingExtras> GetFollowingExtrasAsync(
         CancellationToken cancellationToken = default)
@@ -596,43 +599,40 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
     public async Task<FeedItemLoadResult> GetFollowingPageAsync(
         CancellationToken cancellationToken = default)
     {
-        var items = await GetFollowingItemsAsync(cancellationToken);
-        var hasMore = await HasMoreFollowingItemsAsync(cancellationToken);
-        return new FeedItemLoadResult(items, hasMore);
-    }
-
-    public async Task<FeedItemLoadResult> LoadMoreFollowingItemsAsync(
-        CancellationToken cancellationToken = default)
-    {
         FeedItemLoadResult result = new([], false);
         await RunExclusiveAsync(
             async operationToken =>
             {
                 await EnsureInitializedAsync(operationToken).ConfigureAwait(false);
+                var items = await QueryItemsAsync(
+                    new FeedQuery(FeedId: PluginFeedIds.Updates, Limit: PanelPageSize, Offset: 0),
+                    operationToken).ConfigureAwait(false);
                 var subscriptions = await _feedSession.GetSubscriptionsAsync(operationToken)
                     .ConfigureAwait(false);
-                foreach (var subscription in subscriptions.Where(item =>
-                    IsPluginFeed(item, PluginFeedIds.Updates)))
-                {
-                    if (await _feedSession.HasMoreAsync(subscription, operationToken).ConfigureAwait(false))
-                    {
-                        await _feedSession.LoadMoreAsync(subscription, operationToken).ConfigureAwait(false);
-                    }
-                }
-
-                var items = await QueryItemsAsync(
-                    new FeedQuery(FeedId: PluginFeedIds.Updates),
-                    operationToken).ConfigureAwait(false);
-                var hasMore = await HasMoreFeedItemsCoreAsync(
-                    subscriptions,
-                    PluginFeedIds.Updates,
-                    operationToken)
-                    .ConfigureAwait(false);
+                var hasMore = items.Count >= PanelPageSize
+                    || await HasMoreFeedItemsCoreAsync(subscriptions, PluginFeedIds.Updates, operationToken)
+                        .ConfigureAwait(false);
                 result = new FeedItemLoadResult(items, hasMore);
             },
             cancellationToken);
         return result;
     }
+
+    public Task<FeedItemLoadResult> LoadMoreFollowingItemsAsync(
+        int offset,
+        CancellationToken cancellationToken = default)
+        => LoadMoreSectionItemsAsync(
+            PluginFeedIds.Updates,
+            QueryFollowingItemsCoreAsync,
+            offset,
+            cancellationToken);
+
+    private async Task<IReadOnlyList<FeedItemRow>> QueryFollowingItemsCoreAsync(
+        int offset,
+        CancellationToken cancellationToken)
+        => await QueryItemsAsync(
+            new FeedQuery(FeedId: PluginFeedIds.Updates, Limit: PanelPageSize, Offset: offset),
+            cancellationToken).ConfigureAwait(false);
 
     public async Task<bool> HasMoreFollowingItemsAsync(
         CancellationToken cancellationToken = default)
@@ -656,19 +656,37 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
 
     public Task<FeedItemLoadResult> GetHistoryPageAsync(
         CancellationToken cancellationToken = default)
-        => GetSectionPageAsync(PluginFeedIds.History, QueryHistoryItemsCoreAsync, cancellationToken);
+        => GetSectionPageAsync(
+            PluginFeedIds.History,
+            QueryHistoryItemsCoreAsync,
+            offset: 0,
+            cancellationToken);
 
     public Task<FeedItemLoadResult> LoadMoreHistoryItemsAsync(
+        int offset,
         CancellationToken cancellationToken = default)
-        => LoadMoreSectionItemsAsync(PluginFeedIds.History, QueryHistoryItemsCoreAsync, cancellationToken);
+        => LoadMoreSectionItemsAsync(
+            PluginFeedIds.History,
+            QueryHistoryItemsCoreAsync,
+            offset,
+            cancellationToken);
 
     public Task<FeedItemLoadResult> GetViewLaterPageAsync(
         CancellationToken cancellationToken = default)
-        => GetSectionPageAsync(PluginFeedIds.ViewLater, QueryViewLaterItemsCoreAsync, cancellationToken);
+        => GetSectionPageAsync(
+            PluginFeedIds.ViewLater,
+            QueryViewLaterItemsCoreAsync,
+            offset: 0,
+            cancellationToken);
 
     public Task<FeedItemLoadResult> LoadMoreViewLaterItemsAsync(
+        int offset,
         CancellationToken cancellationToken = default)
-        => LoadMoreSectionItemsAsync(PluginFeedIds.ViewLater, QueryViewLaterItemsCoreAsync, cancellationToken);
+        => LoadMoreSectionItemsAsync(
+            PluginFeedIds.ViewLater,
+            QueryViewLaterItemsCoreAsync,
+            offset,
+            cancellationToken);
 
     private async Task<IReadOnlyList<FeedItemRow>> GetItemsAsync(
         FeedQuery query,
@@ -1224,7 +1242,8 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
 
     private async Task<FeedItemLoadResult> GetSectionPageAsync(
         string feedId,
-        Func<CancellationToken, Task<IReadOnlyList<FeedItemRow>>> query,
+        Func<int, CancellationToken, Task<IReadOnlyList<FeedItemRow>>> query,
+        int offset,
         CancellationToken cancellationToken)
     {
         FeedItemLoadResult result = new([], false);
@@ -1234,10 +1253,16 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
                 await EnsureInitializedAsync(operationToken).ConfigureAwait(false);
                 var subscriptions = await _feedSession.GetSubscriptionsAsync(operationToken)
                     .ConfigureAwait(false);
-                result = new FeedItemLoadResult(
-                    await query(operationToken).ConfigureAwait(false),
-                    await HasMoreFeedItemsCoreAsync(subscriptions, feedId, operationToken)
-                        .ConfigureAwait(false));
+                var items = await query(offset, operationToken).ConfigureAwait(false);
+                var pluginHasMore = await HasMoreFeedItemsCoreAsync(
+                    subscriptions,
+                    feedId,
+                    operationToken).ConfigureAwait(false);
+                // An empty page after offset/merge must never keep hasMore — view-later
+                // merge can shrink a full raw window to fewer logical rows.
+                var hasMore = items.Count > 0
+                    && (items.Count >= PanelPageSize || pluginHasMore);
+                result = new FeedItemLoadResult(items, hasMore);
             },
             cancellationToken);
         return result;
@@ -1245,7 +1270,8 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
 
     private async Task<FeedItemLoadResult> LoadMoreSectionItemsAsync(
         string feedId,
-        Func<CancellationToken, Task<IReadOnlyList<FeedItemRow>>> query,
+        Func<int, CancellationToken, Task<IReadOnlyList<FeedItemRow>>> query,
+        int offset,
         CancellationToken cancellationToken)
     {
         FeedItemLoadResult result = new([], false);
@@ -1274,34 +1300,50 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
                     }
                 }
 
-                result = new FeedItemLoadResult(
-                    await query(operationToken).ConfigureAwait(false),
-                    await HasMoreFeedItemsCoreAsync(subscriptions, feedId, operationToken)
-                        .ConfigureAwait(false));
+                var items = await query(offset, operationToken).ConfigureAwait(false);
+                var hasMore = items.Count >= PanelPageSize
+                    || await HasMoreFeedItemsCoreAsync(subscriptions, feedId, operationToken)
+                        .ConfigureAwait(false);
+                result = new FeedItemLoadResult(items, hasMore);
             },
             cancellationToken);
         return result;
     }
 
     private async Task<IReadOnlyList<FeedItemRow>> QueryHistoryItemsCoreAsync(
+        int offset,
         CancellationToken cancellationToken)
     {
+        // Merge then page so history from plugins and local reads keep one time order.
+        // Bound the fetch window to offset+page (not the old 500-row default).
+        var window = offset + PanelPageSize;
         var remote = await QueryItemsAsync(
-            new FeedQuery(FeedId: PluginFeedIds.History),
+            new FeedQuery(FeedId: PluginFeedIds.History, Limit: window),
             cancellationToken).ConfigureAwait(false);
         var local = await QueryItemsAsync(
-            new FeedQuery(ReadOnly: true),
+            new FeedQuery(ReadOnly: true, Limit: window),
             cancellationToken).ConfigureAwait(false);
-        return MergeLogicalItems(
-            remote,
-            local);
+        var merged = MergeLogicalItems(remote, local);
+        return offset >= merged.Count
+            ? []
+            : merged.Skip(offset).Take(PanelPageSize).ToList();
     }
 
     private async Task<IReadOnlyList<FeedItemRow>> QueryViewLaterItemsCoreAsync(
+        int offset,
         CancellationToken cancellationToken)
-        => MergeLogicalItems(
-            await QueryItemsAsync(new FeedQuery(SavedOnly: true), cancellationToken)
-                .ConfigureAwait(false));
+    {
+        // Saved rows exist under several feed_ids. SQL OFFSET counts raw rows while the UI
+        // list is logical (de-duped) items, so paging by Count stops mid-list. Merge first.
+        var limit = Math.Max(500, offset + PanelPageSize * 2);
+        var rows = await QueryItemsAsync(
+            new FeedQuery(SavedOnly: true, Limit: limit),
+            cancellationToken).ConfigureAwait(false);
+        var merged = MergeLogicalItems(rows);
+        return offset >= merged.Count
+            ? []
+            : merged.Skip(offset).Take(PanelPageSize).ToList();
+    }
 
     private async Task SynchronizeViewLaterPageAsync(
         FeedSubscription subscription,
@@ -1395,7 +1437,8 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
         }
         catch (Exception exception)
         {
-            RaiseStatus(exception.Message, InfoBarSeverity.Error);
+            // Some failures have an empty Message; the panel would show a blank error toast.
+            RaiseStatus(DescribeError(exception), InfoBarSeverity.Error);
             throw;
         }
         finally
