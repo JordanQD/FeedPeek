@@ -123,6 +123,52 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
 
     public IReadOnlyList<CreatorDescriptor> FollowingCreators { get; private set; } = [];
 
+    /// <summary>
+    /// Optional source filter for list queries. Null or empty means all sources.
+    /// Format: <c>providerId|sourceId</c>. Refresh still covers every enabled subscription.
+    /// </summary>
+    public string? SourceFilter { get; set; }
+
+    private (string ProviderId, string SourceId)? ParsedSourceFilter
+    {
+        get
+        {
+            var raw = SourceFilter;
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return null;
+            }
+
+            var separator = raw.IndexOf('|');
+            if (separator <= 0 || separator >= raw.Length - 1)
+            {
+                return null;
+            }
+
+            return (raw[..separator], raw[(separator + 1)..]);
+        }
+    }
+
+    private bool MatchesSourceFilter(FeedSubscription subscription)
+    {
+        var filter = ParsedSourceFilter;
+        return filter is null
+            || (string.Equals(subscription.ProviderId, filter.Value.ProviderId, StringComparison.Ordinal)
+                && string.Equals(subscription.SourceId, filter.Value.SourceId, StringComparison.Ordinal));
+    }
+
+    private FeedQuery ApplySourceFilter(FeedQuery query)
+    {
+        var filter = ParsedSourceFilter;
+        return filter is null
+            ? query
+            : query with
+            {
+                ProviderId = filter.Value.ProviderId,
+                SourceId = filter.Value.SourceId,
+            };
+    }
+
     public Task InitializeAsync(CancellationToken cancellationToken = default)
         => RunExclusiveAsync(
             async operationToken =>
@@ -449,7 +495,7 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
                 // A plugin source may expose only the live view (no updates feed at all), so the
                 // live strip is collected even when there is nothing to ask for a following list.
                 var updateSubscriptions = subscriptions.Where(item =>
-                    IsPluginFeed(item, PluginFeedIds.Updates)).ToArray();
+                    MatchesSourceFilter(item) && IsPluginFeed(item, PluginFeedIds.Updates)).ToArray();
                 var following = new List<CreatorDescriptor>();
                 foreach (var subscription in updateSubscriptions)
                 {
@@ -468,7 +514,7 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
 
                 var liveItems = new List<PluginLiveItem>();
                 foreach (var liveSubscription in subscriptions.Where(item =>
-                    IsPluginFeed(item, PluginFeedIds.Live)))
+                    MatchesSourceFilter(item) && IsPluginFeed(item, PluginFeedIds.Live)))
                 {
                     try
                     {
@@ -1209,12 +1255,13 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
         FeedQuery query,
         CancellationToken cancellationToken)
     {
+        var filtered = ApplySourceFilter(query);
         var summaries = await _feedSession.GetSourceSummariesAsync(cancellationToken)
             .ConfigureAwait(false);
         var sources = summaries.ToDictionary(
             item => (item.Source.ProviderId, item.Source.SourceId),
             item => item.Source);
-        var storedItems = await _feedSession.GetItemsAsync(query, cancellationToken)
+        var storedItems = await _feedSession.GetItemsAsync(filtered, cancellationToken)
             .ConfigureAwait(false);
         return storedItems.Select(item =>
         {
@@ -1281,7 +1328,8 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
                 await EnsureInitializedAsync(operationToken).ConfigureAwait(false);
                 var subscriptions = await _feedSession.GetSubscriptionsAsync(operationToken)
                     .ConfigureAwait(false);
-                foreach (var subscription in subscriptions.Where(item => IsPluginFeed(item, feedId)))
+                foreach (var subscription in subscriptions.Where(item =>
+                    MatchesSourceFilter(item) && IsPluginFeed(item, feedId)))
                 {
                     if (!await _feedSession.HasMoreAsync(subscription, operationToken).ConfigureAwait(false))
                     {
@@ -1397,7 +1445,8 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
         string feedId,
         CancellationToken cancellationToken)
     {
-        foreach (var subscription in subscriptions.Where(item => IsPluginFeed(item, feedId)))
+        foreach (var subscription in subscriptions.Where(item =>
+            MatchesSourceFilter(item) && IsPluginFeed(item, feedId)))
         {
             if (await _feedSession.HasMoreAsync(subscription, cancellationToken).ConfigureAwait(false))
             {

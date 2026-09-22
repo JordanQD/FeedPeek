@@ -196,6 +196,20 @@
                     <ComboBoxItem x:Uid="GeneralLiveHiddenItem" Content="不显示" />
                 </ComboBox>
             </controls:SettingsCard>
+            <controls:SettingsCard
+                x:Uid="GeneralKeepSourceFilterCard"
+                Description="关闭主弹窗后是否记住源筛选，下次打开继续只看该源。"
+                Header="保留源筛选">
+                <controls:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE71C;" />
+                </controls:SettingsCard.HeaderIcon>
+                <ToggleSwitch
+                    x:Name="KeepSourceFilterSwitch"
+                    x:Uid="GeneralKeepSourceFilterSwitch"
+                    AutomationProperties.AutomationId="KeepSourceFilterSwitch"
+                    AutomationProperties.Name="保留源筛选"
+                    Toggled="KeepSourceFilterSwitch_Toggled" />
+            </controls:SettingsCard>
 
             <TextBlock
                 x:Uid="GeneralConfigSectionHeader"

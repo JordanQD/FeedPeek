@@ -29,6 +29,7 @@ public sealed partial class GeneralSettingsPage : Page
     };
 
     private bool _isLoadingSettings;
+    private bool _isInitializingKeepSourceFilter;
     private bool _useRegistryStartup;
     private StartupTask? _startupTask;
 
@@ -56,6 +57,9 @@ public sealed partial class GeneralSettingsPage : Page
             _ => 1,
         };
         LiveSectionDisplayModeBox.SelectedIndex = (int)AppSettings.LiveSectionDisplayMode;
+        _isInitializingKeepSourceFilter = true;
+        KeepSourceFilterSwitch.IsOn = AppSettings.KeepPanelSourceFilter;
+        _isInitializingKeepSourceFilter = false;
         UpdateCustomLaunchWebPageUrlBoxState();
         await LoadStartupStateAsync();
         _isLoadingSettings = false;
@@ -206,6 +210,19 @@ public sealed partial class GeneralSettingsPage : Page
             2 => DefaultOpenPage.ViewLater,
             _ => DefaultOpenPage.Following,
         };
+    }
+
+    private void KeepSourceFilterSwitch_Toggled(object sender, RoutedEventArgs e)
+    {
+        // Do not gate on _isLoadingSettings: programmatic IsOn assignment during load can
+        // interleave with user clicks (LoadStartupStateAsync is async). A dedicated one-shot
+        // guard covers the initial assignment only.
+        if (_isInitializingKeepSourceFilter)
+        {
+            return;
+        }
+
+        AppSettings.KeepPanelSourceFilter = KeepSourceFilterSwitch.IsOn;
     }
 
     private void SaveMainPanelPositionSwitch_Toggled(object sender, RoutedEventArgs e)

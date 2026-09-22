@@ -40,16 +40,48 @@
                     Text="稍后再看" />
             </SelectorBar>
 
-            <Button
+            <StackPanel
                 Grid.Column="1"
-                Width="34"
-                Height="34"
-                Padding="0"
-                Click="RefreshButton_Click"
-                Style="{StaticResource SubtleButtonStyle}"
-                ToolTipService.ToolTip="刷新更新">
-                <FontIcon FontSize="15" Glyph="&#xE72C;" />
-            </Button>
+                Orientation="Horizontal"
+                Spacing="4">
+                <Button
+                    x:Name="FilterButton"
+                    Width="32"
+                    Height="32"
+                    Padding="0"
+                    Style="{StaticResource SubtleButtonStyle}"
+                    ToolTipService.ToolTip="筛选来源">
+                    <FontIcon
+                        FontSize="15"
+                        Glyph="&#xE71C;" />
+                    <Button.Flyout>
+                        <MenuFlyout
+                            x:Name="FilterMenuFlyout"
+                            Placement="BottomEdgeAlignedRight"
+                            Opening="FilterMenuFlyout_Opening">
+                            <MenuFlyout.Items>
+                                <RadioMenuFlyoutItem
+                                    x:Name="FilterAllItem"
+                                    GroupName="PanelSourceFilter"
+                                    IsChecked="True"
+                                    Text="全部"
+                                    Click="FilterMenuItem_Click" />
+                                <MenuFlyoutSeparator x:Name="FilterSeparator" />
+                            </MenuFlyout.Items>
+                        </MenuFlyout>
+                    </Button.Flyout>
+                </Button>
+                <Button
+                    x:Name="RefreshButton"
+                    Width="32"
+                    Height="32"
+                    Padding="0"
+                    Click="RefreshButton_Click"
+                    Style="{StaticResource SubtleButtonStyle}"
+                    ToolTipService.ToolTip="刷新更新">
+                    <FontIcon FontSize="15" Glyph="&#xE72C;" />
+                </Button>
+            </StackPanel>
         </Grid>
 
         <Grid Grid.Row="1">

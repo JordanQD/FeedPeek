@@ -31,6 +31,8 @@ public static class AppSettings
     private const string CustomNotificationCreatorsKey = "CustomNotificationCreators";
     private const string AppLanguageKey = "AppLanguage";
     private const string PluginIconKeyPrefix = "PluginIcon.";
+    private const string PanelSourceFilterKey = "PanelSourceFilter";
+    private const string KeepPanelSourceFilterKey = "KeepPanelSourceFilter";
     private const string DefaultCustomLaunchWebPageUrl = "https://github.com/JordanQD/FeedPeek";
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -151,6 +153,50 @@ public static class AppSettings
     {
         get => ReadBool(SaveMainPanelPositionKey, false);
         set => LocalSettings.Values[SaveMainPanelPositionKey] = value;
+    }
+
+    /// <summary>
+    /// Persisted panel source filter as <c>providerId|sourceId</c>, or null for "all sources".
+    /// Ignored while <see cref="KeepPanelSourceFilter"/> is off.
+    /// </summary>
+    public static string? PanelSourceFilter
+    {
+        get
+        {
+            if (!KeepPanelSourceFilter)
+            {
+                return null;
+            }
+
+            var raw = LocalSettings.Values[PanelSourceFilterKey] as string;
+            return string.IsNullOrWhiteSpace(raw) ? null : raw.Trim();
+        }
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                LocalSettings.Values.Remove(PanelSourceFilterKey);
+                return;
+            }
+
+            LocalSettings.Values[PanelSourceFilterKey] = value.Trim();
+        }
+    }
+
+    /// <summary>
+    /// When off, the panel always starts with "all sources" and does not remember the last filter.
+    /// </summary>
+    public static bool KeepPanelSourceFilter
+    {
+        get => ReadBool(KeepPanelSourceFilterKey, true);
+        set
+        {
+            LocalSettings.Values[KeepPanelSourceFilterKey] = value;
+            if (!value)
+            {
+                LocalSettings.Values.Remove(PanelSourceFilterKey);
+            }
+        }
     }
 
     public static LiveSectionDisplayMode LiveSectionDisplayMode

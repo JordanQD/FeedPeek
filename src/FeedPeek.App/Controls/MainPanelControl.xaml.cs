@@ -2,6 +2,8 @@ using FeedPeek.Models;
 using FeedPeek.Pages;
 using FeedPeek.Services;
 using FeedPeek.Helpers;
+using FeedPeek.PluginContracts.Protocol;
+using FeedPeek.Rss;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -10,6 +12,7 @@ using Microsoft.UI.Xaml.Navigation;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -18,6 +21,7 @@ namespace FeedPeek.Controls;
 public sealed partial class MainPanelControl : UserControl, IDisposable
 {
     private readonly HashSet<IDisposable> _initializedPages = [];
+    private readonly List<(string Key, string Text, string? IconUrl)> _filterEntries = [];
     private CancellationTokenSource? _flyoutCts;
     private double _hostHeight = double.NaN;
     private int _previousSelectedPageIndex = -1;
@@ -37,6 +41,7 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
     {
         Session = new FeedPeekPanelSession();
         InitializeComponent();
+        ApplyPersistedSourceFilter();
         Session.StatusRaised += Session_StatusRaised;
         Session.BackgroundOpenRequested += Session_BackgroundOpenRequested;
         Session.PropertyChanged += Session_PropertyChanged;
@@ -45,6 +50,161 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
         Loaded += MainPanelControl_Loaded;
         ApplyBusyState();
         SelectDefaultPage();
+    }
+
+    private void ApplyPersistedSourceFilter()
+    {
+        Session.SourceFilter = AppSettings.PanelSourceFilter;
+        UpdateFilterButtonVisual();
+    }
+
+    private static bool IsFilterableSource(FeedSourceRow row)
+        => string.Equals(row.ProviderId, RssProviderInfo.ProviderId, StringComparison.Ordinal)
+            || row.Feeds.Any(feed => !string.Equals(feed.FeedId, PluginFeedIds.Live, StringComparison.Ordinal));
+
+    private async void FilterMenuFlyout_Opening(object sender, object e)
+    {
+        RebuildFilterMenuFromCache();
+        if (_filterEntries.Count == 0)
+        {
+            try
+            {
+                await RefreshFilterEntriesAsync();
+            }
+            catch
+            {
+                // Keep the default "all" entry if source loading fails.
+            }
+        }
+    }
+
+    private async Task RefreshFilterEntriesAsync()
+    {
+        if (_isDisposed) return;
+
+        var sources = await Session.GetSourcesAsync(_flyoutCts?.Token ?? CancellationToken.None);
+        if (_isDisposed) return;
+
+        // Plugin package / user plugin icons live on PluginManagementEntry, not Source.Options.
+        // Settings > Sources shows those via PluginSettingsRow; the filter must use the same path.
+        var pluginIcons = new Dictionary<string, string?>(StringComparer.Ordinal);
+        try
+        {
+            foreach (var plugin in await Session.GetPluginsAsync(_flyoutCts?.Token ?? CancellationToken.None))
+            {
+                pluginIcons[plugin.PluginId] = AppSettings.GetPluginIcon(plugin.PluginId) ?? plugin.IconUri;
+            }
+        }
+        catch
+        {
+            // Plugin listing is optional for the filter list itself.
+        }
+
+        if (_isDisposed) return;
+
+        _filterEntries.Clear();
+        foreach (var source in sources.Where(IsFilterableSource)
+            .OrderBy(item => item.DisplayName, StringComparer.CurrentCultureIgnoreCase))
+        {
+            var iconUrl = source.IconUrl;
+            if (string.IsNullOrWhiteSpace(iconUrl)
+                && pluginIcons.TryGetValue(source.ProviderId, out var pluginIcon))
+            {
+                iconUrl = pluginIcon;
+            }
+
+            _filterEntries.Add(($"{source.ProviderId}|{source.SourceId}", source.DisplayName, iconUrl));
+        }
+
+        RebuildFilterMenuFromCache();
+    }
+
+    private void RebuildFilterMenuFromCache()
+    {
+        while (FilterMenuFlyout.Items.Count > 2)
+        {
+            FilterMenuFlyout.Items.RemoveAt(FilterMenuFlyout.Items.Count - 1);
+        }
+
+        var current = Session.SourceFilter ?? AppSettings.PanelSourceFilter;
+        var stillExists = _filterEntries.Any(entry =>
+            string.Equals(entry.Key, current, StringComparison.Ordinal));
+        if (!string.IsNullOrWhiteSpace(current) && _filterEntries.Count > 0 && !stillExists)
+        {
+            AppSettings.PanelSourceFilter = null;
+            Session.SourceFilter = null;
+            current = null;
+        }
+
+        FilterAllItem.IsChecked = string.IsNullOrWhiteSpace(current);
+
+        foreach (var (key, text, _) in _filterEntries)
+        {
+            var item = new RadioMenuFlyoutItem
+            {
+                GroupName = "PanelSourceFilter",
+                Text = text,
+                Tag = key,
+                IsChecked = string.Equals(current, key, StringComparison.Ordinal),
+            };
+            item.Click += FilterMenuItem_Click;
+            FilterMenuFlyout.Items.Add(item);
+        }
+
+        UpdateFilterButtonVisual();
+    }
+
+    private async void FilterMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not RadioMenuFlyoutItem item)
+        {
+            return;
+        }
+
+        var key = item == FilterAllItem || item.Tag is not string tag
+            ? null
+            : tag;
+
+        AppSettings.PanelSourceFilter = AppSettings.KeepPanelSourceFilter ? key : null;
+        Session.SourceFilter = key;
+        UpdateFilterButtonVisual();
+        await RefreshCurrentPageAsync();
+    }
+
+    private void UpdateFilterButtonVisual()
+    {
+        var current = Session.SourceFilter;
+        var filtered = !string.IsNullOrWhiteSpace(current);
+        ToolTipService.SetToolTip(
+            FilterButton,
+            filtered ? "筛选来源（已筛选）" : "筛选来源");
+
+        string? iconUrl = null;
+        if (filtered)
+        {
+            foreach (var (key, _, url) in _filterEntries)
+            {
+                if (string.Equals(key, current, StringComparison.Ordinal))
+                {
+                    iconUrl = url;
+                    break;
+                }
+            }
+        }
+
+        var bitmap = iconUrl is null ? null : ImageSourceCache.GetIcon(iconUrl);
+        FilterButton.Content = bitmap is not null
+            ? new ImageIcon
+            {
+                Source = bitmap,
+                Width = 16,
+                Height = 16,
+            }
+            : new FontIcon
+            {
+                FontSize = 15,
+                Glyph = "",
+            };
     }
 
     private void MainPanelControl_Loaded(object sender, RoutedEventArgs e) => ApplyPanelHeight();
@@ -129,6 +289,7 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
         try
         {
             await Session.InitializeAsync(cancellationToken);
+            await RefreshFilterEntriesAsync();
             await Session.RefreshAllAsync(cancellationToken);
             await ActivateCurrentPageAsync(cancellationToken);
         }
