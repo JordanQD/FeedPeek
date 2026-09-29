@@ -83,6 +83,8 @@ public sealed partial class PluginManifestLoader
             throw new PluginManifestException("API_VERSION_UNSUPPORTED", $"Unsupported plugin API version {manifest.ApiVersion}.");
         if (string.IsNullOrWhiteSpace(manifest.DisplayName) || manifest.DisplayName.Length > 100)
             throw new PluginManifestException("DISPLAY_NAME_INVALID", "displayName is required and must not exceed 100 characters.");
+        if (manifest.Website is not null)
+            ValidateHttpsUrl(manifest.Website, "website");
 
         _ = ResolveContainedPath(root, manifest.Entry, requireJavaScript: true);
         foreach (var script in manifest.PreloadScripts ?? [])

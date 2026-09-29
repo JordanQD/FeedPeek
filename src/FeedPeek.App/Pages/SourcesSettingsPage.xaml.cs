@@ -7,7 +7,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using System;
-using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
@@ -19,8 +19,8 @@ namespace FeedPeek.Pages;
 
 public sealed partial class SourcesSettingsPage : Page, IDisposable
 {
-    private readonly System.Collections.ObjectModel.ObservableCollection<FeedSourceRow> _sources = [];
-    private readonly System.Collections.ObjectModel.ObservableCollection<AddedSourceEntry> _entries = [];
+    private readonly ObservableCollection<SourceSettingsRow> _sources = [];
+    private readonly ObservableCollection<PluginSettingsRow> _plugins = [];
     private readonly FeedPeekPanelSession _session = new();
     private readonly PluginInstallationService _installations = new();
     private bool _disposed;
@@ -29,7 +29,7 @@ public sealed partial class SourcesSettingsPage : Page, IDisposable
     {
         InitializeComponent();
         SourcesListView.ItemsSource = _sources;
-        AddedSourcesExpander.ItemsSource = _entries;
+        PluginsListView.ItemsSource = _plugins;
         Loaded += SourcesSettingsPage_Loaded;
         Unloaded += SourcesSettingsPage_Unloaded;
     }
@@ -48,55 +48,31 @@ public sealed partial class SourcesSettingsPage : Page, IDisposable
         {
             Trace("reload start");
             await _session.InitializeAsync();
-            await ReloadAddedSourcesAsync();
             await ReloadSourcesAsync();
-            Trace($"reload done entries={_entries.Count} sources={_sources.Count}");
+            Trace($"reload done sources={_sources.Count} plugins={_plugins.Count}");
         }
         catch (Exception ex) { ShowStatus(ex.Message, InfoBarSeverity.Error); }
     }
 
-    /// <summary>
-    /// The combined list shows installed plugins first and then every added source, whether it came from
-    /// RSS, Atom or a plugin.
-    /// </summary>
-    private async Task ReloadAddedSourcesAsync()
-    {
-        var plugins = await _session.GetPluginsAsync();
-        var sources = await _session.GetSourcesAsync();
-        _entries.Clear();
-        foreach (var plugin in plugins.OrderBy(item => item.DisplayName, StringComparer.CurrentCulture))
-        {
-            _entries.Add(AddedSourceEntry.ForPlugin(new PluginSettingsRow(plugin)));
-        }
-
-        foreach (var source in sources)
-        {
-            _entries.Add(AddedSourceEntry.ForSource(source));
-        }
-    }
-
-    private void AddedSourceCard_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not SettingsCard { DataContext: AddedSourceEntry entry })
-        {
-            return;
-        }
-
-        switch (entry.Tag)
-        {
-            case PluginSettingsRow plugin:
-                Frame.Navigate(typeof(PluginDetailPage), plugin);
-                break;
-            case FeedSourceRow source:
-                Frame.Navigate(typeof(SourceDetailPage), source);
-                break;
-        }
-    }
-
     private void SourceCard_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not SettingsCard { DataContext: FeedSourceRow source }) return;
-        Frame.Navigate(typeof(SourceDetailPage), source);
+        if (sender is not SettingsCard { DataContext: SourceSettingsRow source }) return;
+        if (source.OpensPluginDetails && source.Plugin is not null)
+        {
+            Frame.Navigate(typeof(PluginDetailPage), source.Plugin);
+        }
+        else
+        {
+            Frame.Navigate(typeof(SourceDetailPage), source.Source);
+        }
+    }
+
+    private void PluginCard_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is SettingsCard { DataContext: PluginSettingsRow plugin })
+        {
+            Frame.Navigate(typeof(PluginDetailPage), plugin);
+        }
     }
 
     private async void AddButton_Click(object sender, RoutedEventArgs e) => await AddSourceFromAddressAsync();
@@ -113,7 +89,7 @@ public sealed partial class SourcesSettingsPage : Page, IDisposable
         var address = EndpointTextBox.Text.Trim();
         if (string.IsNullOrWhiteSpace(address))
         {
-            ShowStatus("请输入网站或 RSS 地址。", InfoBarSeverity.Warning);
+            ShowStatus("请输入 RSS 地址或直播间链接。", InfoBarSeverity.Warning);
             return;
         }
 
@@ -123,8 +99,7 @@ public sealed partial class SourcesSettingsPage : Page, IDisposable
             var source = await _session.AddSourceFromAddressAsync(address);
             EndpointTextBox.Text = string.Empty;
             Trace($"add done provider={source.ProviderId} category={source.Category}");
-            var kind = string.Equals(source.Category, "插件", StringComparison.Ordinal) ? "网站" : source.Category;
-            ShowStatus($"{kind} 来源已添加。", InfoBarSeverity.Success);
+            ShowStatus("订阅已添加。", InfoBarSeverity.Success);
         });
 
         // Rebuild the lists after this handler has unwound, and never touch them once the page is gone:
@@ -146,6 +121,7 @@ public sealed partial class SourcesSettingsPage : Page, IDisposable
         InitializeWithWindow.Initialize(picker, hwnd);
         var folder = await picker.PickSingleFolderAsync();
         if (folder is null) return;
+
         await RunBusyAsync(async () =>
         {
             Trace("install start: " + folder.Path);
@@ -158,10 +134,26 @@ public sealed partial class SourcesSettingsPage : Page, IDisposable
     private async Task ReloadSourcesAsync()
     {
         var sources = await _session.GetSourcesAsync();
+        var pluginRows = (await _session.GetPluginsAsync())
+            .Select(plugin => new PluginSettingsRow(plugin))
+            .OrderBy(plugin => plugin.DisplayName, StringComparer.CurrentCulture)
+            .ToArray();
+        var plugins = pluginRows.ToDictionary(plugin => plugin.PluginId, StringComparer.Ordinal);
+        if (_disposed) return;
         _sources.Clear();
-        foreach (var source in sources)
+        foreach (var row in sources
+            .Select(source => new SourceSettingsRow(source,
+                plugins.TryGetValue(source.ProviderId, out var plugin) ? plugin : null))
+            .OrderBy(row => row.SortOrder)
+            .ThenBy(row => row.DisplayName, StringComparer.CurrentCulture))
         {
-            _sources.Add(source);
+            _sources.Add(row);
+        }
+
+        _plugins.Clear();
+        foreach (var plugin in pluginRows)
+        {
+            _plugins.Add(plugin);
         }
 
         UpdateEmptyState();
@@ -189,7 +181,10 @@ public sealed partial class SourcesSettingsPage : Page, IDisposable
     }
 
     private void UpdateEmptyState()
-        => EmptyPanel.Visibility = _sources.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    {
+        EmptyPanel.Visibility = _sources.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        PluginsEmptyPanel.Visibility = _plugins.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
 
     /// <summary>Step markers so a crash report can name the last step that ran (Debug output window).</summary>
     private static void Trace(string message)
@@ -203,9 +198,9 @@ public sealed partial class SourcesSettingsPage : Page, IDisposable
         Unloaded -= SourcesSettingsPage_Unloaded;
         _session.StatusRaised -= Session_StatusRaised;
         SourcesListView.ItemsSource = null;
-        AddedSourcesExpander.ItemsSource = null!;
+        PluginsListView.ItemsSource = null;
         _sources.Clear();
-        _entries.Clear();
+        _plugins.Clear();
         _session.Dispose();
     }
 }

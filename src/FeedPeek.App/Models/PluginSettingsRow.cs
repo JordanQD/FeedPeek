@@ -1,4 +1,7 @@
 using FeedPeek.PluginContracts.Manifest;
+using FeedPeek.Helpers;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using System;
 using System.Linq;
 
@@ -36,4 +39,14 @@ public sealed class PluginSettingsRow
 
     /// <summary>The icon the user chose for this plugin, falling back to the package icon.</summary>
     public string? IconUri { get; }
+
+    public string Detail => ErrorMessage is not null
+        ? "需要处理"
+        : $"{(IsEnabled ? "已启用" : "已停用")} · 版本 {Version}";
+
+    public ImageSource? IconSource => ImageSourceCache.GetIcon(IconUri);
+
+    public string Initials => IconSource is null
+        ? new string(DisplayName.Trim().Take(2).Select(char.ToUpperInvariant).ToArray())
+        : string.Empty;
 }

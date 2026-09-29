@@ -23,6 +23,7 @@ public sealed partial class SourceDetailPage : Page, IDisposable
 {
     private readonly FeedPeekPanelSession _session = new();
     private FeedSourceRow? _source;
+    private PluginSettingsRow? _plugin;
     private bool _disposed;
 
     public SourceDetailPage()
@@ -71,10 +72,10 @@ public sealed partial class SourceDetailPage : Page, IDisposable
                 }
 
                 _source = row;
-                WebsiteBox.Text = row.Source.Options is not null
-                    && row.Source.Options.TryGetValue("source.website", out var website)
-                        ? website
-                        : string.Empty;
+                WebsiteBox.Text = GetSourceWebsite(row)
+                    ?? (_plugin is null ? null : AppSettings.GetPluginWebsite(_plugin.PluginId)
+                        ?? _plugin.Manifest?.Website)
+                    ?? string.Empty;
             }
             catch
             {
@@ -124,12 +125,8 @@ public sealed partial class SourceDetailPage : Page, IDisposable
             HeroCategory.Text = _source.Category;
             IconPicture.ProfilePicture = CreateImageSource(_source.IconUrl);
             IconPicture.Initials = GetInitials(_source.DisplayName);
-            WebsiteBox.Text = _source.Source.Options is not null
-                && _source.Source.Options.TryGetValue("source.website", out var website)
-                    ? website
-                    : string.Empty;
-
-            if (string.Equals(_source.ProviderId, RssProviderInfo.ProviderId, StringComparison.Ordinal))
+            var isRss = string.Equals(_source.ProviderId, RssProviderInfo.ProviderId, StringComparison.Ordinal);
+            if (isRss)
             {
                 RssCard.Visibility = Visibility.Visible;
                 PluginCard.Visibility = Visibility.Collapsed;
@@ -142,14 +139,38 @@ public sealed partial class SourceDetailPage : Page, IDisposable
                 var plugins = await _session.GetPluginsAsync();
                 var plugin = plugins.FirstOrDefault(item =>
                     string.Equals(item.PluginId, _source.ProviderId, StringComparison.Ordinal));
-                PluginNameText.Text = plugin?.DisplayName ?? _source.ProviderId;
+                _plugin = plugin is null ? null : new PluginSettingsRow(plugin);
+                PluginCard.IsClickEnabled = _plugin is not null;
+                HeroCategory.Text = new SourceSettingsRow(_source, _plugin).Detail;
+                PluginNameText.Text = _plugin?.DisplayName ?? _source.ProviderId;
                 PluginVersionText.Text = plugin is null ? string.Empty : $"版本 {plugin.Version}";
             }
+
+            var sourceWebsite = GetSourceWebsite(_source);
+            var hasContentFeed = _source.Feeds.Any(feed => !string.Equals(feed.Kind, "live", StringComparison.Ordinal));
+            WebsiteCard.Visibility = isRss || (hasContentFeed
+                && (!string.IsNullOrWhiteSpace(sourceWebsite)
+                    || !string.IsNullOrWhiteSpace(_plugin?.Manifest?.Website)))
+                        ? Visibility.Visible
+                        : Visibility.Collapsed;
+            WebsiteCard.Margin = isRss ? new Thickness(0, 4, 0, 0) : new Thickness(0);
+            PluginCard.Margin = !isRss && WebsiteCard.Visibility == Visibility.Visible
+                ? new Thickness(0, 4, 0, 0)
+                : new Thickness(0);
+            WebsiteBox.Text = sourceWebsite
+                ?? (isRss || _plugin is null ? null : AppSettings.GetPluginWebsite(_plugin.PluginId)
+                    ?? _plugin.Manifest?.Website)
+                ?? string.Empty;
         }
         catch (Exception ex)
         {
             ShowStatus(ex.Message, InfoBarSeverity.Error);
         }
+    }
+
+    private void PluginCard_Click(object sender, RoutedEventArgs e)
+    {
+        if (_plugin is not null) Frame.Navigate(typeof(PluginDetailPage), _plugin);
     }
 
     private async void PickIconFile_Click(object sender, RoutedEventArgs e)
@@ -227,6 +248,26 @@ public sealed partial class SourceDetailPage : Page, IDisposable
             .Take(2)
             .Select(char.ToUpperInvariant)
             .ToArray());
+    }
+
+    private static string? GetSourceWebsite(FeedSourceRow source)
+    {
+        if (source.Source.Options is not { } options)
+        {
+            return null;
+        }
+
+        foreach (var key in new[] { "source.website", "website", "homepage", "home" })
+        {
+            if (options.TryGetValue(key, out var website)
+                && Uri.TryCreate(website, UriKind.Absolute, out var uri)
+                && uri.Scheme is "http" or "https")
+            {
+                return uri.AbsoluteUri;
+            }
+        }
+
+        return null;
     }
 
     private async void SaveEndpointButton_Click(object sender, RoutedEventArgs e)

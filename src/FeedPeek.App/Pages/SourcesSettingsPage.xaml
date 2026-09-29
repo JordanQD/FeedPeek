@@ -31,12 +31,14 @@
             </VisualStateGroup>
         </VisualStateManager.VisualStateGroups>
 
-        <!-- Wrapped in a Grid to work around the SettingsExpander ItemsRepeater + parent MaxWidth layout bug -->
         <Grid x:Name="SettingsContent" Margin="24,16,24,36">
             <StackPanel Margin="0" MaxWidth="1000" Spacing="{StaticResource SettingsCardSpacing}">
-                <!-- 添加来源（第一位）：RSS / Atom，或插件支持的直播间链接 -->
+                <TextBlock
+                    Margin="0,0,0,4"
+                    Style="{StaticResource SettingsSectionHeaderTextBlockStyle}"
+                    Text="添加来源" />
                 <controls:SettingsCard
-                    Description="输入网站地址、RSS / Atom 地址，或直接粘贴插件支持的直播间链接。"
+                    Description="粘贴 RSS / Atom 地址或插件支持的直播间链接。"
                     Header="订阅地址"
                     HorizontalContentAlignment="Stretch">
                     <controls:SettingsCard.HeaderIcon>
@@ -62,47 +64,23 @@
                             Padding="0"
                             VerticalAlignment="Center"
                             Click="AddButton_Click"
-                            ToolTipService.ToolTip="添加来源">
+                            ToolTipService.ToolTip="添加订阅">
                             <FontIcon Glyph="&#xE710;" />
                         </Button>
                     </Grid>
                 </controls:SettingsCard>
 
-                <!-- 安装插件（第二位）：与「订阅地址」同级的独立卡片 -->
                 <controls:SettingsCard
-                    Description="选择一个插件目录进行安装。"
-                    Header="安装插件">
+                    Description="从文件夹安装网站或直播间插件。"
+                    Header="插件文件夹">
                     <controls:SettingsCard.HeaderIcon>
                         <FontIcon Glyph="&#xE8B7;" />
                     </controls:SettingsCard.HeaderIcon>
                     <Button
                         x:Name="InstallPluginButton"
-                        VerticalAlignment="Center"
-                        Click="InstallPluginButton_Click"
-                        Content="从文件夹选择" />
+                        Content="从文件夹选择"
+                        Click="InstallPluginButton_Click" />
                 </controls:SettingsCard>
-
-                <!-- 已添加来源（第三位）：已安装插件 + 已添加的 RSS / 插件来源 -->
-                <controls:SettingsExpander
-                    x:Name="AddedSourcesExpander"
-                    Description="已安装的插件，以及已添加的 RSS 与插件来源。"
-                    Header="已添加来源"
-                    IsExpanded="True">
-                    <controls:SettingsExpander.HeaderIcon>
-                        <FontIcon Glyph="&#xE74C;" />
-                    </controls:SettingsExpander.HeaderIcon>
-                    <controls:SettingsExpander.ItemTemplate>
-                        <DataTemplate x:DataType="models:AddedSourceEntry">
-                            <controls:SettingsCard
-                                Description="{x:Bind Detail}"
-                                Header="{x:Bind DisplayName}"
-                                HeaderIcon="{x:Bind Icon}"
-                                DataContext="{x:Bind}"
-                                IsClickEnabled="True"
-                                Click="AddedSourceCard_Click" />
-                        </DataTemplate>
-                    </controls:SettingsExpander.ItemTemplate>
-                </controls:SettingsExpander>
 
                 <!-- 提示条与紧随其后的分节标题放在同一个 Grid 里，作为 StackPanel 的单个子元素：
                      关闭状态的 InfoBar 仍会被 StackPanel 计入 Spacing，会让标题多出 4px。 -->
@@ -119,7 +97,7 @@
                     <TextBlock
                         Grid.Row="1"
                         Style="{StaticResource SettingsSectionHeaderTextBlockStyle}"
-                        Text="已添加的来源" />
+                        Text="我的订阅" />
                 </Grid>
                 <Grid MinHeight="180">
                         <ListView
@@ -135,14 +113,26 @@
                                 </Style>
                             </ListView.ItemContainerStyle>
                             <ListView.ItemTemplate>
-                                <DataTemplate x:DataType="models:FeedSourceRow">
+                                <DataTemplate x:DataType="models:SourceSettingsRow">
                                     <controls:SettingsCard
-                                        Description="{x:Bind Category}"
-                                        Header="{x:Bind DisplayName}"
-                                        HeaderIcon="{x:Bind SourceIcon}"
+                                        AutomationProperties.Name="{x:Bind DisplayName}"
                                         DataContext="{x:Bind}"
                                         IsClickEnabled="True"
-                                        Click="SourceCard_Click" />
+                                        Click="SourceCard_Click">
+                                        <controls:SettingsCard.Header>
+                                            <Grid ColumnSpacing="12">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <PersonPicture Width="32" Height="32" ProfilePicture="{x:Bind IconSource}" Initials="{x:Bind Initials}" IsHitTestVisible="False" />
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                                                    <TextBlock Text="{x:Bind DisplayName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="{x:Bind Detail}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </controls:SettingsCard.Header>
+                                    </controls:SettingsCard>
                                 </DataTemplate>
                             </ListView.ItemTemplate>
                         </ListView>
@@ -153,8 +143,58 @@
                             VerticalAlignment="Center"
                             Spacing="8">
                             <FontIcon HorizontalAlignment="Center" FontSize="28" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Glyph="&#xE774;" />
-                            <TextBlock FontWeight="SemiBold" Text="还没有来源" />
+                            <TextBlock FontWeight="SemiBold" Text="还没有订阅" />
                         </StackPanel>
+                </Grid>
+                <TextBlock
+                    Style="{StaticResource SettingsSectionHeaderTextBlockStyle}"
+                    Text="已安装插件" />
+                <Grid MinHeight="180">
+                    <ListView
+                        x:Name="PluginsListView"
+                        IsItemClickEnabled="False"
+                        IsSwipeEnabled="False"
+                        SelectionMode="None">
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem">
+                                <Setter Property="Padding" Value="0" />
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="IsTabStop" Value="False" />
+                            </Style>
+                        </ListView.ItemContainerStyle>
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="models:PluginSettingsRow">
+                                <controls:SettingsCard
+                                    AutomationProperties.Name="{x:Bind DisplayName}"
+                                    DataContext="{x:Bind}"
+                                    IsClickEnabled="True"
+                                    Click="PluginCard_Click">
+                                    <controls:SettingsCard.Header>
+                                        <Grid ColumnSpacing="12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <PersonPicture Width="32" Height="32" ProfilePicture="{x:Bind IconSource}" Initials="{x:Bind Initials}" IsHitTestVisible="False" />
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                                                <TextBlock Text="{x:Bind DisplayName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{x:Bind Detail}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </controls:SettingsCard.Header>
+                                </controls:SettingsCard>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                    <StackPanel
+                        x:Name="PluginsEmptyPanel"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Spacing="8">
+                        <FontIcon HorizontalAlignment="Center" FontSize="28"
+                                  Foreground="{ThemeResource TextFillColorTertiaryBrush}" Glyph="&#xE74C;" />
+                        <TextBlock FontWeight="SemiBold" Text="还没有安装插件" />
+                    </StackPanel>
                 </Grid>
             </StackPanel>
         </Grid>

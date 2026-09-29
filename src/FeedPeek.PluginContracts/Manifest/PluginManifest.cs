@@ -14,7 +14,8 @@ public sealed record PluginManifest(
     PluginSourceConfigurationManifest? SourceConfiguration = null,
     string? Runtime = null,
     IReadOnlyDictionary<string, string>? RuntimeOptions = null,
-    string? Icon = null);
+    string? Icon = null,
+    string? Website = null);
 
 public sealed record PluginAuthManifest(
     bool Required,

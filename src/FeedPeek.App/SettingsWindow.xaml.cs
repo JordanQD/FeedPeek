@@ -119,8 +119,10 @@ public sealed partial class SettingsWindow : Window
 
     private void NavigationBreadcrumb_ItemClicked(BreadcrumbBar sender, BreadcrumbBarItemClickedEventArgs args)
     {
-        if (args.Index >= 1) return; // 最后一项是当前页，不导航
-        if (navFrame.CanGoBack) navFrame.GoBack();
+        if (args.Index == 0 && navFrame.CurrentSourcePageType != typeof(SourcesSettingsPage))
+        {
+            navFrame.Navigate(typeof(SourcesSettingsPage));
+        }
     }
 
     private void ConfigureTitleBar(IntPtr hwnd)

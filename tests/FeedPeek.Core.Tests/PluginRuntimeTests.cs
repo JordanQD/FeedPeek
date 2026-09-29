@@ -80,6 +80,25 @@ public sealed class PluginRuntimeTests
         """;
 
     [Fact]
+    public async Task ManifestLoader_RequiresHttpsForDeclaredWebsite()
+    {
+        using var temporary = CopyFixturePlugin();
+        var manifestPath = Path.Combine(temporary.Path, PluginManifestRules.FileName);
+        var manifest = JsonNode.Parse(await File.ReadAllTextAsync(manifestPath))!.AsObject();
+        manifest["website"] = "https://www.example.test/";
+        await File.WriteAllTextAsync(manifestPath, manifest.ToJsonString());
+
+        var loader = new PluginManifestLoader();
+        var package = await loader.LoadAsync(temporary.Path);
+        Assert.Equal("https://www.example.test/", package.Manifest.Website);
+
+        manifest["website"] = "file:///C:/private.txt";
+        await File.WriteAllTextAsync(manifestPath, manifest.ToJsonString());
+        var invalid = await Assert.ThrowsAsync<PluginManifestException>(() => loader.LoadAsync(temporary.Path));
+        Assert.Equal("URL_INVALID", invalid.Code);
+    }
+
+    [Fact]
     public async Task Discovery_DisablesValidPluginAndIsolatesBrokenPlugin()
     {
         using var root = TemporaryDirectory.Create();
@@ -375,6 +394,40 @@ public sealed class PluginRuntimeTests
         var error = await Assert.ThrowsAsync<PluginManifestException>(
             () => new PluginManifestLoader().LoadAsync(temporary.Path));
         Assert.Equal("RUNTIME_VIEW_UNSUPPORTED", error.Code);
+    }
+
+    [Fact]
+    public async Task LiveParsePlugin_CreatesRoomSourceWithNameAndAvatarEvenWhenOffline()
+    {
+        var package = await new PluginManifestLoader().LoadAsync(LiveFixturePluginRoot);
+        var http = new RecordingLiveHttpBridge();
+        await using var runtime = await JintPluginTransport.CreateAsync(package, CreateHost(http: http));
+
+        async Task<PluginSourceDefinition> CreateRoomAsync(string roomId)
+        {
+            var created = await InvokeAsync(runtime, LivePluginId, PluginMethods.SourceCreate, new
+            {
+                context = LiveInvocationContext(),
+                displayName = "Mock Live · " + roomId,
+                options = new Dictionary<string, string> { ["roomIds"] = roomId },
+            });
+            Assert.True(created.Success, created.Error?.Code + ": " + created.Error?.Message);
+            return created.Result.Deserialize<PluginSourceDefinition>(PluginJson.SerializerOptions)!;
+        }
+
+        var live = await CreateRoomAsync("12345");
+        Assert.Equal("Streamer", live.DisplayName);
+        Assert.Equal("12345", live.Options!["roomIds"]);
+        Assert.Equal("https://i0.example.test/face.jpg", live.Options["source.icon"]);
+
+        var offline = await CreateRoomAsync("7777");
+        Assert.Equal("Room 7777", offline.DisplayName);
+        Assert.False(offline.Options!.ContainsKey("source.icon"));
+
+        var unavailable = await CreateRoomAsync("404");
+        Assert.Equal("Mock Live · 404", unavailable.DisplayName);
+        Assert.Equal("404", unavailable.Options!["roomIds"]);
+        Assert.Equal(2, http.RequestedUrls.Count);
     }
 
     [Fact]

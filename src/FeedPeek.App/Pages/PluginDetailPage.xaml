@@ -106,8 +106,16 @@
                     Click="LoginButton_Click" />
             </controls:SettingsCard>
 
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
             <controls:SettingsCard
                 x:Name="WebsiteCard"
+                Grid.Row="0"
+                Visibility="Collapsed"
+                Margin="0,0,0,4"
                 Description="主面板「打开源网站」使用的网址。未设置时打开前会询问。"
                 Header="打开的网页">
                 <controls:SettingsCard.HeaderIcon>
@@ -132,6 +140,7 @@
             </controls:SettingsCard>
 
             <controls:SettingsCard
+                Grid.Row="1"
                 Description="删除插件及其来源和本地缓存"
                 Header="删除插件">
                 <controls:SettingsCard.HeaderIcon>
@@ -142,6 +151,7 @@
                     Content="删除插件"
                     Click="DeletePluginButton_Click" />
             </controls:SettingsCard>
+            </Grid>
 
             <InfoBar
                 x:Name="StatusInfoBar"

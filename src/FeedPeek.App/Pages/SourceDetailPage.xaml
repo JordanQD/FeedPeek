@@ -82,8 +82,17 @@
                 </StackPanel>
             </StackPanel>
 
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
             <controls:SettingsCard
                 x:Name="RssCard"
+                Grid.Row="0"
+                Visibility="Collapsed"
                 Description="修改源链接后点击保存"
                 Header="源链接">
                 <controls:SettingsCard.HeaderIcon>
@@ -107,6 +116,8 @@
 
             <controls:SettingsCard
                 x:Name="WebsiteCard"
+                Grid.Row="1"
+                Visibility="Collapsed"
                 Description="主面板「打开源网站」使用的网址。未设置时打开前会询问。"
                 Header="打开的网页">
                 <controls:SettingsCard.HeaderIcon>
@@ -132,7 +143,11 @@
 
             <controls:SettingsCard
                 x:Name="PluginCard"
-                Header="插件">
+                Grid.Row="2"
+                Visibility="Collapsed"
+                Header="所属插件"
+                IsClickEnabled="True"
+                Click="PluginCard_Click">
                 <controls:SettingsCard.HeaderIcon>
                     <FontIcon Glyph="&#xE74C;" />
                 </controls:SettingsCard.HeaderIcon>
@@ -143,6 +158,7 @@
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 </StackPanel>
             </controls:SettingsCard>
+            </Grid>
 
             <controls:SettingsCard
                 Description="删除该来源及其本地缓存"

@@ -462,12 +462,29 @@ public static class LiveParseDialect
             // derive it from, so an empty list is the correct answer rather than an unsupported method.
             'creator.getFollowing': () => ({ creators: [] }),
 
-            'source.create': payload => {
+            'source.create': async payload => {
               const context = payload.context || {};
+              const options = Object.assign({}, payload.options || {});
+              const roomIds = parseRoomIds(options.roomIds);
+              let displayName = text(payload.displayName).trim() || config.displayName;
+              // A pinned room is a source even while the room is offline. Resolve its identity
+              // here so the settings card does not depend on the live-only feed.getLive result.
+              if (roomIds.length === 1) {
+                try {
+                  const room = await plugin[roomDetailMethod]({ roomId: roomIds[0] });
+                  const name = text(room && room.userName).trim()
+                    || text(room && room.roomTitle).trim();
+                  if (name) displayName = name;
+                  const avatar = image(room && room.userHeadImg);
+                  if (avatar) options['source.icon'] = avatar;
+                } catch (error) {
+                  // A transient detail failure must not prevent the room from being pinned.
+                }
+              }
               return {
                 providerId: context.providerId,
                 sourceId: context.sourceId,
-                displayName: text(payload.displayName).trim() || config.displayName,
+                displayName,
                 credentialProfileId: context.credentialProfileId || null,
                 feeds: [{
                   feedId: 'live',
@@ -476,7 +493,7 @@ public static class LiveParseDialect
                   supportsPaging: false,
                   supportsNotifications: false
                 }],
-                options: payload.options || null
+                options: payload.options ? options : null
               };
             },
 

@@ -62,7 +62,7 @@ public sealed partial class PluginDetailPage : Page, IDisposable
         }
 
         AppSettings.SetPluginWebsite(_pluginId, WebsiteBox.Text);
-        WebsiteBox.Text = AppSettings.GetPluginWebsite(_pluginId) ?? string.Empty;
+        WebsiteBox.Text = AppSettings.GetPluginWebsite(_pluginId) ?? _plugin?.Manifest?.Website ?? string.Empty;
         ShowStatus("已保存打开的网页。", InfoBarSeverity.Success);
     }
 
@@ -80,7 +80,7 @@ public sealed partial class PluginDetailPage : Page, IDisposable
                 return;
             }
 
-            WebsiteBox.Text = AppSettings.GetPluginWebsite(_pluginId) ?? string.Empty;
+            WebsiteBox.Text = AppSettings.GetPluginWebsite(_pluginId) ?? _plugin?.Manifest?.Website ?? string.Empty;
         });
     }
 
@@ -108,7 +108,10 @@ public sealed partial class PluginDetailPage : Page, IDisposable
             _defaultIconUri = _plugin.DefaultIconUri;
             HeroName.Text = _plugin.DisplayName;
             HeroVersion.Text = string.IsNullOrWhiteSpace(_plugin.Version) ? string.Empty : $"版本 {_plugin.Version}";
-            WebsiteBox.Text = AppSettings.GetPluginWebsite(_pluginId) ?? string.Empty;
+            WebsiteCard.Visibility = string.IsNullOrWhiteSpace(_plugin.Manifest?.Website)
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+            WebsiteBox.Text = AppSettings.GetPluginWebsite(_pluginId) ?? _plugin.Manifest?.Website ?? string.Empty;
             PluginCard.Header = "插件标识";
             PluginCard.Description = _plugin.PluginId;
             IconPicture.ProfilePicture = CreateImageSource(_plugin.IconUri);
@@ -264,7 +267,7 @@ public sealed partial class PluginDetailPage : Page, IDisposable
         {
             LoginCard.Description = "已登录";
             LoginButton.Content = "退出";
-            ShowStatus("登录状态已保存，可以添加此网站的来源。", InfoBarSeverity.Success);
+            ShowStatus("登录状态已保存。", InfoBarSeverity.Success);
         });
 
     private void SignInWindow_Closed(object sender, WindowEventArgs args)

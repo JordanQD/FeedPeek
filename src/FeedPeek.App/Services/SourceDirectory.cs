@@ -117,7 +117,11 @@ public static class SourceDirectory
             foreach (var plugin in await installations.GetEntriesAsync(cancellationToken).ConfigureAwait(false))
             {
                 pluginIcons[plugin.PluginId] = AppSettings.GetPluginIcon(plugin.PluginId) ?? plugin.IconUri;
-                pluginWebsites[plugin.PluginId] = AppSettings.GetPluginWebsite(plugin.PluginId);
+                if (!string.IsNullOrWhiteSpace(plugin.Manifest?.Website))
+                {
+                    pluginWebsites[plugin.PluginId] = AppSettings.GetPluginWebsite(plugin.PluginId)
+                        ?? plugin.Manifest.Website;
+                }
             }
         }
         catch
