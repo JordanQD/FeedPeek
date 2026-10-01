@@ -11,6 +11,19 @@
     "entry": { "type": "string", "minLength": 1 },
     "preloadScripts": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
     "capabilities": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "creatorResolution": {
+      "type": ["object", "null"],
+      "required": ["inputHosts"],
+      "properties": {
+        "inputHosts": { "type": "array", "items": { "type": "string" }, "minItems": 1, "maxItems": 16, "uniqueItems": true }
+      }
+    },
+    "notifications": {
+      "type": ["object", "null"],
+      "properties": {
+        "autoAddToCustom": { "type": "boolean", "default": false }
+      }
+    },
     "auth": {
       "type": ["object", "null"],
       "properties": {

@@ -250,7 +250,8 @@ public static partial class LiveParsePackageConverter
                 ["roomUrlTemplate"] = roomUrlTemplate,
                 ["liveStates"] = LiveStateBroadcasting,
             },
-            ResolveIcon(sourceDirectory));
+            ResolveIcon(sourceDirectory),
+            Notifications: new PluginNotificationManifest(AutoAddToCustom: true));
 
         return new LiveParsePackageConversion(manifest, scripts, dropped, hosts);
     }

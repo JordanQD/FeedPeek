@@ -18,6 +18,12 @@ public interface IFeedStore : IAsyncDisposable
     Task<IReadOnlyList<FeedSubscription>> GetSubscriptionsAsync(
         CancellationToken cancellationToken = default);
 
+    Task<FeedSubscription?> GetSubscriptionAsync(string subscriptionId,
+        CancellationToken cancellationToken = default);
+
+    Task UpdateSourceConfigurationAsync(SourceDefinition source, IReadOnlyList<FeedSubscription> subscriptions,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<StoredFeedItem>> GetItemsAsync(
         FeedQuery query,
         CancellationToken cancellationToken = default);
@@ -70,5 +76,43 @@ public interface IFeedStore : IAsyncDisposable
 
     Task SavePollingStateAsync(
         FeedPollingState state,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<SourceNotificationRule>> GetSourceNotificationRulesAsync(
+        CancellationToken cancellationToken = default);
+
+    Task<int> SynchronizeSourceNotificationRulesAsync(
+        IReadOnlyList<SourceNotificationRule> candidates,
+        CancellationToken cancellationToken = default);
+
+    Task SaveSourceNotificationRuleAsync(
+        SourceNotificationRule rule,
+        CancellationToken cancellationToken = default);
+
+    Task DeleteSourceNotificationRuleAsync(
+        SourceNotificationKey key,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<CreatorNotificationPolicy>> GetCreatorNotificationPoliciesAsync(
+        CancellationToken cancellationToken = default);
+
+    Task SaveCreatorNotificationPolicyAsync(
+        CreatorNotificationPolicy policy,
+        CancellationToken cancellationToken = default);
+
+    Task EnsureCreatorNotificationPolicyAsync(
+        CreatorNotificationPolicy policy,
+        CancellationToken cancellationToken = default);
+
+    Task DeleteCreatorNotificationPolicyAsync(
+        SourceNotificationKey key,
+        CancellationToken cancellationToken = default);
+
+    Task<int> MigrateCreatorNotificationPoliciesAsync(
+        IReadOnlyList<CreatorNotificationPolicy> candidates,
+        CancellationToken cancellationToken = default);
+
+    Task RepairLiveFeedNotificationCapabilitiesAsync(
+        IReadOnlyList<string> compatibilityProviderIds,
         CancellationToken cancellationToken = default);
 }

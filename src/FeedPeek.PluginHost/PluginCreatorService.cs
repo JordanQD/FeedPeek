@@ -15,6 +15,11 @@ public sealed class PluginCreatorService(string pluginId, PluginClient client)
     public async Task<IReadOnlyList<CreatorDescriptor>> GetFollowingAsync(
         FeedSubscription subscription,
         CancellationToken cancellationToken = default)
+        => (await GetFollowingPageAsync(subscription, cancellationToken).ConfigureAwait(false)).Creators;
+
+    public async Task<FollowingCreatorsPage> GetFollowingPageAsync(
+        FeedSubscription subscription,
+        CancellationToken cancellationToken = default)
     {
         ValidateSubscription(subscription);
         var result = await _client.InvokeAsync<PluginAccountPayload, PluginCreatorListResult>(
@@ -26,26 +31,53 @@ public sealed class PluginCreatorService(string pluginId, PluginClient client)
             throw InvalidResult("Plugin creator list is required.");
 
         var keys = new HashSet<string>(StringComparer.Ordinal);
-        return result.Creators.Select(creator =>
+        var creators = result.Creators.Select(creator =>
         {
-            if (string.IsNullOrWhiteSpace(creator.CreatorKey) || !keys.Add(creator.CreatorKey))
+            if (creator is null || !keys.Add(creator.CreatorKey))
                 throw InvalidResult("Plugin creator keys must be non-empty and unique.");
-            if (string.IsNullOrWhiteSpace(creator.DisplayName))
-                throw InvalidResult("Plugin creator names are required.");
-            ValidateOptionalWebUrl(creator.ProfileUrl, "creator profile URL");
-            ValidateOptionalWebUrl(creator.AvatarUrl, "creator avatar URL");
-            return new CreatorDescriptor(
-                subscription.ProviderId,
-                subscription.SourceId,
-                creator.CreatorKey,
-                creator.DisplayName,
-                creator.ProfileUrl,
-                creator.AvatarUrl,
-                creator.SupportedNotificationKinds ?? []);
+            return MapCreator(subscription, creator);
         }).ToArray();
+        return new(creators, result.IsComplete);
     }
 
-    public async Task<IReadOnlyList<PluginLiveItem>> GetLiveAsync(
+    public async Task<CreatorResolutionResult> ResolveAsync(
+        FeedSubscription subscription,
+        string input,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateSubscription(subscription);
+        ArgumentException.ThrowIfNullOrWhiteSpace(input);
+        if (input.Length > 2048) throw new ArgumentException("Author input is too long.", nameof(input));
+        var result = await _client.InvokeAsync<PluginCreatorResolvePayload, PluginCreatorResolveResult>(
+            ProviderId, PluginMethods.CreatorResolve,
+            new(CreateContext(subscription), input.Trim()), cancellationToken).ConfigureAwait(false);
+        var state = result.FollowState switch
+        {
+            "followed" => CreatorFollowState.Followed,
+            "notFollowed" => CreatorFollowState.NotFollowed,
+            "unknown" => CreatorFollowState.Unknown,
+            _ => throw InvalidResult("Plugin author follow state is invalid."),
+        };
+        return new(MapCreator(subscription, result.Creator), state);
+    }
+
+    private static CreatorDescriptor MapCreator(FeedSubscription subscription, PluginCreatorDescriptor? creator)
+    {
+        if (creator is null || string.IsNullOrWhiteSpace(creator.CreatorKey) || creator.CreatorKey.Length > 256)
+            throw InvalidResult("Plugin creator key is required.");
+        if (string.IsNullOrWhiteSpace(creator.DisplayName) || creator.DisplayName.Length > 256)
+            throw InvalidResult("Plugin creator name is required.");
+        ValidateOptionalWebUrl(creator.ProfileUrl, "creator profile URL");
+        ValidateOptionalWebUrl(creator.AvatarUrl, "creator avatar URL");
+        var kinds = creator.SupportedNotificationKinds ?? [];
+        if (kinds.Any(kind => kind is not ("video" or "updates" or "live"))
+            || kinds.Distinct(StringComparer.Ordinal).Count() != kinds.Count)
+            throw InvalidResult("Plugin creator notification kinds are invalid.");
+        return new(subscription.ProviderId, subscription.SourceId, creator.CreatorKey, creator.DisplayName,
+            creator.ProfileUrl, creator.AvatarUrl, kinds);
+    }
+
+    public async Task<PluginLivePage> GetLivePageAsync(
         FeedSubscription subscription,
         CancellationToken cancellationToken = default)
     {
@@ -55,7 +87,7 @@ public sealed class PluginCreatorService(string pluginId, PluginClient client)
             PluginMethods.FeedGetLive,
             new PluginAccountPayload(CreateContext(subscription)),
             cancellationToken).ConfigureAwait(false);
-        if (result.Items is null)
+        if (result is null || result.Items is null)
             throw InvalidResult("Plugin live items are required.");
 
         var keys = new HashSet<string>(StringComparer.Ordinal);
@@ -74,8 +106,13 @@ public sealed class PluginCreatorService(string pluginId, PluginClient client)
                 throw InvalidResult("Plugin live viewer count cannot be negative.");
         }
 
-        return result.Items;
+        return result;
     }
+
+    public async Task<IReadOnlyList<PluginLiveItem>> GetLiveAsync(
+        FeedSubscription subscription,
+        CancellationToken cancellationToken = default)
+        => (await GetLivePageAsync(subscription, cancellationToken).ConfigureAwait(false)).Items;
 
     public Task<ActionDescriptor[]> GetActionsAsync(
         FeedSubscription subscription,

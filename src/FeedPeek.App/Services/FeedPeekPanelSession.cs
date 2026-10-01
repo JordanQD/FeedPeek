@@ -4,6 +4,7 @@ using FeedPeek.Core.Models;
 using FeedPeek.Core.Persistence;
 using FeedPeek.PluginContracts.Protocol;
 using FeedPeek.PluginContracts.Dtos;
+using FeedPeek.PluginContracts.Manifest;
 using FeedPeek.Rss;
 using FeedPeek.Helpers;
 using Microsoft.UI.Dispatching;
@@ -197,7 +198,11 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
         return await AddPluginSourceAsync(
             room.PluginId,
             room.DisplayName,
-            new Dictionary<string, string>(StringComparer.Ordinal) { [PluginRoomIdsOption] = room.RoomId },
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [PluginRoomIdsOption] = room.RoomId,
+                [SourceAddress.AddressOption] = room.Address,
+            },
             room.CredentialProfileId,
             selectedFeedIds: null,
             cancellationToken).ConfigureAwait(false);
@@ -207,6 +212,7 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
         string PluginId,
         string DisplayName,
         string RoomId,
+        string Address,
         string? CredentialProfileId);
 
     private async Task<PluginRoomAddress?> ResolvePluginRoomAddressAsync(
@@ -219,8 +225,7 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
                 "暂时只支持粘贴完整的直播间链接，例如 https://live.douyin.com/123456。");
         }
 
-        if (!Uri.TryCreate(address, UriKind.Absolute, out var uri)
-            && !Uri.TryCreate("https://" + address, UriKind.Absolute, out uri))
+        if (!SourceAddress.TryParseWebUri(address, out var uri))
         {
             return null;
         }
@@ -237,7 +242,7 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
             if (entry.Manifest?.RuntimeOptions is null
                 || !entry.Manifest.RuntimeOptions.TryGetValue(PluginRoomUrlTemplateOption, out var template)
                 || string.IsNullOrWhiteSpace(template)
-                || !TryMatchRoomTemplate(template, uri, out var roomId))
+                || !SourceAddress.TryMatchRoomTemplate(template, uri, out var roomId, out var canonicalAddress))
             {
                 continue;
             }
@@ -271,6 +276,7 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
                 entry.PluginId,
                 $"{entry.DisplayName} · {roomId}",
                 roomId,
+                canonicalAddress,
                 credentialProfileId);
         }
 
@@ -309,48 +315,6 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
             && existing
                 .Split([',', ' ', ';', '\n', '\r', '\t'], StringSplitOptions.RemoveEmptyEntries)
                 .Contains(roomId, StringComparer.Ordinal);
-
-    /// <summary>Matches a plugin's room URL template (for example <c>https://live.douyin.com/{roomId}</c>).</summary>
-    private static bool TryMatchRoomTemplate(string template, Uri address, out string roomId)
-    {
-        roomId = string.Empty;
-        const string marker = "{roomId}";
-        var markerIndex = template.IndexOf(marker, StringComparison.Ordinal);
-        if (markerIndex < 0
-            || !Uri.TryCreate(template[..markerIndex], UriKind.Absolute, out var templateBase)
-            || !string.Equals(templateBase.Host, address.Host, StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        var prefix = template[..markerIndex];
-        var suffix = template[(markerIndex + marker.Length)..];
-        var candidate = address.GetLeftPart(UriPartial.Path);
-        if (!candidate.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        var remainder = candidate[prefix.Length..];
-        if (suffix.Length > 0)
-        {
-            if (!remainder.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
-            {
-                return false;
-            }
-
-            remainder = remainder[..^suffix.Length];
-        }
-
-        remainder = remainder.Trim('/');
-        if (remainder.Length == 0 || !remainder.All(char.IsDigit))
-        {
-            return false;
-        }
-
-        roomId = remainder;
-        return true;
-    }
 
     public async Task<FeedSourceRow> AddRssSubscriptionAsync(
         string endpoint,
@@ -405,6 +369,11 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
 
                 // The first successful poll stores the current items but deliberately emits no notifications.
                 await _feedSession.RefreshAsync(subscription, operationToken).ConfigureAwait(false);
+
+                NotificationStateChanges.MarkSource(source.ProviderId, source.SourceId);
+                AppSettings.NotifyNotificationSettingsChanged();
+                await SynchronizeSourceNotificationRulesCoreAsync(AppSettings.NotificationTargetMode, operationToken)
+                    .ConfigureAwait(false);
 
                 var summaries = await _feedSession.GetSourceSummariesAsync(operationToken)
                     .ConfigureAwait(false);
@@ -597,7 +566,11 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
                 }
 
                 AppSettings.MarkAutoCreatedPluginSource(pluginId);
+                NotificationStateChanges.MarkSource(created.Source.ProviderId, created.Source.SourceId);
+                AppSettings.NotifyNotificationSettingsChanged();
                 withSource.Add(pluginId);
+                await SynchronizeSourceNotificationRulesCoreAsync(AppSettings.NotificationTargetMode, cancellationToken)
+                    .ConfigureAwait(false);
             }
             catch (Exception exception)
             {
@@ -870,6 +843,272 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
         return result;
     }
 
+    public async Task<IReadOnlyList<NotificationSourceDescriptor>> GetNotificationSourcesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        IReadOnlyList<NotificationSourceDescriptor> result = [];
+        await RunExclusiveAsync(
+            async operationToken =>
+            {
+                await EnsureInitializedAsync(operationToken).ConfigureAwait(false);
+                result = await GetNotificationSourcesCoreAsync(operationToken).ConfigureAwait(false);
+            },
+            cancellationToken);
+        return result;
+    }
+
+    public Task SynchronizeSourceNotificationRulesAsync(
+        NotificationTargetMode? targetMode = null,
+        CancellationToken cancellationToken = default)
+        => RunExclusiveAsync(async token =>
+        {
+            await EnsureInitializedAsync(token).ConfigureAwait(false);
+            var sources = await _feedSession.GetSourceSummariesAsync(token).ConfigureAwait(false);
+            AppSettings.PruneOrphanedCreatorNotifications(sources
+                .Select(item => new SourceNotificationKey(item.Source.ProviderId, item.Source.SourceId)).ToHashSet());
+            await SynchronizeSourceNotificationRulesCoreAsync(targetMode ?? AppSettings.NotificationTargetMode, token)
+                .ConfigureAwait(false);
+        }, cancellationToken);
+
+    public async Task<IReadOnlyList<SourceNotificationRule>> GetSourceNotificationRulesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        IReadOnlyList<SourceNotificationRule> result = [];
+        await RunExclusiveAsync(async token =>
+        {
+            await EnsureInitializedAsync(token).ConfigureAwait(false);
+            result = await _store.GetSourceNotificationRulesAsync(token).ConfigureAwait(false);
+        }, cancellationToken);
+        return result;
+    }
+
+    public Task SaveSourceNotificationRuleAsync(SourceNotificationRule rule, CancellationToken cancellationToken = default)
+        => RunExclusiveAsync(async token =>
+        {
+            await EnsureInitializedAsync(token).ConfigureAwait(false);
+            var creatorPolicyContext = await TryGetCreatorPolicyContextAsync(rule.Key, token)
+                .ConfigureAwait(false);
+            if (creatorPolicyContext is not null)
+            {
+                var existing = (await _store.GetCreatorNotificationPoliciesAsync(token)
+                        .ConfigureAwait(false))
+                    .FirstOrDefault(item => item.Key == rule.Key);
+                var policy = existing is null
+                    ? new CreatorNotificationPolicy(
+                        rule.ProviderId,
+                        rule.SourceId,
+                        CreatorNotificationScope.SelectedCreators,
+                        CreatorNotificationScope.SelectedCreators,
+                        rule.UpdateNotificationsEnabled,
+                        rule.LiveNotificationsEnabled)
+                    : existing with
+                    {
+                        UpdatesEnabled = rule.UpdateNotificationsEnabled,
+                        LiveEnabled = rule.LiveNotificationsEnabled,
+                    };
+                await SaveCreatorNotificationPolicyCoreAsync(policy, creatorPolicyContext.Value, token)
+                    .ConfigureAwait(false);
+                return;
+            }
+
+            var previous = (await _store.GetSourceNotificationRulesAsync(token).ConfigureAwait(false))
+                .FirstOrDefault(item => item.Key == rule.Key);
+            await _store.SaveSourceNotificationRuleAsync(rule, token).ConfigureAwait(false);
+            if (previous?.UpdateNotificationsEnabled != rule.UpdateNotificationsEnabled
+                || previous is null || !previous.UpdateFeedIds.SequenceEqual(rule.UpdateFeedIds))
+                NotificationStateChanges.MarkScope(rule.ProviderId, rule.SourceId, Core.Notifications.NotificationKind.Updates);
+            if (previous?.LiveNotificationsEnabled != rule.LiveNotificationsEnabled
+                || previous is null || !previous.LiveFeedIds.SequenceEqual(rule.LiveFeedIds))
+                NotificationStateChanges.MarkScope(rule.ProviderId, rule.SourceId, Core.Notifications.NotificationKind.Live);
+            AppSettings.NotifyNotificationSettingsChanged();
+        }, cancellationToken);
+
+    public Task DeleteSourceNotificationRuleAsync(SourceNotificationKey key, CancellationToken cancellationToken = default)
+        => RunExclusiveAsync(async token =>
+        {
+            await EnsureInitializedAsync(token).ConfigureAwait(false);
+            if ((await _store.GetCreatorNotificationPoliciesAsync(token).ConfigureAwait(false))
+                .Any(policy => policy.Key == key))
+            {
+                await DeleteCreatorNotificationPolicyCoreAsync(key, token).ConfigureAwait(false);
+                return;
+            }
+
+            await _store.DeleteSourceNotificationRuleAsync(key, token).ConfigureAwait(false);
+            NotificationStateChanges.MarkScope(key.ProviderId, key.SourceId, Core.Notifications.NotificationKind.Updates);
+            NotificationStateChanges.MarkScope(key.ProviderId, key.SourceId, Core.Notifications.NotificationKind.Live);
+            AppSettings.NotifyNotificationSettingsChanged();
+        }, cancellationToken);
+
+    public async Task<IReadOnlyList<CreatorNotificationPolicy>> GetCreatorNotificationPoliciesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        IReadOnlyList<CreatorNotificationPolicy> result = [];
+        await RunExclusiveAsync(async token =>
+        {
+            await EnsureInitializedAsync(token).ConfigureAwait(false);
+            result = await _store.GetCreatorNotificationPoliciesAsync(token).ConfigureAwait(false);
+        }, cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public Task SaveCreatorNotificationPolicyAsync(
+        CreatorNotificationPolicy policy,
+        CancellationToken cancellationToken = default)
+        => RunExclusiveAsync(async token =>
+        {
+            await EnsureInitializedAsync(token).ConfigureAwait(false);
+            var context = await GetCreatorPolicyContextAsync(policy.Key, token).ConfigureAwait(false);
+            await SaveCreatorNotificationPolicyCoreAsync(policy, context, token).ConfigureAwait(false);
+        }, cancellationToken);
+
+    public Task DeleteCreatorNotificationPolicyAsync(
+        SourceNotificationKey key,
+        CancellationToken cancellationToken = default)
+        => RunExclusiveAsync(async token =>
+        {
+            await EnsureInitializedAsync(token).ConfigureAwait(false);
+            await DeleteCreatorNotificationPolicyCoreAsync(key, token).ConfigureAwait(false);
+        }, cancellationToken);
+
+    private async Task SaveCreatorNotificationPolicyCoreAsync(
+        CreatorNotificationPolicy policy,
+        (SourceDefinition Source, SourceNotificationCapabilities Capabilities, PluginManifest Manifest) context,
+        CancellationToken token)
+    {
+        if (policy.Key != new SourceNotificationKey(context.Source.ProviderId, context.Source.SourceId))
+            throw new InvalidOperationException("通知来源已发生变化，请返回后重试。");
+        var previous = (await _store.GetCreatorNotificationPoliciesAsync(token).ConfigureAwait(false))
+            .FirstOrDefault(item => item.Key == policy.Key);
+        // Preserve an unavailable kind's saved preference while editing the other kind.
+        if (policy.UpdatesEnabled && previous?.UpdatesEnabled != true && !context.Capabilities.SupportsUpdates)
+            throw new InvalidOperationException("当前来源不支持更新通知。");
+        if (policy.LiveEnabled && previous?.LiveEnabled != true && !context.Capabilities.SupportsLive)
+            throw new InvalidOperationException("当前来源不支持开播通知。");
+        if (!context.Manifest.Capabilities.Contains("creator.following", StringComparer.Ordinal)
+            && ((policy.UpdatesScope == CreatorNotificationScope.AllFollowing && previous?.UpdatesScope != policy.UpdatesScope)
+                || (policy.LiveScope == CreatorNotificationScope.AllFollowing && previous?.LiveScope != policy.LiveScope)))
+            throw new InvalidOperationException("当前插件不能获取完整关注名单，请使用自选作者通知。");
+        await _store.SaveCreatorNotificationPolicyAsync(policy, token).ConfigureAwait(false);
+        // Retire a legacy source rule without writing a suppression: the policy is now the
+        // authoritative notification entry and explicit saves must remain recoverable.
+        await _store.MigrateCreatorNotificationPoliciesAsync([policy], token).ConfigureAwait(false);
+        if (previous is null || previous.UpdatesEnabled != policy.UpdatesEnabled
+            || previous.UpdatesScope != policy.UpdatesScope)
+            NotificationStateChanges.MarkScope(policy.ProviderId, policy.SourceId,
+                Core.Notifications.NotificationKind.Updates);
+        if (previous is null || previous.LiveEnabled != policy.LiveEnabled
+            || previous.LiveScope != policy.LiveScope)
+            NotificationStateChanges.MarkScope(policy.ProviderId, policy.SourceId,
+                Core.Notifications.NotificationKind.Live);
+        AppSettings.NotifyNotificationSettingsChanged();
+    }
+
+    private async Task DeleteCreatorNotificationPolicyCoreAsync(
+        SourceNotificationKey key,
+        CancellationToken token)
+    {
+        // Fence an in-flight notification poll before committing the suppression and removing
+        // the creator rules. The background monitor will rerun against the new persisted state.
+        NotificationStateChanges.Pulse();
+        await _store.DeleteCreatorNotificationPolicyAsync(key, token).ConfigureAwait(false);
+        AppSettings.RemoveSourceNotificationState(key.ProviderId, key.SourceId);
+        // Deleting a custom notification configuration does not change the source or account,
+        // and must not reset its independent AllSources baseline.
+        NotificationStateChanges.MarkScope(key.ProviderId, key.SourceId, Core.Notifications.NotificationKind.Updates);
+        NotificationStateChanges.MarkScope(key.ProviderId, key.SourceId, Core.Notifications.NotificationKind.Live);
+        AppSettings.NotifyNotificationSettingsChanged();
+    }
+
+    private async Task<(SourceDefinition Source, SourceNotificationCapabilities Capabilities, PluginManifest Manifest)>
+        GetCreatorPolicyContextAsync(SourceNotificationKey key, CancellationToken token)
+    {
+        var source = (await _feedSession.GetSourceSummariesAsync(token).ConfigureAwait(false))
+            .Select(item => item.Source)
+            .FirstOrDefault(item => item.ProviderId == key.ProviderId && item.SourceId == key.SourceId)
+            ?? throw new InvalidOperationException("通知来源不存在。");
+        var subscriptions = await _feedSession.GetSubscriptionsAsync(token).ConfigureAwait(false);
+        var manifest = _pluginRuntime.GetManifest(key.ProviderId)
+            ?? throw new InvalidOperationException("对应的网站插件不可用。");
+        if (!CreatorNotificationPolicies.IsEligible(source, subscriptions, manifest))
+            throw new InvalidOperationException("当前来源不支持作者通知。");
+        var capabilities = SourceNotificationCapabilities.Resolve(
+            source,
+            subscriptions,
+            manifest.Capabilities.Contains("feed.updates", StringComparer.Ordinal),
+            manifest.Capabilities.Contains("feed.live", StringComparer.Ordinal));
+        if (!capabilities.HasAny)
+            throw new InvalidOperationException("当前来源没有可用的通知 Feed。");
+        return (source, capabilities, manifest);
+    }
+
+    private async Task<(SourceDefinition Source, SourceNotificationCapabilities Capabilities, PluginManifest Manifest)?>
+        TryGetCreatorPolicyContextAsync(SourceNotificationKey key, CancellationToken token)
+    {
+        var source = (await _feedSession.GetSourceSummariesAsync(token).ConfigureAwait(false))
+            .Select(item => item.Source)
+            .FirstOrDefault(item => item.ProviderId == key.ProviderId && item.SourceId == key.SourceId);
+        if (source is null)
+            return null;
+        var subscriptions = await _feedSession.GetSubscriptionsAsync(token).ConfigureAwait(false);
+        var manifest = _pluginRuntime.GetManifest(key.ProviderId);
+        if (manifest is null || !CreatorNotificationPolicies.IsEligible(source, subscriptions, manifest))
+            return null;
+        var capabilities = SourceNotificationCapabilities.Resolve(
+            source,
+            subscriptions,
+            manifest.Capabilities.Contains("feed.updates", StringComparer.Ordinal),
+            manifest.Capabilities.Contains("feed.live", StringComparer.Ordinal));
+        return capabilities.HasAny ? (source, capabilities, manifest) : null;
+    }
+
+    private async Task<IReadOnlyList<NotificationSourceDescriptor>> GetNotificationSourcesCoreAsync(
+        CancellationToken cancellationToken)
+    {
+        var sources = await _feedSession.GetSourceSummariesAsync(cancellationToken).ConfigureAwait(false);
+        var subscriptions = await _feedSession.GetSubscriptionsAsync(cancellationToken).ConfigureAwait(false);
+        var descriptors = new List<NotificationSourceDescriptor>();
+        foreach (var summary in sources)
+        {
+            var source = summary.Source;
+            var isRss = source.ProviderId == RssProviderInfo.ProviderId;
+            var manifest = _pluginRuntime.GetManifest(source.ProviderId);
+            if (!isRss && manifest is null)
+                continue;
+            var capabilities = SourceNotificationCapabilities.Resolve(source, subscriptions,
+                supportsUpdates: isRss || manifest!.Capabilities.Contains("feed.updates", StringComparer.Ordinal),
+                supportsLive: !isRss && manifest!.Capabilities.Contains("feed.live", StringComparer.Ordinal));
+            if (capabilities.HasAny)
+                descriptors.Add(new(source, capabilities,
+                    isRss || PluginManifestRules.ShouldAutoAddToCustomNotifications(manifest!)));
+        }
+        return descriptors;
+    }
+
+    private async Task SynchronizeSourceNotificationRulesCoreAsync(NotificationTargetMode mode, CancellationToken token)
+    {
+        if (mode != NotificationTargetMode.CustomCreators)
+            return;
+        var sources = await GetNotificationSourcesCoreAsync(token).ConfigureAwait(false);
+        var added = await _store.SynchronizeSourceNotificationRulesAsync(sources
+            .Where(source => source.AutoAddToCustom)
+            .Select(source => source.Capabilities.CreateRule(
+                new(source.Source.ProviderId, source.Source.SourceId), isAutomatic: true)).ToArray(), token)
+            .ConfigureAwait(false);
+        if (added > 0)
+            AppSettings.NotifyNotificationSettingsChanged();
+    }
+
+    private async Task DeleteSourceCoreAsync(string providerId, string sourceId, CancellationToken token)
+    {
+        await _feedSession.DeleteSourceAsync(providerId, sourceId, token).ConfigureAwait(false);
+        CreatorNotificationStatusCache.Remove(new SourceNotificationKey(providerId, sourceId));
+        AppSettings.RemoveSourceNotificationState(providerId, sourceId);
+        FeedPollSnapshotCache.RemoveSource(providerId, sourceId);
+        NotificationStateChanges.MarkSource(providerId, sourceId);
+        AppSettings.NotifyNotificationSettingsChanged();
+    }
+
     internal async Task<IReadOnlyList<PluginManagementEntry>> GetPluginsAsync(
         CancellationToken cancellationToken = default)
     {
@@ -916,6 +1155,10 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
                         string.Equals(item.Source.ProviderId, created.Source.ProviderId, StringComparison.Ordinal)
                         && string.Equals(item.Source.SourceId, created.Source.SourceId, StringComparison.Ordinal));
                 result = new FeedSourceRow(summary);
+                NotificationStateChanges.MarkSource(created.Source.ProviderId, created.Source.SourceId);
+                AppSettings.NotifyNotificationSettingsChanged();
+                await SynchronizeSourceNotificationRulesCoreAsync(AppSettings.NotificationTargetMode, operationToken)
+                    .ConfigureAwait(false);
             },
             cancellationToken);
         return result!;
@@ -939,7 +1182,7 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
                     string.Equals(item.Source.ProviderId, pluginId, StringComparison.Ordinal)
                     && string.Equals(item.Source.CredentialProfileId, credentialProfileId, StringComparison.Ordinal)))
                 {
-                    await _feedSession.DeleteSourceAsync(
+                    await DeleteSourceCoreAsync(
                         source.Source.ProviderId,
                         source.Source.SourceId,
                         operationToken).ConfigureAwait(false);
@@ -959,7 +1202,7 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
                 foreach (var source in sources.Where(item =>
                     string.Equals(item.Source.ProviderId, pluginId, StringComparison.Ordinal)))
                 {
-                    await _feedSession.DeleteSourceAsync(
+                    await DeleteSourceCoreAsync(
                         source.Source.ProviderId,
                         source.Source.SourceId,
                         operationToken).ConfigureAwait(false);
@@ -1064,7 +1307,7 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
                     if (subscription is not null)
                         await _pluginRuntime.DeleteSourceAsync(subscription, operationToken).ConfigureAwait(false);
                 }
-                await _feedSession.DeleteSourceAsync(
+                await DeleteSourceCoreAsync(
                     source.ProviderId,
                     source.SourceId,
                     operationToken).ConfigureAwait(false);
@@ -1073,56 +1316,83 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
             cancellationToken);
     }
 
-    public async Task UpdateRssEndpointAsync(
+    public async Task<FeedSourceRow> UpdateSourceAddressAsync(
         string providerId,
         string sourceId,
-        string endpoint,
+        string address,
         CancellationToken cancellationToken = default)
     {
-        await RunExclusiveAsync(
-            async operationToken =>
+        if (!SourceAddress.TryParseWebUri(address, out var input))
+            throw new InvalidOperationException("请输入有效的源链接。");
+        FeedSourceRow? result = null;
+        await RunExclusiveAsync(async token =>
+        {
+            await EnsureInitializedAsync(token).ConfigureAwait(false);
+            var summaries = await _feedSession.GetSourceSummariesAsync(token).ConfigureAwait(false);
+            var summary = summaries.FirstOrDefault(item => item.Source.ProviderId == providerId && item.Source.SourceId == sourceId)
+                ?? throw new InvalidOperationException("来源不存在。");
+            var subscriptions = (await _feedSession.GetSubscriptionsAsync(token).ConfigureAwait(false))
+                .Where(item => item.ProviderId == providerId && item.SourceId == sourceId).ToArray();
+            if (subscriptions.Length == 0) throw new InvalidOperationException("来源没有有效的订阅。");
+            var options = summary.Source.Options is null ? new Dictionary<string, string>(StringComparer.Ordinal)
+                : new Dictionary<string, string>(summary.Source.Options, StringComparer.Ordinal);
+            SourceDefinition updatedSource;
+            string? endpoint = null;
+            var isRss = providerId == RssProviderInfo.ProviderId;
+            if (isRss)
             {
-                await EnsureInitializedAsync(operationToken).ConfigureAwait(false);
-
-                var summaries = await _feedSession.GetSourceSummariesAsync(operationToken)
-                    .ConfigureAwait(false);
-                var summary = summaries.FirstOrDefault(item =>
-                        string.Equals(item.Source.ProviderId, providerId, StringComparison.Ordinal)
-                        && string.Equals(item.Source.SourceId, sourceId, StringComparison.Ordinal))
-                    ?? throw new InvalidOperationException("来源不存在。");
-
-                var options = new Dictionary<string, string>(StringComparer.Ordinal);
-                if (summary.Source.Options is not null)
-                {
-                    foreach (var pair in summary.Source.Options)
-                    {
-                        options[pair.Key] = pair.Value;
-                    }
-                }
-
+                var discovery = await _rssProvider.DiscoverAsync(input.AbsoluteUri, token).ConfigureAwait(false);
+                endpoint = discovery.FeedUri.AbsoluteUri;
+                if (summaries.Any(item => item.Source.ProviderId == providerId && item.Source.SourceId != sourceId
+                    && item.Source.Options?.GetValueOrDefault(RssEndpointOption) == endpoint))
+                    throw new InvalidOperationException("这个订阅地址已经添加过了。");
+                var name = string.IsNullOrWhiteSpace(discovery.Title) ? discovery.FeedUri.Host : discovery.Title.Trim();
                 options[RssEndpointOption] = endpoint;
-                var updatedSource = summary.Source with { Options = options };
-
-                var subscriptions = await _feedSession.GetSubscriptionsAsync(operationToken)
-                    .ConfigureAwait(false);
-                var sourceSubscriptions = subscriptions
-                    .Where(item =>
-                        string.Equals(item.ProviderId, providerId, StringComparison.Ordinal)
-                        && string.Equals(item.SourceId, sourceId, StringComparison.Ordinal))
-                    .ToList();
-
-                foreach (var subscription in sourceSubscriptions)
+                options[RssFormatOption] = discovery.Format.Equals("atom", StringComparison.OrdinalIgnoreCase) ? "atom" : "rss";
+                options.Remove("source.icon");
+                options.Remove(RssIconOption);
+                if (!string.IsNullOrWhiteSpace(discovery.IconUrl)) options[RssIconOption] = discovery.IconUrl;
+                updatedSource = summary.Source with
                 {
-                    var updatedSubscription = subscription with { Endpoint = endpoint };
-                    await _feedSession.AddSubscriptionAsync(
-                        updatedSource,
-                        updatedSubscription,
-                        operationToken).ConfigureAwait(false);
-                }
-            },
-            cancellationToken);
+                    DisplayName = name,
+                    Options = options,
+                    Feeds = summary.Source.Feeds.Select(feed => feed with { DisplayName = name, Kind = options[RssFormatOption] }).ToArray(),
+                };
+            }
+            else
+            {
+                var manifest = _pluginRuntime.GetManifest(providerId)
+                    ?? throw new InvalidOperationException("对应的网站插件已被停用，请先启用它。");
+                if (PluginManifestRules.ResolveRuntime(manifest) != PluginManifestRules.LiveParseRuntime
+                    || manifest.RuntimeOptions is null || !manifest.RuntimeOptions.TryGetValue(PluginRoomUrlTemplateOption, out var template)
+                    || !SourceAddress.TryMatchRoomTemplate(template, input, out var roomId, out var canonicalAddress))
+                    throw new InvalidOperationException("请输入当前插件对应的直播间链接。");
+                if (summaries.Any(item => item.Source.SourceId != sourceId
+                    && IsSameRoom(new FeedSourceRow(item), providerId, roomId)))
+                    throw new InvalidOperationException("这个直播间已经添加过了。");
+                options[PluginRoomIdsOption] = roomId;
+                options[SourceAddress.AddressOption] = canonicalAddress;
+                updatedSource = await _pluginRuntime.ResolveRoomSourceAsync(subscriptions[0], options, token).ConfigureAwait(false);
+                if (subscriptions.Any(subscription => !updatedSource.Feeds.Any(feed => feed.FeedId == subscription.FeedId)))
+                    throw new InvalidOperationException("插件返回的来源视图与现有订阅不一致。");
+            }
+            var updatedSubscriptions = subscriptions.Select(subscription => subscription with
+            {
+                DisplayName = isRss ? updatedSource.DisplayName
+                    : updatedSource.DisplayName + " · " + updatedSource.Feeds.First(feed => feed.FeedId == subscription.FeedId).DisplayName,
+                Endpoint = isRss ? endpoint : subscription.Endpoint,
+                Options = updatedSource.Options,
+            }).ToArray();
+            await _store.UpdateSourceConfigurationAsync(updatedSource, updatedSubscriptions, token).ConfigureAwait(false);
+            foreach (var subscription in updatedSubscriptions)
+                if (!isRss) _pluginRuntime.Register(subscription);
+            NotificationStateChanges.MarkSource(providerId, sourceId);
+            AppSettings.NotifyNotificationSettingsChanged();
+            result = new FeedSourceRow(new FeedSourceSummary(updatedSource, summary.ItemCount, summary.UnreadCount));
+            SourceDirectory.Refresh();
+        }, cancellationToken).ConfigureAwait(false);
+        return result!;
     }
-
     public async Task UpdateSourceIconAsync(
         string providerId,
         string sourceId,
@@ -1275,7 +1545,7 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
             await _feedSession.InitializeAsync(cancellationToken).ConfigureAwait(false);
             // Phase 4.3 created this source automatically. It is not a user-created
             // source, and must not spring back to life when the plugin is installed.
-            await _feedSession.DeleteSourceAsync(
+            await DeleteSourceCoreAsync(
                 LegacyVideoSiteCompatibility.PluginId,
                 LegacyVideoSiteCompatibility.SourceId,
                 cancellationToken).ConfigureAwait(false);
@@ -1298,16 +1568,33 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
         foreach (var provider in _pluginRuntime.FeedProviders)
             _registeredPluginProviders.Add(provider.ProviderId);
 
+        await _store.RepairLiveFeedNotificationCapabilitiesAsync(_pluginRuntime.AvailableProviderIds
+            .Where(id => PluginManifestRules.ResolveRuntime(_pluginRuntime.GetManifest(id)!)
+                == PluginManifestRules.LiveParseRuntime).ToArray(), cancellationToken).ConfigureAwait(false);
+
         // Plugins that need no user input get their default source created here, so installing one is
         // enough for it to show up in the main window.
         await CreateAutomaticSourcesAsync(cancellationToken).ConfigureAwait(false);
 
-        foreach (var subscription in await _feedSession.GetSubscriptionsAsync(cancellationToken)
-            .ConfigureAwait(false))
+        var subscriptions = await _feedSession.GetSubscriptionsAsync(cancellationToken)
+            .ConfigureAwait(false);
+        foreach (var subscription in subscriptions)
         {
             if (_pluginRuntime.IsPluginProvider(subscription.ProviderId))
                 _pluginRuntime.Register(subscription);
         }
+
+        var sources = (await _feedSession.GetSourceSummariesAsync(cancellationToken)
+                .ConfigureAwait(false))
+            .Select(item => item.Source)
+            .ToArray();
+        await CreatorNotificationPolicies.MigrateAsync(
+            _store,
+            sources,
+            subscriptions,
+            _pluginRuntime.GetManifest,
+            CreatorNotificationPolicies.SavedCreators(),
+            cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<IReadOnlyList<FeedItemRow>> QueryItemsAsync(

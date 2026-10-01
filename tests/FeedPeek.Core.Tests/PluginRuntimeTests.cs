@@ -13,6 +13,37 @@ namespace FeedPeek.Core.Tests;
 
 public sealed class PluginRuntimeTests
 {
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("{}", false)]
+    [InlineData("{\"autoAddToCustom\":false}", false)]
+    [InlineData("{\"autoAddToCustom\":true}", true)]
+    public async Task ManifestLoader_UsesNativeNotificationOptIn(string? notifications, bool expected)
+    {
+        using var temporary = CopyFixturePlugin();
+        var path = Path.Combine(temporary.Path, PluginManifestRules.FileName);
+        var manifest = JsonNode.Parse(await File.ReadAllTextAsync(path))!.AsObject();
+        if (notifications is not null)
+            manifest["notifications"] = JsonNode.Parse(notifications);
+        await File.WriteAllTextAsync(path, manifest.ToJsonString());
+
+        var package = await new PluginManifestLoader().LoadAsync(temporary.Path);
+        Assert.Equal(expected, PluginManifestRules.ShouldAutoAddToCustomNotifications(package.Manifest));
+    }
+
+    [Fact]
+    public async Task ManifestLoader_RejectsNonBooleanNotificationOptIn()
+    {
+        using var temporary = CopyFixturePlugin();
+        var path = Path.Combine(temporary.Path, PluginManifestRules.FileName);
+        var manifest = JsonNode.Parse(await File.ReadAllTextAsync(path))!.AsObject();
+        manifest["notifications"] = JsonNode.Parse("{\"autoAddToCustom\":\"true\"}");
+        await File.WriteAllTextAsync(path, manifest.ToJsonString());
+        var error = await Assert.ThrowsAsync<PluginManifestException>(
+            () => new PluginManifestLoader().LoadAsync(temporary.Path));
+        Assert.Equal("MANIFEST_INVALID_JSON", error.Code);
+    }
+
     [Fact]
     public async Task ManifestLoader_ValidatesPackageAndRejectsTraversal()
     {
@@ -435,6 +466,9 @@ public sealed class PluginRuntimeTests
     {
         var package = await new PluginManifestLoader().LoadAsync(LiveFixturePluginRoot);
         Assert.Equal(PluginManifestRules.LiveParseRuntime, PluginManifestRules.ResolveRuntime(package.Manifest));
+        // Previously converted packages without a policy still use the compatibility-room default.
+        Assert.Null(package.Manifest.Notifications);
+        Assert.True(PluginManifestRules.ShouldAutoAddToCustomNotifications(package.Manifest));
 
         var http = new RecordingLiveHttpBridge();
         await using var runtime = await JintPluginTransport.CreateAsync(package, CreateHost(http: http));
@@ -453,6 +487,8 @@ public sealed class PluginRuntimeTests
         var definition = created.Result.Deserialize<PluginSourceDefinition>(PluginJson.SerializerOptions)!;
         Assert.Equal(LivePluginId, definition.ProviderId);
         Assert.Equal("live", Assert.Single(definition.Feeds).FeedId);
+        Assert.Equal("live", Assert.Single(definition.Feeds).Kind);
+        Assert.True(Assert.Single(definition.Feeds).SupportsNotifications);
 
         var live = await InvokeAsync(runtime, LivePluginId, PluginMethods.FeedGetLive, new
         {

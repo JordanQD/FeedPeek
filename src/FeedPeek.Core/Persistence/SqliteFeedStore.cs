@@ -5,9 +5,9 @@ using System.Text.Json;
 
 namespace FeedPeek.Core.Persistence;
 
-public sealed class SqliteFeedStore : IFeedStore
+public sealed partial class SqliteFeedStore : IFeedStore
 {
-    private const int SchemaVersion = 2;
+    private const int SchemaVersion = 4;
     private const int DefaultItemLimit = 500;
     private const int MaxItemLimit = 5000;
 
@@ -847,9 +847,12 @@ public sealed class SqliteFeedStore : IFeedStore
             await migrationTable.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
 
+        // Serialize migration readers as well as writers across independent settings/monitor stores.
+        using var transaction = connection.BeginTransaction();
         long currentVersion;
         await using (var versionCommand = connection.CreateCommand())
         {
+            versionCommand.Transaction = transaction;
             versionCommand.CommandText = "SELECT COALESCE(MAX(version), 0) FROM schema_migrations;";
             currentVersion = Convert.ToInt64(
                 await versionCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false),
@@ -862,7 +865,6 @@ public sealed class SqliteFeedStore : IFeedStore
                 $"The database schema version {currentVersion} is newer than the supported version {SchemaVersion}.");
         }
 
-        using var transaction = connection.BeginTransaction();
         if (currentVersion == 0)
         {
             await using var schema = CreateCommand(connection, transaction, SchemaV2Sql);
@@ -886,6 +888,12 @@ public sealed class SqliteFeedStore : IFeedStore
             transaction,
             "CREATE INDEX IF NOT EXISTS ix_item_states_saved ON item_states (is_saved, provider_id, source_id);",
             cancellationToken).ConfigureAwait(false);
+
+        await ExecuteAsync(connection, transaction, NotificationSchemaV3Sql, cancellationToken)
+            .ConfigureAwait(false);
+
+        await ExecuteAsync(connection, transaction, CreatorNotificationSchemaV4Sql, cancellationToken)
+            .ConfigureAwait(false);
 
         if (currentVersion < SchemaVersion)
         {

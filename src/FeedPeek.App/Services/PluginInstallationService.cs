@@ -1,4 +1,5 @@
 using FeedPeek.PluginContracts.Manifest;
+using FeedPeek.Helpers;
 using FeedPeek.PluginRuntime.Discovery;
 using FeedPeek.PluginRuntime.Manifest;
 using System;
@@ -215,8 +216,6 @@ internal sealed class PluginInstallationService
                         IsEnabled: true,
                         DateTimeOffset.UtcNow));
                     await WriteRecordsCoreAsync(records, cancellationToken).ConfigureAwait(false);
-                    if (Directory.Exists(backupPath))
-                        Directory.Delete(backupPath, recursive: true);
                 }
                 catch
                 {
@@ -226,6 +225,12 @@ internal sealed class PluginInstallationService
                         Directory.Move(backupPath, targetPath);
                     throw;
                 }
+                // The new package and its record are committed. Backup cleanup failure must not
+                // restore the old package while leaving the new package hash in the state file.
+                DeleteDirectoryIfExists(backupPath);
+                ImageSourceCache.InvalidateLocalImages();
+                NotificationStateChanges.MarkProvider(stagedPackage.Manifest.PluginId);
+                AppSettings.NotifyNotificationSettingsChanged();
                 return new PluginManagementEntry(
                     stagedPackage.Manifest.PluginId,
                     stagedPackage.Manifest.DisplayName,
@@ -262,8 +267,12 @@ internal sealed class PluginInstallationService
             var index = records.FindIndex(record => string.Equals(record.PluginId, pluginId, StringComparison.Ordinal));
             if (index < 0)
                 throw new InvalidOperationException("只能启用或停用用户安装的插件。");
+            if (records[index].IsEnabled == isEnabled)
+                return;
             records[index] = records[index] with { IsEnabled = isEnabled };
             await WriteRecordsCoreAsync(records, cancellationToken).ConfigureAwait(false);
+            NotificationStateChanges.MarkProvider(pluginId);
+            AppSettings.NotifyNotificationSettingsChanged();
         }
         finally
         {
@@ -299,6 +308,7 @@ internal sealed class PluginInstallationService
             }
 
             // A reinstall should be able to create its default source again.
+            ImageSourceCache.InvalidateLocalImages();
             AppSettings.ClearAutoCreatedPluginSource(pluginId);
 
             if (Directory.Exists(backupPath))
@@ -313,6 +323,8 @@ internal sealed class PluginInstallationService
                     // cleaned up on a later maintenance pass without reviving the plugin.
                 }
             }
+            NotificationStateChanges.MarkProvider(pluginId);
+            AppSettings.NotifyNotificationSettingsChanged();
         }
         finally
         {

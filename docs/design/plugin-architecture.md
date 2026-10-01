@@ -1,4 +1,4 @@
-# FeedPeek 插件架构说明
+﻿# FeedPeek 插件架构说明
 
 > 状态：**实现说明**，以 `main` 分支代码为准（不是计划文档）。
 > 覆盖代码：`src/FeedPeek.PluginContracts`、`src/FeedPeek.PluginRuntime`、`src/FeedPeek.PluginHost`、`src/FeedPeek.App`。
@@ -55,9 +55,17 @@ FeedPeek.Core            FeedPeek.PluginContracts
 | `network` | object | `{ allowedHosts, allowRedirectHosts }` |
 | `views` | object[] | `{ id, kind, title }`，kind 取 `feed` / `collection` / `live` |
 | `sourceConfiguration` | object? | `{ fields, defaultFeedIds }` |
+| `notifications` | object? | `{ autoAddToCustom: bool }`，原生插件省略时默认不自动加入自定义通知列表 |
+| `creatorResolution` | object? | `{ inputHosts: string[] }`，作者链接的精确归属域名；声明时必须具有 `creator.resolve`，不授予网络访问 |
 | `icon` | string? | 包内相对路径的插件图标，见 2.5 |
 
 新增字段都带默认值，因此旧清单（没有 `runtime` / `runtimeOptions` / `icon`）继续可用。
+
+`notifications.autoAddToCustom` 仅决定添加来源后是否自动创建来源通知规则，不授予通知能力，也不更改用户保存的开关。原生插件默认 `false`；哔哩哔哩显式声明 `false`，由用户手动创建作者通知配置。RSS/Atom 由宿主采用自动加入策略；LiveParse 转换器写入 `true`，旧兼容包没有此字段时也采用宿主直播间策略。实际可用通知类型必须同时满足已启用订阅、Feed 的 `SupportsNotifications=true` 和插件的 `feed.updates` / `feed.live` 能力；按 Feed 的 `kind` 区分更新（`feed` / `rss` / `atom`）和开播（`live`），不依赖固定 Feed ID。
+
+原生作者来源的自定义通知使用宿主 SQLite 的 `CreatorNotificationPolicy`：按 provider/source 保存每类通知的全部已关注作者或自选作者范围和总开关。自选时还需匹配 provider/source/creator 的个人开关；全部时不复制整批作者配置。全局“所有来源更新”使用当前账号的全部关注名单和全局类型开关，自定义策略暂不参与；“不通知”不执行通知查询。新手动配置默认自选，`creator.following` 是新增全部范围的必要能力；仅有 `creator.resolve` 可逐个验证自选作者。
+
+后台将作者范围展开成每作者的运行时 watch，新关注作者首次成功观察静默，不重置其他作者。完整关注名单才确认取消关注；不完整结果保留已知成员并加入正向确认者，失败保持 watch 但跳过事件观察。直播 Feed 本身仍须成功且完整才能更新在线状态。账号、来源、凭据与插件变更使关系缓存和通知基线失效；关闭某个自选开关不影响全局全部范围的基线。迁移按更新/开播分别保留原等效范围，不重绑不同插件身份、不打开关闭值；删除通知策略清理该来源的自选通知配置并抑制自动补回，不取消站点关注或删除来源。通知页直接展示全部已有来源，RSS/Atom 用 SettingsCard，插件按 provider 用 SettingsExpander 分组；组内正文显示通知项与有效自选作者，副标题不重复插件名；作者来源级配置移至 ItemsFooter 的通知设置按钮，页脚使用无图标 DefaultSettingsExpanderItemStyle。ItemsFooter 底部根据 manifest 的 creator.following / creator.resolve 和通知 Feed 显示添加通知，不按插件名称或 ID 判断。B 站已声明作者能力，不需要专属 UI 注册。未保存规则的来源显示关闭的虚拟项，用户编辑才持久化，不重新开启删除/关闭值。来源/策略使用开关关闭，只有作者详情可删除。添加限定当前来源，空输入不展开关注名单。详情用原生范围下拉框保存全部/自选，旧混合范围只有用户主动选择后才统一；全部下隐藏个人卡片但保留数据，自选恢复名单与开关。关闭查询和账号变更丢弃过期结果，重复对象进入已有详情。界面效果待用户手动验收，详见统一通知实施计划第四步记录。
 
 `auth` 子结构：
 
@@ -72,7 +80,7 @@ FeedPeek.Core            FeedPeek.PluginContracts
 
 ### 2.3 能力白名单（`PluginManifestRules.SupportedCapabilities`，共 11 项）
 
-`feed.updates`、`feed.live`、`account.auth`、`account.profile`、`account.history`、`collection.viewLater`、`creator.following`、`creator.relation`、`item.actions`、`creator.actions`、`source.configuration`。
+`feed.updates`、`feed.live`、`account.auth`、`account.profile`、`account.history`、`collection.viewLater`、`creator.following`、`creator.resolve`、`creator.relation`、`item.actions`、`creator.actions`、`source.configuration`。
 
 宿主**按 capability 分发行为**，不按内置站点 ID 判断（见第 9 节）。声明了 `sourceConfiguration` 就必须同时声明 `source.configuration`，否则报 `SOURCE_CONFIGURATION_CAPABILITY_MISSING`。
 
@@ -143,7 +151,7 @@ plugin.handshake        plugin.getStatus
 auth.begin              auth.complete       auth.validate      auth.clear
 source.create           source.get          source.listFeeds   source.delete
 account.getProfile      account.getHistory  account.getMoreHistory
-creator.getFollowing    creator.getActions  creator.executeAction
+creator.getFollowing    creator.resolve     creator.getActions  creator.executeAction
 feed.getUpdates         feed.getMoreUpdates feed.getLive
 collection.getViewLater collection.getMoreViewLater
 item.getActions         item.executeAction
@@ -155,9 +163,13 @@ item.getActions         item.executeAction
 
 - `PluginInvocationContext(SubscriptionId, ProviderId, SourceId, FeedId, CredentialProfileId, Options)`：每次业务调用都必须携带。
 - `PluginFeedPage(Items, NextCursor, HasMore)` / `PluginFeedItem(ItemId, Title, Url, AuthorName, PublishedAt, CreatorKey, AuthorUrl, Summary, ImageUrl, AuthorImageUrl, DurationText, Metadata)`。
-- `PluginLivePage(Items)` / `PluginLiveItem(CreatorKey, DisplayName, Url, Title, AvatarUrl, CoverUrl, ViewerCount, StartedAt, Metadata)`。
+- `PluginLivePage(Items, IsComplete=true)` / `PluginLiveItem(CreatorKey, DisplayName, Url, Title, AvatarUrl, CoverUrl, ViewerCount, StartedAt, Metadata)`。`isComplete` 是可选字段，旧原生插件省略时仍视为完整成功；部分房间查询失败时插件应返回 `false`，全部失败应返回错误。信息流可展示部分成功内容，但通知监控仅用完整成功结果更新在线集合，防止网络恢复后误报开播。LiveParse 兼容层已按此规则标记部分失败，并把缺失或未知直播状态视为失败。
 - `PluginSourceDefinition(ProviderId, SourceId, DisplayName, CredentialProfileId, Feeds, Options)` / `PluginFeedDefinition(FeedId, DisplayName, Kind, SupportsPaging, SupportsNotifications)`。
 - `PluginCreatorDescriptor(CreatorKey, DisplayName, ProfileUrl, AvatarUrl, SupportedNotificationKinds, Metadata)`。
+- `PluginCreatorResolvePayload(Context, Input)` / `PluginCreatorResolveResult(Creator, FollowState)`：可选 `creator.resolve` 接收原始作者链接或 ID，站点路径与 UID 解析由插件负责。`followState` 只接受 `followed` / `notFollowed` / `unknown`；失败返回结构化错误，不能返回假未关注。Host 用请求订阅的 provider/source 赋予作者身份，校验名称、HTTP(S) 地址和通知类型（`video` / `updates` / `live`）。
+- `PluginCreatorListResult(Creators, IsComplete=false)`：旧插件省略字段仍可读取关注名单，但名单缺项不能证明未关注；匹配到完整作者 ID 或个人页可确认已关注。只有成功且显式完整的名单才允许据精确作者 ID 判定未关注，不由链接最后一段猜作者 ID。
+
+作者通知查询候选来自有效来源的已启用订阅及 `creator.resolve` / `creator.following` 能力，不固定 `updates` Feed 名称。输入域名与 `creatorResolution.inputHosts` 精确匹配时自动选择唯一来源；多个来源或不透明作者 ID 要明确选择，不向所有插件广播查询。解析字段缺省的旧插件走关注名单回退。登录失效、请求失败、关系未知和确认未关注分别显示；查询与保存都重新核验当前来源及账号，关闭对话框后取消请求。作者类型开关取作者支持类型与来源已启用通知 Feed 能力的交集。
 - `ActionDescriptor(ActionId, LocalizationKey, FallbackText, IconSemantic, DangerLevel, RequiresConfirmation, IsRepeatable, Payload)`；`dangerLevel` 取 `none|warning|destructive`，`iconSemantic` 取 `add|remove|save|open|refresh|follow|unfollow|settings`。
 - `HostHttpRequest(Url, Method, Headers, Body, BodyEncoding, TimeoutMs, MaxResponseBytes)` / `HostHttpResponse(Status, FinalUrl, Headers, Body, BodyEncoding)`。
 
@@ -297,17 +309,19 @@ Host 之外没有网络出口：插件脚本里的 URL 只有经过这个桥才�
 - `GetPluginsAsync` / `InstallAsync` 返回的 `PluginManagementEntry` 带上 `IconUri`（插件包图标，见 2.5）；`PluginSettingsRow.IconUri` 再叠加用户自定义图标。
 - 安装记录：`ApplicationData.Current.LocalFolder/FeedPeek/plugin-installations.v1.json`，元素是 `PluginInstallationRecord(PluginId, Version, PackageHash, DirectoryName, IsEnabled, InstalledAt)`；写入走 `.tmp` 加 `File.Move(overwrite: true)`。
 - **默认关闭面**：目录里存在但没有安装记录的插件会被强制加入停用集合，不会被加载（`GetLoadConfigurationAsync`）；以 `.` 开头的目录被忽略；多个目录声明同一 `pluginId` 时全部判为 `PLUGIN_ID_DUPLICATE` 并拒绝加载。
-- 安装 / 升级（同一 `pluginId` 即升级）：
+- 安装 / 升级共用“安装插件”入口（同一 `pluginId` 即替换；不比较版本高低，同版本也允许替换）：
   1. 校验源目录，复制到 `.staging-{guid}`；
   2. 再校验 staging（防止复制后标识变化）；
   3. 旧目录移动到 `.backup-{guid}`；
   4. staging 移入目标路径；
-  5. 更新安装记录，成功则删备份。
-  任一步失败：删掉已就位的目录并把备份移回，保证旧版本仍可继续加载。
+  5. 更新版本号与包哈希的安装记录，成功后清理备份。
+  安装记录提交前失败：删掉已就位的目录并把备份移回，保证旧版本仍可继续加载。记录提交后备份清理失败只保留隐藏备份，不能回滚目录而留下新哈希。替换不创建或删除来源，也不清除凭据；安装后的插件启用。当前没有在线检查或下载更新。
+- 本地插件图标（`file` / `ms-appdata`）先短暂读取字节、关闭文件，再以 `InMemoryRandomAccessStream` 解码，不能让 WinUI `BitmapImage.UriSource` 长期持有包内图标文件。2026-10-01 拒绝访问问题已由运行进程的 `bilibili.ico` 文件句柄确认；原路径 ACL 为当前用户 FullControl、文件非只读。安装/卸载提交后清除本地图标缓存，避免相同 URI 继续显示旧图；读取/解码失败仍触发设置卡片默认图标回退，卸载卡片时解绑回调。
+  验证：本地文件分离读取、保留字节后移动/删除插件目录、应用数据 URI 与路径越界，以及作者解析/Runtime 回归共 **76 项通过**；App Debug x64 构建 **0 警告、0 错误**。未替换正在运行的 Release 进程或已安装插件；重新编译并使用新 App 后，由用户复测图标可见时安装/替换插件，以及缺失/损坏图标的回退。
 - 启停：只改安装记录里的 `IsEnabled`。停用的插件不加载，因此不再刷新、不再产生通知，也不会出现「找不到 Provider」错误；停用不删缓存。
 - 卸载：目录先移到 `.uninstall-{guid}` -> 写记录（去掉该项）-> 成功后删备份；写记录失败则把目录移回。备份删不掉时留待后续清理，**不会复活插件**。
 - 所有目录名都过 `ResolveUserPath`：拒绝绝对路径与非法字符，并在 `Path.GetFullPath` 之后做包含性检查。
-- **热加载限制**：安装与启停只影响下一次 `FeedPeekPluginRuntime.LoadAsync`（`_loaded` 为 true 时直接早退）。当前 UI 安装完只刷新列表，因此新插件要到下一个会话（新的 Flyout 或重新打开的设置页）才真正生效。
+- **热加载时机**：安装记录或插件目录时间戳改变后，下次 `FeedPeekPluginRuntime.LoadAsync` 会根据 change token 重建 Provider；只有 token 未变化时才跳过加载。来源列表刷新、后续面板/通知操作会检测变化，不在替换目录的瞬间强制重建正在使用的 UI。
 
 ## 11. 凭据与登录
 
@@ -338,6 +352,15 @@ Host 之外没有网络出口：插件脚本里的 URL 只有经过这个桥才�
 
 关注作者（`creator.getFollowing`）**不会**为每个作者建立 Source，只喂给通知规则（`ProviderId + SourceId + CreatorKey`）。
 
+### 12.1 地址型来源编辑（2026-10-01）
+
+- 添加直播间地址时，宿主按插件 `roomUrlTemplate` 匹配路径和数字房间号。模板主机的 `www.` 可省略，输入省略协议时补 HTTPS，HTTP 输入也可识别；保存为模板的规范地址 `source.address`。不把 `live.`、`m.` 等子域当作任意别名，不扩大插件网络白名单或 Cookie 域。
+- 单直播间 LiveParse 来源详情复用 RSS 的“源链接”设置卡片。旧来源没有 `source.address` 时，按单个 `roomIds` 和模板推导；多房间配置不显示单链接编辑，原生账户型订阅不显示此入口。
+- LiveParse 的 `source.get` 使用上下文的新 `roomIds` 严格获取房间资料，即使当前未开播也返回名称与头像；详情查询失败向宿主报错，不吞掉错误后保存旧资料。`source.create` 保留已有的暂时查询失败回退行为。返回资料不再有头像时删除旧 `source.icon`，让默认图标回退生效。
+- 修改前验证当前插件、链接归属及重复房间，查询成功后在 SQLite 事务中一起保存原来源的名称、图标、源链接和订阅参数。保留 provider/source/subscription 身份及用户通知开关，清除旧轮询状态和缓存快照，避免旧 ETag、游标和通知在线状态应用到新地址。
+- RSS 修改链接也先重新发现并校验 RSS/Atom，再刷新名称、格式及图标。新链接查询失败不修改原来源。地址保存后详情标题、面包屑和返回后的来源/通知列表都读取新资料；本次更新后的首次通知查询静默建立基线。
+- 验证：地址匹配、旧来源链接回填、离线房间资料刷新、头像缺失回退、失败不保存及相关通知/插件回归共 92 项通过；地址保存专项 4 项通过（含随后补充的查询与保存并发用例）。App Debug x64 构建通过，0 警告、0 错误。未启动应用；人工检查不带 `www` 的斗鱼链接添加、修改为另一房间后名称/头像及面包屑更新、查询失败保留原值，以及原通知开关仍保持原值。
+
 ## 13. 现状、边界与已知缺口
 
 ### 13.1 设计上明确不做的
@@ -361,6 +384,3 @@ Host 之外没有网络出口：插件脚本里的 URL 只有经过这个桥才�
 | 9 | 没有 Host 侧图片代理，`ImageUrl` / `AvatarUrl` 直接由 WinUI 绑定联网，图片请求不经过 `allowedHosts` 校验 | `FeedLiveItemRow` 与 `FeedItemRow` |
 | 10 | 凭据生命周期只有 `auth.begin/complete/validate/clear`，没有 `setCredential` / `getCredentialStatus` 这类按需回写的接口，登出完全靠宿主删 profile | `PluginMethods` |
 | 11 | 清单以前没有图标字段，插件行与插件详情页只有字形、顶部没有图标 | `PluginManifest.Icon` / `PluginDetailPage`，现已在 2.5 实现 |
-
-
-

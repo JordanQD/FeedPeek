@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
   <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
   <resheader name="version"><value>2.0</value></resheader>
@@ -89,29 +89,47 @@
   <data name="NotificationCheckIntervalBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>通知檢查間隔（分鐘）</value></data>
   <data name="NotificationTargetSectionHeader.Text" xml:space="preserve"><value>通知對象</value></data>
   <data name="NotificationTargetCard.Header" xml:space="preserve"><value>通知對象</value></data>
-  <data name="NotificationTargetCard.Description" xml:space="preserve"><value>選擇通知所有關注 UP，僅通知自選 UP，或完全關閉通知。</value></data>
+  <data name="NotificationTargetCard.Description" xml:space="preserve"><value>選擇所有來源、自訂來源或關閉通知。</value></data>
   <data name="NotificationTargetModeBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>通知對象</value></data>
   <data name="NotificationTargetNoneItem.Content" xml:space="preserve"><value>不通知</value></data>
   <data name="NotificationTargetAllFollowingItem.Content" xml:space="preserve"><value>所有來源更新</value></data>
-  <data name="NotificationTargetCustomCreatorsItem.Content" xml:space="preserve"><value>自訂作者通知</value></data>
-  <data name="NotificationVideoNotifyCard.Header" xml:space="preserve"><value>內容更新通知</value></data>
+  <data name="NotificationTargetCustomCreatorsItem.Content" xml:space="preserve"><value>自訂來源通知</value></data>
+  <data name="NotificationVideoNotifyCard.Header" xml:space="preserve"><value>更新通知</value></data>
   <data name="NotificationVideoNotifyCard.Description" xml:space="preserve"><value>來源出現新內容時提醒。</value></data>
-  <data name="NotificationVideoNotificationSwitch.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>影片更新通知</value></data>
+  <data name="NotificationVideoNotificationSwitch.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>更新通知</value></data>
   <data name="NotificationLiveNotifyCard.Header" xml:space="preserve"><value>開播通知</value></data>
-  <data name="NotificationLiveNotifyCard.Description" xml:space="preserve"><value>關注 UP 開始直播時提醒。</value></data>
+  <data name="NotificationLiveNotifyCard.Description" xml:space="preserve"><value>來源開始直播時提醒。</value></data>
   <data name="NotificationLiveNotificationSwitch.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>開播通知</value></data>
   <data name="NotificationCustomSectionHeader.Text" xml:space="preserve"><value>自訂通知</value></data>
-  <data name="NotificationCustomSectionDescription.Text" xml:space="preserve"><value>自訂 UP 的通知通過關注動態流檢測，因此僅對你已關注的 UP 生效。開播通知不受此限制。</value></data>
-  <data name="NotificationAddCustomCreatorCard.Header" xml:space="preserve"><value>自訂作者</value></data>
-  <data name="NotificationAddCustomCreatorCard.Description" xml:space="preserve"><value>作者由網站插件的關注列表提供。</value></data>
-  <data name="NotificationAddCreatorButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>添加自訂 UP</value></data>
-  <data name="NotificationAddCreatorButtonText.Text" xml:space="preserve"><value>添加 UP</value></data>
-  <data name="NotificationCustomVideoLabel.Text" xml:space="preserve"><value>影片</value></data>
-  <data name="NotificationCustomVideoSwitch.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>影片更新通知</value></data>
+  <data name="NotificationCustomSectionDescription.Text" xml:space="preserve"><value>自訂來源和作者的通知按各自來源設定發送。</value></data>
+  <data name="NotificationAddCustomCreatorCard.Header" xml:space="preserve"><value>添加通知</value></data>
+  <data name="NotificationAddCustomCreatorCard.Description" xml:space="preserve"><value>選擇已新增的來源，或進入外掛通知詳情設定作者。</value></data>
+  <data name="NotificationAddCreatorButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>添加通知</value></data>
+  <data name="NotificationAddCreatorButtonText.Text" xml:space="preserve"><value>添加通知</value></data>
+  <data name="NotificationCustomVideoLabel.Text" xml:space="preserve"><value>更新</value></data>
+  <data name="NotificationCustomVideoSwitch.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>更新通知</value></data>
   <data name="NotificationCustomLiveLabel.Text" xml:space="preserve"><value>開播</value></data>
   <data name="NotificationCustomLiveSwitch.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>開播通知</value></data>
   <data name="NotificationRemoveCreatorButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>刪除自訂 UP</value></data>
-  <data name="NotificationSettings.VideoNotifyCard.Header" xml:space="preserve"><value>影片更新通知</value></data>
+  <data name="NotificationSettings.VideoNotifyCard.Header" xml:space="preserve"><value>更新通知</value></data>
+  <data name="NotificationAddSourceMenuItem.Text" xml:space="preserve"><value>添加來源通知</value></data>
+  <data name="NotificationAddAuthorMenuItem.Text" xml:space="preserve"><value>添加作者通知</value></data>
+  <data name="NotificationEmptyList.Text" xml:space="preserve"><value>還沒有已新增的來源。請先在來源頁面新增訂閱或外掛來源。</value></data>
+  <data name="NotificationDetailSectionHeader.Text" xml:space="preserve"><value>通知類型</value></data>
+  <data name="NotificationDetailUpdatesCard.Header" xml:space="preserve"><value>更新通知</value></data>
+  <data name="NotificationDetailUpdatesCard.Description" xml:space="preserve"><value>此來源出現新內容時提醒。</value></data>
+  <data name="NotificationDetailUpdatesSwitch.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>更新通知</value></data>
+  <data name="NotificationDetailLiveCard.Header" xml:space="preserve"><value>開播通知</value></data>
+  <data name="NotificationDetailLiveCard.Description" xml:space="preserve"><value>此來源開始直播時提醒。</value></data>
+  <data name="NotificationDetailLiveSwitch.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>開播通知</value></data>
+  <data name="NotificationDetailSettingsHeader.Text" xml:space="preserve"><value>來源設定</value></data>
+  <data name="NotificationOpenSourceCard.Header" xml:space="preserve"><value>打開來源設定</value></data>
+  <data name="NotificationViewPluginCard.Header" xml:space="preserve"><value>查看插件</value></data>
+  <data name="NotificationDetailManagementHeader.Text" xml:space="preserve"><value>管理</value></data>
+  <data name="NotificationDeleteRuleCard.Header" xml:space="preserve"><value>刪除此通知項</value></data>
+  <data name="NotificationDeleteRuleCard.Description" xml:space="preserve"><value>保留來源及其內容。刪除的通知項不會自動補回。</value></data>
+  <data name="NotificationDeleteRuleButton.Content" xml:space="preserve"><value>刪除</value></data>
+  <data name="NotificationDeleteRuleButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>刪除此通知項</value></data>
   <data name="NotificationSettings.LiveNotifyCard.Header" xml:space="preserve"><value>開播通知</value></data>
 
   <data name="AboutPageTitle.Text" xml:space="preserve"><value>關於</value></data>
@@ -169,14 +187,14 @@
   <data name="InvalidConfigFile" xml:space="preserve"><value>配置文件為空或格式不正確。</value></data>
   <data name="OpenedUrl" xml:space="preserve"><value>已打開：{0}</value></data>
   <data name="OpenLinkFailed" xml:space="preserve"><value>打開連結失敗：{0}</value></data>
-  <data name="AddCreatorDialogTitle" xml:space="preserve"><value>添加 UP 主</value></data>
-  <data name="EnterLinkOrUid" xml:space="preserve"><value>輸入連結或 UID</value></data>
-  <data name="ClickQueryToFetch" xml:space="preserve"><value>點擊查詢按鈕讀取 UP 資訊</value></data>
-  <data name="FetchingCreatorInfo" xml:space="preserve"><value>正在讀取 UP 資訊...</value></data>
+  <data name="AddCreatorDialogTitle" xml:space="preserve"><value>添加作者通知</value></data>
+  <data name="EnterLinkOrUid" xml:space="preserve"><value>輸入作者主頁連結或作者 ID</value></data>
+  <data name="ClickQueryToFetch" xml:space="preserve"><value>點擊查詢按鈕讀取作者資訊</value></data>
+  <data name="FetchingCreatorInfo" xml:space="preserve"><value>正在讀取作者資訊...</value></data>
   <data name="InputInvalid" xml:space="preserve"><value>輸入無效</value></data>
-  <data name="InputInvalidDetail" xml:space="preserve"><value>請輸入有效的 UP 主頁連結或 UID。</value></data>
+  <data name="InputInvalidDetail" xml:space="preserve"><value>請輸入所選插件支援的作者主頁連結或作者 ID。</value></data>
   <data name="AlreadyExists" xml:space="preserve"><value>已存在</value></data>
-  <data name="AlreadyExistsDetail" xml:space="preserve"><value>這個 UP 已經在通知列表裡。</value></data>
+  <data name="AlreadyExistsDetail" xml:space="preserve"><value>這個作者已經在所選來源的通知列表裡。</value></data>
   <data name="FetchFailed" xml:space="preserve"><value>讀取失敗</value></data>
   <data name="AddedCreator" xml:space="preserve"><value>已添加：{0}</value></data>
   <data name="RemovedCreator" xml:space="preserve"><value>已刪除：{0}</value></data>
@@ -211,14 +229,93 @@
   <data name="MainWindow.Title" xml:space="preserve"><value>FeedPeek</value></data>
   <data name="SettingsWindow.Title" xml:space="preserve"><value>FeedPeek 設定</value></data>
   <data name="WebSignInWindow.Title" xml:space="preserve"><value>FeedPeek 登錄</value></data>
-  <data name="AddCreatorDialogVideoLabel" xml:space="preserve"><value>影片更新通知</value></data>
+  <data name="AddCreatorDialogVideoLabel" xml:space="preserve"><value>更新通知</value></data>
   <data name="AddCreatorDialogLiveLabel" xml:space="preserve"><value>開播通知</value></data>
   <data name="AddToNotificationListMenuItem" xml:space="preserve"><value>添加到通知列表</value></data>
   <data name="RemoveFromNotificationListMenuItem" xml:space="preserve"><value>移除通知列表</value></data>
   <data name="AddedToNotificationList" xml:space="preserve"><value>已添加到通知列表：{0}</value></data>
   <data name="RemovedFromNotificationList" xml:space="preserve"><value>已從通知列表移除：{0}</value></data>
-  <data name="CreatorNotFollowed" xml:space="preserve"><value>該 UP 不在你的關注列表中</value></data>
-  <data name="CreatorNotFollowedDetail" xml:space="preserve"><value>僅能對已關注的 UP 添加通知。</value></data>
+  <data name="CreatorNotFollowed" xml:space="preserve"><value>尚未關注該作者</value></data>
+  <data name="CreatorNotFollowedDetail" xml:space="preserve"><value>所選來源的帳號尚未關注該作者，僅能對已關注的作者添加通知。</value></data>
+  <data name="CreatorQuerySource" xml:space="preserve"><value>查詢來源</value></data>
+  <data name="CreatorChooseSource" xml:space="preserve"><value>請選擇來源</value></data>
+  <data name="CreatorAmbiguousSource" xml:space="preserve"><value>有多個可查詢的來源，請選擇作者所屬的來源和帳號。</value></data>
+  <data name="CreatorNoAvailableSource" xml:space="preserve"><value>沒有支援作者通知的來源，請先在來源頁添加訂閱或啟用插件。</value></data>
+  <data name="CreatorFollowUnknown" xml:space="preserve"><value>無法確認關注關係</value></data>
+  <data name="CreatorFollowUnknownDetail" xml:space="preserve"><value>插件未提供完整關注資訊，無法確認該作者是否已關注。請更新插件或嘗試作者 ID。</value></data>
+  <data name="CreatorLoginRequired" xml:space="preserve"><value>需要登入</value></data>
+  <data name="CreatorLoginRequiredDetail" xml:space="preserve"><value>請到所選來源的插件設定中登入後重試。</value></data>
+  <data name="CreatorQueryFailed" xml:space="preserve"><value>作者查詢失敗</value></data>
+  <data name="CreatorQueryFailedDetail" xml:space="preserve"><value>此次查詢失敗，未判斷為未關注，請稍後重試。</value></data>
+  <data name="CreatorSourceUnavailable" xml:space="preserve"><value>所選來源已不可用</value></data>
+  <data name="CreatorNotificationUnavailable" xml:space="preserve"><value>沒有可用的通知類型</value></data>
+  <data name="CreatorNotificationUnavailableDetail" xml:space="preserve"><value>該作者或所選來源未啟用支援通知的更新、直播訂閱。</value></data>
   <data name="SignInNotificationTitle" xml:space="preserve"><value>歡迎使用 FeedPeek</value></data>
   <data name="SignInNotificationBody" xml:space="preserve"><value>點擊登錄 Bilibili 賬號以獲取關注動態</value></data>
+  <data name="SourceNotificationSyncFailed" xml:space="preserve"><value>來源通知清單同步失敗，已保留原通知模式。請重新開啟此頁或重新選擇以重試。</value></data>
+  <data name="NotificationListLoadFailed" xml:space="preserve"><value>無法載入通知清單，請重新開啟此頁面。</value></data>
+  <data name="NotificationNoAvailableSources" xml:space="preserve"><value>沒有可添加的來源，請先在來源頁面添加訂閱或啟用插件。</value></data>
+  <data name="NotificationSourcePicker" xml:space="preserve"><value>選擇來源</value></data>
+  <data name="NotificationAddSourceTitle" xml:space="preserve"><value>添加來源通知</value></data>
+  <data name="NotificationUnavailable" xml:space="preserve"><value>暫不可用</value></data>
+  <data name="NotificationSaveFailed" xml:space="preserve"><value>保存失敗，請重試。</value></data>
+  <data name="NotificationRuleMissing" xml:space="preserve"><value>此通知項已移除，請返回通知頁面。</value></data>
+  <data name="NotificationRuleUnavailable" xml:space="preserve"><value>此來源暫不可用或不支援通知。啟用插件或訂閱後可恢復，已保存的開關保持不變。</value></data>
+  <data name="NotificationSourceMissing" xml:space="preserve"><value>來源已刪除</value></data>
+  <data name="NotificationAuthor" xml:space="preserve"><value>作者</value></data>
+  <data name="NotificationUpdates" xml:space="preserve"><value>更新通知</value></data>
+  <data name="NotificationLive" xml:space="preserve"><value>開播通知</value></data>
+  <data name="NotificationCreatorPolicy" xml:space="preserve"><value>作者通知</value></data>
+  <data name="NotificationCreatorNotFollowed" xml:space="preserve"><value>已取消關注 / 暫不可用</value></data>
+  <data name="NotificationCreatorRelationUnknown" xml:space="preserve"><value>關係待確認</value></data>
+  <data name="NotificationAllFollowingCreators" xml:space="preserve"><value>全部已關注作者</value></data>
+  <data name="NotificationSelectedCreators" xml:space="preserve"><value>自選作者</value></data>
+  <data name="NotificationCreatorUpdates" xml:space="preserve"><value>更新</value></data>
+  <data name="NotificationCreatorLive" xml:space="preserve"><value>開播</value></data>
+  <data name="NotificationAddTitle" xml:space="preserve"><value>添加通知</value></data>
+  <data name="NotificationSearchPlaceholder" xml:space="preserve"><value>搜尋已關注作者，或輸入作者 ID、連結查詢</value></data>
+  <data name="NotificationSearchName" xml:space="preserve"><value>搜尋通知對象</value></data>
+  <data name="NotificationCandidates" xml:space="preserve"><value>通知對象</value></data>
+  <data name="NotificationScope" xml:space="preserve"><value>通知範圍</value></data>
+  <data name="NotificationPluginNeedsSource" xml:space="preserve"><value>請在插件設定中登入或添加來源</value></data>
+  <data name="NotificationAlreadyConfigured" xml:space="preserve"><value>已添加，查看設定</value></data>
+  <data name="NotificationViewConfiguration" xml:space="preserve"><value>查看設定</value></data>
+  <data name="NotificationOpenSettings" xml:space="preserve"><value>開啟設定</value></data>
+  <data name="NotificationSavedAuthorPreference" xml:space="preserve"><value>保存自選作者偏好會保留目前來源範圍。全部範圍下，這些個人開關暫不參與篩選；可在來源通知詳情中修改範圍。</value></data>
+  <data name="NotificationNewSelectedScope" xml:space="preserve"><value>自選範圍保存後，可在通知詳情添加作者；選擇全部會通知目前及以後已關注的作者。</value></data>
+  <data name="NotificationLoadingAuthors" xml:space="preserve"><value>正在載入已關注作者，請輸入名稱搜尋。</value></data>
+  <data name="NotificationEnterAuthorId" xml:space="preserve"><value>此插件支援按作者 ID 或連結查詢。請輸入後按 Enter 或點擊搜尋。</value></data>
+  <data name="NotificationSearchHint" xml:space="preserve"><value>輸入已關注作者名稱搜尋，或輸入作者 ID、連結後查詢。</value></data>
+  <data name="NotificationPartialAuthors" xml:space="preserve"><value>作者列表不完整，可輸入作者 ID 或連結直接查詢。缺項不代表未關注。</value></data>
+  <data name="NotificationAuthorLoadFailed" xml:space="preserve"><value>已關注作者載入失敗，可輸入作者 ID 或連結重試查詢。</value></data>
+  <data name="NotificationConfigurationSaved" xml:space="preserve"><value>已保存通知設定。</value></data>
+  <data name="NotificationCreatorPersonalNone" xml:space="preserve"><value>目前全域模式為「不通知」，此作者設定暫不生效。</value></data>
+  <data name="NotificationCreatorPersonalAllSources" xml:space="preserve"><value>目前全域模式為「所有來源更新」，使用全域類型開關通知全部已關注作者，個人開關暫不參與篩選。</value></data>
+  <data name="NotificationCreatorPersonalCustom" xml:space="preserve"><value>目前全域模式為「自訂來源通知」，個人開關僅在來源對應類型為自選且總開關開啟時生效。</value></data>
+  <data name="NotificationCreatorPersonalAllScope" xml:space="preserve"><value>此來源使用全部已關注作者範圍，個人作者開關暫不參與篩選。</value></data>
+  <data name="NotificationCreatorPersonalSelectedScope" xml:space="preserve"><value>此來源使用自選作者範圍，須同時開啟來源和此作者的對應類型開關。</value></data>
+  <data name="NotificationCreatorPersonalMixedScope" xml:space="preserve"><value>此來源按更新和開播分別設定範圍，個人開關僅在對應類型為自選時生效。</value></data>
+  <data name="NotificationCreatorGlobalNone" xml:space="preserve"><value>目前全域模式為「不通知」，已保存的作者範圍和開關暫不生效。</value></data>
+  <data name="NotificationCreatorGlobalAllSources" xml:space="preserve"><value>目前全域模式為「所有來源更新」，使用全域類型開關通知全部已關注作者。下方範圍和開關僅用於自訂來源通知。</value></data>
+  <data name="NotificationCreatorGlobalCustom" xml:space="preserve"><value>目前全域模式為「自訂來源通知」，下方範圍和類型開關生效。</value></data>
+  <data name="NotificationCreatorAllFollowingUnavailable" xml:space="preserve"><value>目前插件不支援完整關注列表，無法選擇全部已關注作者。</value></data>
+  <data name="NotificationCreatorScopeCard.Header" xml:space="preserve"><value>作者範圍</value></data>
+  <data name="NotificationCreatorScopeCard.Description" xml:space="preserve"><value>僅在自訂來源通知模式下生效。</value></data>
+  <data name="NotificationCreatorScopeBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>作者範圍</value></data>
+  <data name="NotificationMixedCreatorScopeItem.Content" xml:space="preserve"><value>按通知類型分別設定（保留舊設定）</value></data>
+  <data name="NotificationAllFollowingCreatorScopeItem.Content" xml:space="preserve"><value>全部已關注作者</value></data>
+  <data name="NotificationSelectedCreatorScopeItem.Content" xml:space="preserve"><value>自選作者</value></data>
+  <data name="NotificationAddSelectedCreatorCard.Header" xml:space="preserve"><value>搜尋已關注作者</value></data>
+  <data name="NotificationAddSelectedCreatorCard.Description" xml:space="preserve"><value>搜尋並選擇要通知的作者。</value></data>
+  <data name="NotificationSourceSearchPlaceholder" xml:space="preserve"><value>搜尋已新增的來源</value></data>
+  <data name="NotificationSourceSearchHint" xml:space="preserve"><value>選擇已新增的來源；外掛的作者通知在其詳情中設定。</value></data>
+  <data name="NotificationAuthorSearchTitle" xml:space="preserve"><value>新增作者通知</value></data>
+  <data name="NotificationPluginAddCard.Header" xml:space="preserve"><value>新增通知</value></data>
+  <data name="NotificationPluginAddButton.Content" xml:space="preserve"><value>新增通知</value></data>
+  <data name="NotificationPluginAddButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>新增通知</value></data>
+  <data name="NotificationPluginGroupCount" xml:space="preserve"><value>{0} 個來源 · {1} 個自選作者</value></data>
+  <data name="NotificationPluginSettingsCard.Header" xml:space="preserve"><value>通知設定</value></data>
+  <data name="NotificationPluginSettingsButton.Content" xml:space="preserve"><value>設定</value></data>
+  <data name="NotificationRoomKind" xml:space="preserve"><value>直播間</value></data>
+  <data name="NotificationWebsiteKind" xml:space="preserve"><value>網站訂閱</value></data>
 </root>

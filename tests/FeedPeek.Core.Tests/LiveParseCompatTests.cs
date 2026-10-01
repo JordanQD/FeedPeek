@@ -63,6 +63,7 @@ public sealed class LiveParseCompatTests
 
         var manifest = conversion!.Manifest;
         Assert.Equal("liveparse.demo", manifest.PluginId);
+        Assert.True(manifest.Notifications!.AutoAddToCustom);
         Assert.Equal(PluginManifestRules.LiveParseRuntime, PluginManifestRules.ResolveRuntime(manifest));
         Assert.Equal(["feed.live", "source.configuration", "account.auth"], manifest.Capabilities);
         Assert.Equal("index.js", manifest.Entry);
@@ -92,6 +93,7 @@ public sealed class LiveParseCompatTests
         // The written package passes the normal loader and runs through the dialect.
         var package = await new PluginManifestLoader().LoadAsync(target.Path);
         Assert.Equal("liveparse.demo", package.Manifest.PluginId);
+        Assert.True(package.Manifest.Notifications!.AutoAddToCustom);
 
         await using var runtime = await JintPluginTransport.CreateAsync(package, CreateHost());
         var handshake = await InvokeAsync(runtime, "liveparse.demo", PluginMethods.Handshake, new { });
@@ -135,6 +137,53 @@ public sealed class LiveParseCompatTests
         Assert.False(auth!.Required);
         Assert.NotNull(auth.LoginFlow);
         Assert.Contains("account.auth", conversion.Manifest.Capabilities);
+    }
+
+    [Fact]
+    public async Task LiveParse_ReturnsIncompletePageWhenOneRoomFails()
+    {
+        var page = await InvokeLivePageAsync("""
+            globalThis.LiveParsePlugin = {
+              apiVersion: 1,
+              async getRoomDetail({ roomId }) {
+                if (String(roomId) === '2') throw new Error('temporary failure');
+                await Host.http.request({ platformId: 'demo', request: { url: 'https://api.demo.test/room', method: 'GET' } });
+                return { roomId: String(roomId), userName: 'Room ' + roomId, liveState: '1' };
+              }
+            };
+            """, "1 2");
+
+        var item = Assert.Single(page.Items);
+        Assert.Equal("1", item.CreatorKey);
+        Assert.False(page.IsComplete);
+    }
+
+    [Fact]
+    public async Task LiveParse_ReturnsCompletePageWhenAllRoomsAreOffline()
+    {
+        var page = await InvokeLivePageAsync("""
+            globalThis.LiveParsePlugin = {
+              apiVersion: 1,
+              async getRoomDetail({ roomId }) {
+                await Host.http.request({ platformId: 'demo', request: { url: 'https://api.demo.test/room', method: 'GET' } });
+                return { roomId: String(roomId), userName: 'Room ' + roomId, liveState: '0' };
+              }
+            };
+            """, "1 2");
+
+        Assert.Empty(page.Items);
+        Assert.True(page.IsComplete);
+    }
+
+    [Fact]
+    public void PluginLivePage_DefaultsLegacyPayloadsToComplete()
+    {
+        var page = JsonSerializer.Deserialize<PluginLivePage>(
+            "{\"items\":[]}",
+            PluginJson.SerializerOptions);
+
+        Assert.NotNull(page);
+        Assert.True(page!.IsComplete);
     }
 
     /// <summary>
@@ -251,6 +300,96 @@ public sealed class LiveParseCompatTests
         }
 
         return name + ": " + string.Join(" | ", notes);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task SourceGetRefreshesOfflineRoomIdentityAndReplacesOldAvatar(bool hasAvatar)
+    {
+        var script = "globalThis.LiveParsePlugin = { apiVersion: 1, async getRoomDetail(payload) { return { roomId: payload.roomId, "
+            + "userName: 'New broadcaster', roomTitle: 'Offline room', liveState: '0', userHeadImg: "
+            + (hasAvatar ? "'https://images.demo.test/new.png'" : "null") + " }; } };";
+        var response = await InvokeRoomSourceAsync(script, PluginMethods.SourceGet);
+        Assert.True(response.Success, response.Error?.Message);
+        var source = response.Result.Deserialize<PluginSourceDefinition>(PluginJson.SerializerOptions)!;
+        Assert.Equal("probe-source", source.SourceId);
+        Assert.Equal("New broadcaster", source.DisplayName);
+        Assert.Equal("22222", source.Options!["roomIds"]);
+        Assert.Equal("https://live.demo.test/22222", source.Options["source.address"]);
+        Assert.Equal("https://example.test/custom-home", source.Options["source.website"]);
+        if (hasAvatar) Assert.Equal("https://images.demo.test/new.png", source.Options["source.icon"]);
+        else Assert.False(source.Options.ContainsKey("source.icon"));
+    }
+
+    [Fact]
+    public async Task SourceGetDoesNotSwallowRoomLookupFailuresButCreateKeepsItsExistingFallback()
+    {
+        const string script = "globalThis.LiveParsePlugin = { apiVersion: 1, async getRoomDetail() { throw new Error('unavailable'); } };";
+        var edit = await InvokeRoomSourceAsync(script, PluginMethods.SourceGet);
+        Assert.False(edit.Success);
+        var create = await InvokeRoomSourceAsync(script, PluginMethods.SourceCreate);
+        Assert.True(create.Success, create.Error?.Message);
+    }
+
+    private static async Task<PluginResponseEnvelope<JsonElement>> InvokeRoomSourceAsync(string script, string method)
+    {
+        using var source = TemporaryDirectory.Create();
+        await File.WriteAllTextAsync(Path.Combine(source.Path, "manifest.json"), """
+            { "pluginId": "demo", "version": "1.0.0", "apiVersion": 1, "displayName": "Demo Live",
+              "entry": "index.js", "hostBehavior": { "externalRoomURLTemplate": "https://live.demo.test/{roomId}" } }
+            """);
+        // The literal URL also lets the converter derive the fixture's network hosts.
+        await File.WriteAllTextAsync(Path.Combine(source.Path, "index.js"), "// https://api.demo.test/room\n" + script);
+        using var target = TemporaryDirectory.Create();
+        Assert.NotNull(await LiveParsePackageConverter.TryConvertAsync(source.Path, target.Path));
+        var package = await new PluginManifestLoader().LoadAsync(target.Path);
+        await using var runtime = await JintPluginTransport.CreateAsync(package, CreateHost());
+        var context = new PluginInvocationContext("probe-subscription", package.Manifest.PluginId, "probe-source", "live", null,
+            new Dictionary<string, string>
+            {
+                ["roomIds"] = "22222", ["source.address"] = "https://live.demo.test/22222",
+                ["source.icon"] = "https://images.demo.test/old.png", ["source.website"] = "https://example.test/custom-home",
+            });
+        return await InvokeAsync(runtime, package.Manifest.PluginId, method, new { context, options = context.Options });
+    }
+
+    private static async Task<PluginLivePage> InvokeLivePageAsync(string script, string roomIds)
+    {
+        using var source = TemporaryDirectory.Create();
+        await File.WriteAllTextAsync(Path.Combine(source.Path, "manifest.json"), """
+            {
+              "pluginId": "demo",
+              "version": "1.0.0",
+              "apiVersion": 1,
+              "displayName": "Demo Live",
+              "entry": "index.js",
+              "hostBehavior": { "externalRoomURLTemplate": "https://live.demo.test/{roomId}" }
+            }
+            """);
+        await File.WriteAllTextAsync(Path.Combine(source.Path, "index.js"), script);
+
+        using var target = TemporaryDirectory.Create();
+        var conversion = await LiveParsePackageConverter.TryConvertAsync(source.Path, target.Path);
+        Assert.NotNull(conversion);
+        var package = await new PluginManifestLoader().LoadAsync(target.Path);
+        await using var runtime = await JintPluginTransport.CreateAsync(package, CreateHost());
+        var response = await InvokeAsync(runtime, package.Manifest.PluginId, PluginMethods.FeedGetLive, new
+        {
+            context = new PluginInvocationContext(
+                "probe-subscription",
+                package.Manifest.PluginId,
+                "probe-source",
+                "live",
+                null,
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["roomIds"] = roomIds,
+                }),
+        });
+
+        Assert.True(response.Success, response.Error?.Message);
+        return response.Result.Deserialize<PluginLivePage>(PluginJson.SerializerOptions)!;
     }
 
     private static PluginHostServices CreateHost()

@@ -16,6 +16,11 @@ public static class PluginManifestRules
     public static string ResolveRuntime(PluginManifest manifest)
         => string.IsNullOrWhiteSpace(manifest.Runtime) ? NativeRuntime : manifest.Runtime;
 
+    /// <summary>Compatibility rooms use the host policy; native plugins must opt in.</summary>
+    public static bool ShouldAutoAddToCustomNotifications(PluginManifest manifest)
+        => string.Equals(ResolveRuntime(manifest), LiveParseRuntime, StringComparison.Ordinal)
+            || manifest.Notifications?.AutoAddToCustom == true;
+
 
     public static IReadOnlySet<string> SupportedCapabilities { get; } =
         new HashSet<string>(StringComparer.Ordinal)
@@ -27,6 +32,7 @@ public static class PluginManifestRules
             "account.history",
             "collection.viewLater",
             "creator.following",
+            "creator.resolve",
             "creator.relation",
             "item.actions",
             "creator.actions",

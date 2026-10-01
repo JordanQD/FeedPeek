@@ -9,7 +9,12 @@ public sealed record PluginCreatorDescriptor(
     IReadOnlyDictionary<string, string>? Metadata);
 
 public sealed record PluginCreatorListResult(
-    IReadOnlyList<PluginCreatorDescriptor> Creators);
+    IReadOnlyList<PluginCreatorDescriptor> Creators,
+    bool IsComplete = false);
+
+public sealed record PluginCreatorResolvePayload(PluginInvocationContext Context, string Input);
+
+public sealed record PluginCreatorResolveResult(PluginCreatorDescriptor Creator, string FollowState);
 
 public sealed record PluginCreatorReference(
     PluginInvocationContext Context,
@@ -22,7 +27,11 @@ public sealed record ExecuteCreatorActionPayload(
     string ActionId,
     IReadOnlyDictionary<string, string>? Payload);
 
-public sealed record PluginLivePage(IReadOnlyList<PluginLiveItem> Items);
+// IsComplete is optional on the wire so native plugins written before the
+// completeness signal was introduced remain successful by default.
+public sealed record PluginLivePage(
+    IReadOnlyList<PluginLiveItem> Items,
+    bool IsComplete = true);
 
 public sealed record PluginLiveItem(
     string CreatorKey,

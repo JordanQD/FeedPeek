@@ -90,10 +90,10 @@
                 </Grid.RowDefinitions>
 
             <controls:SettingsCard
-                x:Name="RssCard"
+                x:Name="SourceAddressCard"
                 Grid.Row="0"
                 Visibility="Collapsed"
-                Description="修改源链接后点击保存"
+                Description="修改链接并保存，同步更新来源名称和图标"
                 Header="源链接">
                 <controls:SettingsCard.HeaderIcon>
                     <FontIcon Glyph="&#xE71B;" />
@@ -105,9 +105,11 @@
                     </Grid.ColumnDefinitions>
                     <TextBox
                         x:Name="EndpointTextBox"
+                        AutomationProperties.Name="源链接"
                         PlaceholderText="https://example.com/feed.xml" />
                     <Button
                         x:Name="SaveEndpointButton"
+                        AutomationProperties.Name="保存源链接"
                         Grid.Column="1"
                         Click="SaveEndpointButton_Click"
                         Content="保存" />

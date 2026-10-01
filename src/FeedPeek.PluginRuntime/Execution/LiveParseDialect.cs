@@ -403,6 +403,13 @@ public static class LiveParseDialect
               metadata: state ? { liveState: state } : null
             };
           };
+          const isKnownOfflineState = state => {
+            const value = text(state).trim().toLowerCase();
+            return value === '0' || value === '2' || value === '3'
+              || value === 'offline' || value === 'off' || value === 'ended'
+              || value === 'closed' || value === 'end' || value === 'idle'
+              || value === 'notlive' || value === 'not_live' || value === 'not-live';
+          };
           // A source pins concrete rooms. A full link such as https://www.douyu.com/74751 is accepted
           // as well as a bare id, and duplicates are folded.
           const parseRoomIds = value => {
@@ -445,6 +452,50 @@ public static class LiveParseDialect
             };
           };
 
+          const resolveRoomSource = async (payload, requireDetail) => {
+              const context = payload.context || {};
+              const options = Object.assign({}, payload.options || context.options || {});
+              const roomIds = parseRoomIds(options.roomIds);
+              let displayName = text(payload.displayName).trim() || config.displayName;
+              if (requireDetail && roomIds.length !== 1) {
+                throw Host.makeError('SOURCE_OPTION_INVALID', 'A source link must identify one room.', {});
+              }
+              // A pinned room is a source even while the room is offline. Resolve its identity
+              // here so the settings card does not depend on the live-only feed.getLive result.
+              if (roomIds.length === 1) {
+                try {
+                  const room = await plugin[roomDetailMethod]({ roomId: roomIds[0] });
+                  if (requireDetail && (!room || typeof room !== 'object')) {
+                    throw Host.makeError('LIVE_DETAIL_INVALID', 'The plugin returned no room detail.', {});
+                  }
+                  const name = text(room && room.userName).trim()
+                    || text(room && room.roomTitle).trim();
+                  if (name) displayName = name;
+                  else if (requireDetail) displayName = config.displayName + ' · ' + roomIds[0];
+                  const avatar = image(room && room.userHeadImg);
+                  if (requireDetail) delete options['source.icon'];
+                  if (avatar) options['source.icon'] = avatar;
+                } catch (error) {
+                  if (requireDetail) throw error;
+                  // A transient detail failure must not prevent the room from being pinned.
+                }
+              }
+              return {
+                providerId: context.providerId,
+                sourceId: context.sourceId,
+                displayName,
+                credentialProfileId: context.credentialProfileId || null,
+                feeds: [{
+                  feedId: 'live',
+                  displayName: '正在直播',
+                  kind: 'live',
+                  supportsPaging: false,
+                  supportsNotifications: true
+                }],
+                options: payload.options || context.options ? options : null
+              };
+            };
+
           const handlers = {
             'plugin.handshake': () => ({
               providerId: config.pluginId,
@@ -463,38 +514,11 @@ public static class LiveParseDialect
             'creator.getFollowing': () => ({ creators: [] }),
 
             'source.create': async payload => {
-              const context = payload.context || {};
-              const options = Object.assign({}, payload.options || {});
-              const roomIds = parseRoomIds(options.roomIds);
-              let displayName = text(payload.displayName).trim() || config.displayName;
-              // A pinned room is a source even while the room is offline. Resolve its identity
-              // here so the settings card does not depend on the live-only feed.getLive result.
-              if (roomIds.length === 1) {
-                try {
-                  const room = await plugin[roomDetailMethod]({ roomId: roomIds[0] });
-                  const name = text(room && room.userName).trim()
-                    || text(room && room.roomTitle).trim();
-                  if (name) displayName = name;
-                  const avatar = image(room && room.userHeadImg);
-                  if (avatar) options['source.icon'] = avatar;
-                } catch (error) {
-                  // A transient detail failure must not prevent the room from being pinned.
-                }
-              }
-              return {
-                providerId: context.providerId,
-                sourceId: context.sourceId,
-                displayName,
-                credentialProfileId: context.credentialProfileId || null,
-                feeds: [{
-                  feedId: 'live',
-                  displayName: '正在直播',
-                  kind: 'live',
-                  supportsPaging: false,
-                  supportsNotifications: false
-                }],
-                options: payload.options ? options : null
-              };
+              return resolveRoomSource(payload, false);
+            },
+
+            'source.get': async payload => {
+              return resolveRoomSource(payload, true);
             },
 
             'feed.getLive': async payload => {
@@ -524,16 +548,49 @@ public static class LiveParseDialect
                   if (firstError === null) firstError = result.error;
                   continue;
                 }
+                if (!result.room || typeof result.room !== 'object') {
+                  if (firstError === null) {
+                    firstError = Host.makeError(
+                      'LIVE_DETAIL_INVALID',
+                      'The plugin returned no room detail.',
+                      { roomId: result.roomId });
+                  }
+                  continue;
+                }
+                const state = text(result.room.liveState).trim();
+                if (!state) {
+                  if (firstError === null) {
+                    firstError = Host.makeError(
+                      'LIVE_STATE_MISSING',
+                      'The plugin room detail is missing liveState.',
+                      { roomId: result.roomId });
+                  }
+                  continue;
+                }
                 if (liveStates.length > 0) {
-                  const state = text(result.room && result.room.liveState).trim();
-                  if (liveStates.indexOf(state) < 0) continue;
+                  if (liveStates.indexOf(state) < 0) {
+                    if (!isKnownOfflineState(state) && firstError === null) {
+                      firstError = Host.makeError(
+                        'LIVE_STATE_UNKNOWN',
+                        'The plugin returned an unknown liveState.',
+                        { roomId: result.roomId, liveState: state });
+                    }
+                    continue;
+                  }
                 }
                 const item = toLiveItem(result.room, result.roomId);
-                if (item) items.push(item);
+                if (item) {
+                  items.push(item);
+                } else if (firstError === null) {
+                  firstError = Host.makeError(
+                    'LIVE_DETAIL_INVALID',
+                    'The plugin returned an invalid room detail.',
+                    { roomId: result.roomId });
+                }
               }
               // A single broken room must not empty the strip, but a systematic failure should surface.
               if (items.length === 0 && firstError !== null) throw firstError;
-              return { items };
+              return { items, isComplete: firstError === null };
             },
 
             'auth.begin': () => ({ state: 'webviewRequired', data: null }),

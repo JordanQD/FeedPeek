@@ -1,9 +1,42 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Page
     x:Class="FeedPeek.Pages.NotificationSettingsPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:controls="using:CommunityToolkit.WinUI.Controls">
+    xmlns:controls="using:CommunityToolkit.WinUI.Controls"
+    xmlns:models="using:FeedPeek.Models"
+    xmlns:helpers="using:FeedPeek.Helpers">
+    <Page.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="ms-appx:///CommunityToolkit.WinUI.Controls.SettingsControls/SettingsExpander/SettingsExpander.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        <DataTemplate x:Key="NotificationCandidateTemplate" x:DataType="models:NotificationCandidateRow">
+            <controls:SettingsCard Header="{x:Bind DisplayName}" Description="{x:Bind Detail}"
+                AutomationProperties.Name="{x:Bind DisplayName}"
+                helpers:SettingsCardAvatar.IsEnabled="True" helpers:SettingsCardAvatar.Source="{x:Bind IconSource}" />
+        </DataTemplate>
+        <DataTemplate x:Key="NotificationRuleTemplate" x:DataType="models:NotificationRuleRow">
+            <controls:SettingsCard IsClickEnabled="True" DataContext="{x:Bind}" Click="NotificationRule_Click"
+                Header="{x:Bind DisplayName}" Description="{x:Bind GroupDetail}" AutomationProperties.Name="{x:Bind DisplayName}"
+                helpers:SettingsCardAvatar.IsEnabled="True" helpers:SettingsCardAvatar.Source="{x:Bind IconSource}" />
+        </DataTemplate>
+        <DataTemplate x:Key="PluginNotificationSettingsTemplate" x:DataType="models:NotificationFooterRow">
+            <controls:SettingsCard x:Uid="NotificationPluginSettingsCard" Header="通知设置" Description="{x:Bind Description}"
+                Style="{StaticResource DefaultSettingsExpanderItemStyle}">
+                <Button x:Uid="NotificationPluginSettingsButton" Content="设置" DataContext="{x:Bind Rule}"
+                    AutomationProperties.Name="{x:Bind Rule.DisplayName}" Click="NotificationRule_Click" />
+            </controls:SettingsCard>
+        </DataTemplate>
+        <DataTemplate x:Key="PluginNotificationAddTemplate" x:DataType="models:NotificationFooterRow">
+            <controls:SettingsCard x:Uid="NotificationPluginAddCard" Header="添加通知" Description="{x:Bind Description}"
+                Style="{StaticResource DefaultSettingsExpanderItemStyle}" IsEnabled="{x:Bind Rule.IsAvailable}">
+                <Button x:Uid="NotificationPluginAddButton" Content="添加通知" DataContext="{x:Bind Rule}"
+                    AutomationProperties.Name="添加通知" Click="PluginAddNotification_Click" />
+            </controls:SettingsCard>
+        </DataTemplate>
+        </ResourceDictionary>
+    </Page.Resources>
 
     <ScrollView
         x:Name="SettingsScrollView"
@@ -44,8 +77,9 @@
                 Style="{StaticResource SettingsSectionHeaderTextBlockStyle}"
                 Text="通知对象" />
             <controls:SettingsCard
+                x:Name="NotificationTargetCard"
                 x:Uid="NotificationTargetCard"
-                Description="选择通知所有关注 UP，仅通知自选 UP，或完全关闭通知。"
+                Description="选择所有来源、自定义来源或关闭通知。"
                 Header="通知对象">
                 <controls:SettingsCard.HeaderIcon>
                     <FontIcon Glyph="&#xE715;" />
@@ -60,11 +94,12 @@
                     AutomationProperties.Name="通知对象"
                     SelectionChanged="NotificationTargetModeBox_SelectionChanged">
                     <ComboBoxItem x:Uid="NotificationTargetNoneItem" Content="不通知" />
-                    <ComboBoxItem x:Uid="NotificationTargetAllFollowingItem" Content="所有 UP 更新" />
-                    <ComboBoxItem x:Uid="NotificationTargetCustomCreatorsItem" Content="自定义 UP 通知" />
+                    <ComboBoxItem x:Uid="NotificationTargetAllFollowingItem" Content="所有来源更新" />
+                    <ComboBoxItem x:Uid="NotificationTargetCustomCreatorsItem" Content="自定义来源通知" />
                 </ComboBox>
             </controls:SettingsCard>
 
+            <StackPanel x:Name="ActiveNotificationPanel" Spacing="{StaticResource SettingsCardSpacing}">
             <TextBlock
                 x:Name="NotificationIntervalSectionHeader"
                 x:Uid="NotificationIntervalSectionHeader"
@@ -91,11 +126,13 @@
                     ValueChanged="NotificationCheckIntervalBox_ValueChanged" />
             </controls:SettingsCard>
 
+            <Grid>
+            <StackPanel x:Name="GlobalNotificationPanel" Spacing="{StaticResource SettingsCardSpacing}">
             <controls:SettingsCard
                 x:Name="GlobalVideoNotificationCard"
                 x:Uid="NotificationVideoNotifyCard"
-                Description="关注 UP 发布新视频时提醒。"
-                Header="视频更新通知">
+                Description="来源出现新内容时提醒。"
+                Header="更新通知">
                 <controls:SettingsCard.HeaderIcon>
                     <FontIcon Glyph="&#xE714;" />
                 </controls:SettingsCard.HeaderIcon>
@@ -103,13 +140,13 @@
                     x:Name="VideoNotificationSwitch"
                     x:Uid="NotificationVideoNotificationSwitch"
                     AutomationProperties.AutomationId="VideoNotificationSwitch"
-                    AutomationProperties.Name="视频更新通知"
+                    AutomationProperties.Name="更新通知"
                     Toggled="VideoNotificationSwitch_Toggled" />
             </controls:SettingsCard>
             <controls:SettingsCard
                 x:Name="GlobalLiveNotificationCard"
                 x:Uid="NotificationLiveNotifyCard"
-                Description="关注 UP 开始直播时提醒。"
+                Description="来源开始直播时提醒。"
                 Header="开播通知">
                 <controls:SettingsCard.HeaderIcon>
                     <FontIcon Glyph="&#xE789;" />
@@ -122,159 +159,45 @@
                     Toggled="LiveNotificationSwitch_Toggled" />
             </controls:SettingsCard>
 
-            <StackPanel
-                x:Name="CustomNotificationPanel"
-                Spacing="{StaticResource SettingsCardSpacing}">
-                <TextBlock
-                    x:Uid="NotificationCustomSectionHeader"
-                    Style="{StaticResource SettingsSectionHeaderTextBlockStyle}"
-                    Text="自定义通知" />
-                <controls:SettingsCard
-                    x:Uid="NotificationAddCustomCreatorCard"
-                    Description="通知通过关注动态流检测，因此仅对你已关注的 UP 生效。"
-                    Header="自定义 UP"
-                    HorizontalContentAlignment="Right">
-                    <controls:SettingsCard.HeaderIcon>
-                        <PathIcon Data="M10 2C12.7614 2 15 4.23858 15 7C15 9.76142 12.7614 12 10 12C7.23858 12 5 9.76142 5 7C5 4.23858 7.23858 2 10 2ZM10 3.5C8.067 3.5 6.5 5.067 6.5 7C6.5 8.933 8.067 10.5 10 10.5C11.933 10.5 13.5 8.933 13.5 7C13.5 5.067 11.933 3.5 10 3.5ZM4.25 14H11.25C11.6642 14 12 14.3358 12 14.75C12 15.1642 11.6642 15.5 11.25 15.5H4.25C3.83579 15.5 3.5 15.8358 3.5 16.25V17.16C3.5 17.82 3.79 18.44 4.29 18.86C5.54 19.94 7.44 20.5 10 20.5C10.58 20.5 11.13 20.47 11.65 20.41C12.0615 20.3626 12.4337 20.6579 12.4811 21.0694C12.5285 21.4808 12.2332 21.853 11.8218 21.9004C11.2493 21.9664 10.642 22 10 22C7.11 22 4.87 21.34 3.31 20C2.48 19.29 2 18.25 2 17.16V16.25C2 15.0074 3.00736 14 4.25 14ZM18 12C18.4142 12 18.75 12.3358 18.75 12.75V16.25H22.25C22.6642 16.25 23 16.5858 23 17C23 17.4142 22.6642 17.75 22.25 17.75H18.75V21.25C18.75 21.6642 18.4142 22 18 22C17.5858 22 17.25 21.6642 17.25 21.25V17.75H13.75C13.3358 17.75 13 17.4142 13 17C13 16.5858 13.3358 16.25 13.75 16.25H17.25V12.75C17.25 12.3358 17.5858 12 18 12Z" />
-                    </controls:SettingsCard.HeaderIcon>
-                    <Button
-                        x:Name="AddCreatorButton"
-                        x:Uid="NotificationAddCreatorButton"
-                        MinWidth="40"
-                        Width="40"
-                        Height="40"
-                        Padding="0"
-                        AutomationProperties.AutomationId="AddCreatorButton"
-                        AutomationProperties.Name="添加自定义 UP"
-                        Click="AddCreatorButton_Click" />
-                </controls:SettingsCard>
-                <ListView
-                        x:Name="CustomNotificationCreatorsList"
-                        HorizontalContentAlignment="Stretch"
-                        ScrollViewer.VerticalScrollBarVisibility="Disabled"
-                        ScrollViewer.VerticalScrollMode="Disabled"
-                        SelectionMode="None">
-                        <ListView.ItemContainerStyle>
-                            <Style TargetType="ListViewItem">
+            </StackPanel>
+            <StackPanel x:Name="CustomNotificationPanel" Spacing="{StaticResource SettingsCardSpacing}">
+                <TextBlock x:Uid="NotificationCustomSectionHeader" Style="{StaticResource SettingsSectionHeaderTextBlockStyle}" Text="自定义通知" />
+                <Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                    <TextBlock x:Name="CustomNotificationStatusText" Margin="1,0,0,4" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Visibility="Collapsed" />
+                    <Grid Grid.Row="1">
+                        <TextBlock x:Name="EmptyNotificationsText" x:Uid="NotificationEmptyList" Text="还没有已添加的来源。请先在来源页面添加订阅或插件来源。" Margin="1,12,0,0" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="Collapsed" />
+                        <ListView x:Name="NotificationGroupsList" SelectionMode="None" HorizontalContentAlignment="Stretch" ScrollViewer.VerticalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollMode="Disabled">
+                            <ListView.ItemContainerStyle><Style TargetType="ListViewItem">
                                 <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                                <Setter Property="HorizontalAlignment" Value="Stretch" />
-                                <Setter Property="Padding" Value="0" />
-                            </Style>
-                        </ListView.ItemContainerStyle>
-                        <ListView.ItemTemplate>
-                            <DataTemplate>
-                                <Grid
-                                    HorizontalAlignment="Stretch"
-                                    MinHeight="64"
-                                    Padding="24,10"
-                                    ColumnSpacing="16"
-                                    RowSpacing="8">
-                                    <VisualStateManager.VisualStateGroups>
-                                        <VisualStateGroup>
-                                            <VisualState x:Name="WideItem">
-                                                <VisualState.StateTriggers>
-                                                    <AdaptiveTrigger MinWindowWidth="640" />
-                                                </VisualState.StateTriggers>
-                                                <VisualState.Setters>
-                                                    <Setter Target="ControlsRow.(Grid.Column)" Value="1" />
-                                                    <Setter Target="ControlsRow.(Grid.Row)" Value="0" />
-                                                </VisualState.Setters>
-                                            </VisualState>
-                                            <VisualState x:Name="NarrowItem">
-                                                <VisualState.StateTriggers>
-                                                    <AdaptiveTrigger MinWindowWidth="0" />
-                                                </VisualState.StateTriggers>
-                                                <VisualState.Setters>
-                                                    <Setter Target="ControlsRow.(Grid.Column)" Value="0" />
-                                                    <Setter Target="ControlsRow.(Grid.Row)" Value="1" />
-                                                </VisualState.Setters>
-                                            </VisualState>
-                                        </VisualStateGroup>
-                                    </VisualStateManager.VisualStateGroups>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="Auto" />
-                                    </Grid.RowDefinitions>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel
-                                        VerticalAlignment="Center"
-                                        Orientation="Horizontal"
-                                        Spacing="12">
-                                        <PersonPicture
-                                            Width="40"
-                                            Height="40"
-                                            DisplayName="{Binding Name}"
-                                            ProfilePicture="{Binding AvatarImage}" />
-                                        <TextBlock
-                                            VerticalAlignment="Center"
-                                            FontWeight="SemiBold"
-                                            Text="{Binding Name}"
-                                            TextTrimming="CharacterEllipsis" />
-                                    </StackPanel>
-                                    <StackPanel
-                                        x:Name="ControlsRow"
-                                        Grid.Column="1"
-                                        VerticalAlignment="Center"
-                                        Orientation="Horizontal"
-                                        Spacing="20">
-                                        <StackPanel
-                                            VerticalAlignment="Center"
-                                            Orientation="Horizontal"
-                                            Spacing="8">
-                                            <TextBlock
-                                                x:Uid="NotificationCustomVideoLabel"
-                                                VerticalAlignment="Center"
-                                                Text="视频" />
-                                            <ToggleSwitch
-                                                x:Uid="NotificationCustomVideoSwitch"
-                                                AutomationProperties.Name="视频更新通知"
-                                                OffContent=""
-                                                OnContent=""
-                                                IsOn="{Binding VideoNotificationsEnabled, Mode=TwoWay}"
-                                                Tag="{Binding}"
-                                                Toggled="CustomVideoNotificationSwitch_Toggled" />
-                                        </StackPanel>
-                                        <StackPanel
-                                            VerticalAlignment="Center"
-                                            Orientation="Horizontal"
-                                            Spacing="8">
-                                            <TextBlock
-                                                x:Uid="NotificationCustomLiveLabel"
-                                                VerticalAlignment="Center"
-                                                Text="开播" />
-                                            <ToggleSwitch
-                                                x:Uid="NotificationCustomLiveSwitch"
-                                                AutomationProperties.Name="开播通知"
-                                                OffContent=""
-                                                OnContent=""
-                                                IsOn="{Binding LiveNotificationsEnabled, Mode=TwoWay}"
-                                                Tag="{Binding}"
-                                                Toggled="CustomLiveNotificationSwitch_Toggled" />
-                                        </StackPanel>
-                                        <Button
-                                            x:Uid="NotificationRemoveCreatorButton"
-                                            Width="32"
-                                            Height="32"
-                                            Padding="0"
-                                            AutomationProperties.Name="删除自定义 UP"
-                                            Tag="{Binding}"
-                                            Click="RemoveCreatorButton_Click">
-                                            <SymbolIcon Symbol="Delete" />
-                                        </Button>
-                                    </StackPanel>
+                                <Setter Property="Padding" Value="0" /><Setter Property="IsTabStop" Value="False" />
+                            </Style></ListView.ItemContainerStyle>
+                            <ListView.ItemTemplate><DataTemplate x:DataType="models:NotificationSettingsGroup">
+                                <Grid>
+                                    <controls:SettingsCard Visibility="{x:Bind SourceVisibility}" IsClickEnabled="True"
+                                        Header="{x:Bind Source.DisplayName}" Description="{x:Bind Source.Detail}"
+                                        AutomationProperties.Name="{x:Bind Source.DisplayName}" DataContext="{x:Bind Source}"
+                                        Click="NotificationRule_Click" helpers:SettingsCardAvatar.IsEnabled="True"
+                                        helpers:SettingsCardAvatar.Source="{x:Bind Source.IconSource}" />
+                                    <controls:SettingsExpander Visibility="{x:Bind PluginVisibility}"
+                                        Header="{x:Bind DisplayName}" Description="{x:Bind Detail}" AutomationProperties.Name="{x:Bind DisplayName}"
+                                        DataContext="{x:Bind}" ItemsSource="{x:Bind NotificationItems}" ItemTemplate="{StaticResource NotificationRuleTemplate}"
+                                        helpers:SettingsCardAvatar.IsEnabled="True" helpers:SettingsCardAvatar.Source="{x:Bind IconSource}"
+                                        Loaded="PluginExpander_Loaded" Expanded="PluginExpander_StateChanged" Collapsed="PluginExpander_StateChanged">
+                                        <controls:SettingsExpander.ItemsFooter>
+                                            <StackPanel>
+                                                <ItemsRepeater ItemsSource="{x:Bind SettingsTargets}" ItemTemplate="{StaticResource PluginNotificationSettingsTemplate}" />
+                                                <ItemsRepeater ItemsSource="{x:Bind FooterAddTargets}" ItemTemplate="{StaticResource PluginNotificationAddTemplate}" />
+                                            </StackPanel>
+                                        </controls:SettingsExpander.ItemsFooter>
+                                    </controls:SettingsExpander>
                                 </Grid>
-                            </DataTemplate>
-                        </ListView.ItemTemplate>
-                    </ListView>
-                <TextBlock
-                    x:Name="CustomNotificationStatusText"
-                    Margin="1,8,0,0"
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                    TextWrapping="Wrap"
-                    Visibility="Collapsed" />
+                            </DataTemplate></ListView.ItemTemplate>
+                        </ListView>
+                    </Grid>
+                </Grid>
+            </StackPanel>
+            </Grid>
             </StackPanel>
         </StackPanel>
     </ScrollView>

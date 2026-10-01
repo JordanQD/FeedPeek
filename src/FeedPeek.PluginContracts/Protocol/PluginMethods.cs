@@ -14,6 +14,7 @@ public static class PluginMethods
     public const string SourceDelete = "source.delete";
     public const string AccountGetProfile = "account.getProfile";
     public const string CreatorGetFollowing = "creator.getFollowing";
+    public const string CreatorResolve = "creator.resolve";
     public const string FeedGetUpdates = "feed.getUpdates";
     public const string FeedGetMoreUpdates = "feed.getMoreUpdates";
     public const string FeedGetLive = "feed.getLive";
@@ -30,7 +31,7 @@ public static class PluginMethods
     {
         Handshake, GetStatus, AuthBegin, AuthComplete, AuthValidate, AuthClear,
         SourceCreate, SourceGet, SourceListFeeds, SourceDelete, AccountGetProfile,
-        CreatorGetFollowing, FeedGetUpdates, FeedGetMoreUpdates, FeedGetLive,
+        CreatorGetFollowing, CreatorResolve, FeedGetUpdates, FeedGetMoreUpdates, FeedGetLive,
         AccountGetHistory, AccountGetMoreHistory, CollectionGetViewLater,
         CollectionGetMoreViewLater, ItemGetActions, ItemExecuteAction,
         CreatorGetActions, CreatorExecuteAction,

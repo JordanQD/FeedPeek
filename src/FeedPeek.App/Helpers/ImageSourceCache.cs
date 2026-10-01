@@ -1,7 +1,14 @@
 using Microsoft.UI.Xaml.Media.Imaging;
+using Microsoft.UI.Xaml.Media;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics;
+using System.IO;
+using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
+using Windows.Storage;
+using Windows.Storage.Streams;
 
 namespace FeedPeek.Helpers;
 
@@ -20,6 +27,7 @@ public static class ImageSourceCache
     private static readonly object Gate = new();
     private static readonly Dictionary<string, LinkedListNode<CacheEntry>> Map = new(StringComparer.Ordinal);
     private static readonly LinkedList<CacheEntry> Lru = new();
+    private static readonly ConditionalWeakTable<BitmapImage, ImageLoadState> ImageStates = new();
     private static int _capacity = DefaultCapacity;
 
     public static int Capacity
@@ -82,6 +90,36 @@ public static class ImageSourceCache
 
     public static BitmapImage? GetSettingsAvatar(string? imageUrl) => GetOrCreate(imageUrl, SettingsAvatarDecodePixelWidth);
 
+    public static bool HasFailed(ImageSource? source) => source is BitmapImage image
+        && ImageStates.TryGetValue(image, out var state) && state.Failed;
+
+    internal static void AddFailureHandler(BitmapImage image, Action handler)
+        => ImageStates.GetValue(image, static _ => new ImageLoadState()).FailureHandlers += handler;
+
+    internal static void RemoveFailureHandler(BitmapImage image, Action handler)
+    {
+        if (ImageStates.TryGetValue(image, out var state)) state.FailureHandlers -= handler;
+    }
+
+    public static void InvalidateLocalImages()
+    {
+        lock (Gate)
+        {
+            var node = Lru.First;
+            while (node is not null)
+            {
+                var next = node.Next;
+                if (node.Value.Key.StartsWith("file:", StringComparison.OrdinalIgnoreCase)
+                    || node.Value.Key.StartsWith("ms-appdata:", StringComparison.OrdinalIgnoreCase))
+                {
+                    Map.Remove(node.Value.Key);
+                    Lru.Remove(node);
+                }
+                node = next;
+            }
+        }
+    }
+
     public static void Clear()
     {
         lock (Gate)
@@ -93,12 +131,48 @@ public static class ImageSourceCache
 
     private static BitmapImage CreateBitmap(Uri uri, int decodePixelWidth)
     {
-        var image = new BitmapImage
-        {
-            DecodePixelWidth = decodePixelWidth,
-            UriSource = uri,
-        };
+        var image = new BitmapImage { DecodePixelWidth = decodePixelWidth };
+        var state = ImageStates.GetValue(image, static _ => new ImageLoadState());
+        image.ImageFailed += (_, _) => MarkFailed(state);
+        image.ImageOpened += (_, _) => state.Failed = false;
+        if (uri.IsFile || string.Equals(uri.Scheme, "ms-appdata", StringComparison.OrdinalIgnoreCase))
+            _ = LoadLocalBitmapAsync(image, uri, state);
+        else
+            image.UriSource = uri;
         return image;
+    }
+
+    private static async Task LoadLocalBitmapAsync(BitmapImage image, Uri uri, ImageLoadState state)
+    {
+        try
+        {
+            // WinUI may retain a UriSource file handle for the image's lifetime. Read it briefly,
+            // then decode a memory stream so a displayed plugin icon cannot lock its install folder.
+            var path = LocalImageFile.ResolvePath(uri, ApplicationData.Current.LocalFolder.Path,
+                ApplicationData.Current.RoamingFolder.Path, ApplicationData.Current.TemporaryFolder.Path);
+            var bytes = await LocalImageFile.ReadDetachedAsync(path);
+            using var stream = new InMemoryRandomAccessStream();
+            using (var writer = new DataWriter(stream))
+            {
+                writer.WriteBytes(bytes);
+                await writer.StoreAsync();
+                writer.DetachStream();
+            }
+            stream.Seek(0);
+            await image.SetSourceAsync(stream);
+        }
+        catch (Exception exception)
+        {
+            MarkFailed(state);
+            Debug.WriteLine($"Local image load failed: {exception.Message}");
+        }
+    }
+
+    private static void MarkFailed(ImageLoadState state)
+    {
+        if (state.Failed) return;
+        state.Failed = true;
+        state.FailureHandlers?.Invoke();
     }
 
     private static void TrimLocked()
@@ -130,4 +204,9 @@ public static class ImageSourceCache
     }
 
     private sealed record CacheEntry(string Key, BitmapImage Image);
+    private sealed class ImageLoadState
+    {
+        public bool Failed { get; set; }
+        public Action? FailureHandlers { get; set; }
+    }
 }

@@ -21,6 +21,8 @@ public sealed partial class SettingsWindow : Window
     private const double StandardTitleBarHeight = 32;
 
     private readonly AppWindow _appWindow;
+    private bool _isSynchronizingNavigationSelection;
+    private SourceDetailPage? _sourceDetailPage;
 
     public SettingsWindow()
     {
@@ -70,6 +72,13 @@ public sealed partial class SettingsWindow : Window
             return;
         }
 
+        // Detail pages change the selected home item to reflect their owning settings
+        // section. That change must not be treated as a user navigation request.
+        if (_isSynchronizingNavigationSelection)
+        {
+            return;
+        }
+
         var pageType = tag switch
         {
             "general" => typeof(GeneralSettingsPage),
@@ -79,9 +88,13 @@ public sealed partial class SettingsWindow : Window
             _ => typeof(GeneralSettingsPage),
         };
 
+        // Home-page navigation starts a new settings path. Detail pages are the only
+        // pages that should remain in the back stack when the user changes sections.
+        navFrame.BackStack.Clear();
         if (navFrame.CurrentSourcePageType != pageType)
         {
             navFrame.Navigate(pageType);
+            navFrame.BackStack.Clear();
         }
 
         if (navView.PaneDisplayMode == NavigationViewPaneDisplayMode.LeftMinimal)
@@ -102,8 +115,11 @@ public sealed partial class SettingsWindow : Window
 
     private void NavFrame_Navigated(object sender, NavigationEventArgs e)
     {
+        if (_sourceDetailPage is not null) _sourceDetailPage.SourceChanged -= SourceDetailPage_SourceChanged;
+        _sourceDetailPage = navFrame.Content as SourceDetailPage;
+        if (_sourceDetailPage is not null) _sourceDetailPage.SourceChanged += SourceDetailPage_SourceChanged;
         var pageType = e.SourcePageType;
-        titleBar.IsBackButtonVisible = pageType == typeof(PluginDetailPage) || pageType == typeof(SourceDetailPage);
+        titleBar.IsBackButtonVisible = IsDetailPage(pageType);
 
         NavigationBreadcrumb.ItemsSource = pageType switch
         {
@@ -113,16 +129,127 @@ public sealed partial class SettingsWindow : Window
             var t when t == typeof(AboutSettingsPage) => new[] { LocalizationHelper.GetString("AboutPageTitle.Text", "关于") },
             var t when t == typeof(PluginDetailPage) && e.Parameter is PluginSettingsRow plugin => new[] { "来源", plugin.DisplayName },
             var t when t == typeof(SourceDetailPage) && e.Parameter is FeedSourceRow source => new[] { "来源", source.DisplayName },
+            var t when t == typeof(NotificationDetailPage) && e.Parameter is NotificationRuleRow rule => new[]
+            {
+                LocalizationHelper.GetString("NotificationPageTitle.Text", "通知"),
+                rule.DisplayName,
+            },
             _ => Array.Empty<string>(),
         };
+
+        SynchronizeNavigationSelection(GetNavigationRootTag(pageType));
+    }
+
+    private void SourceDetailPage_SourceChanged(object? sender, EventArgs e)
+    {
+        if (ReferenceEquals(sender, navFrame.Content) && sender is SourceDetailPage { SourceDisplayName: { } name })
+            NavigationBreadcrumb.ItemsSource = new[] { "来源", name };
     }
 
     private void NavigationBreadcrumb_ItemClicked(BreadcrumbBar sender, BreadcrumbBarItemClickedEventArgs args)
     {
-        if (args.Index == 0 && navFrame.CurrentSourcePageType != typeof(SourcesSettingsPage))
+        if (args.Index != 0)
         {
-            navFrame.Navigate(typeof(SourcesSettingsPage));
+            return;
         }
+
+        var rootPageType = GetNavigationRootPageType(navFrame.CurrentSourcePageType);
+        if (rootPageType is null || navFrame.CurrentSourcePageType == rootPageType)
+        {
+            return;
+        }
+
+        NavigateToExistingRoot(rootPageType);
+    }
+
+    private static bool IsDetailPage(Type? pageType)
+        => pageType == typeof(PluginDetailPage)
+            || pageType == typeof(SourceDetailPage)
+            || pageType == typeof(NotificationDetailPage);
+
+    private static string? GetNavigationRootTag(Type? pageType)
+        => pageType switch
+        {
+            var t when t == typeof(SourcesSettingsPage)
+                || t == typeof(SourceDetailPage)
+                || t == typeof(PluginDetailPage) => "sources",
+            var t when t == typeof(NotificationSettingsPage)
+                || t == typeof(NotificationDetailPage) => "notification",
+            var t when t == typeof(GeneralSettingsPage) => "general",
+            var t when t == typeof(AboutSettingsPage) => "about",
+            _ => null,
+        };
+
+    private static Type? GetNavigationRootPageType(Type? pageType)
+        => GetNavigationRootTag(pageType) switch
+        {
+            "sources" => typeof(SourcesSettingsPage),
+            "notification" => typeof(NotificationSettingsPage),
+            "general" => typeof(GeneralSettingsPage),
+            "about" => typeof(AboutSettingsPage),
+            _ => null,
+        };
+
+    private void SynchronizeNavigationSelection(string? rootTag)
+    {
+        if (rootTag is null)
+        {
+            return;
+        }
+
+        NavigationViewItem? target = null;
+        foreach (var item in navView.MenuItems)
+        {
+            if (item is NavigationViewItem navigationItem
+                && string.Equals(navigationItem.Tag as string, rootTag, StringComparison.Ordinal))
+            {
+                target = navigationItem;
+                break;
+            }
+        }
+
+        if (target is null || ReferenceEquals(navView.SelectedItem, target))
+        {
+            return;
+        }
+
+        _isSynchronizingNavigationSelection = true;
+        try
+        {
+            navView.SelectedItem = target;
+        }
+        finally
+        {
+            _isSynchronizingNavigationSelection = false;
+        }
+    }
+
+    private void NavigateToExistingRoot(Type rootPageType)
+    {
+        var rootIndex = -1;
+        for (var index = 0; index < navFrame.BackStack.Count; index++)
+        {
+            if (navFrame.BackStack[index].SourcePageType == rootPageType)
+            {
+                rootIndex = index;
+            }
+        }
+
+        if (rootIndex >= 0)
+        {
+            // BackStack excludes the current page. Pop the detail chain until the
+            // existing root page becomes current instead of appending another root.
+            while (navFrame.CanGoBack && navFrame.BackStack.Count > rootIndex)
+            {
+                navFrame.GoBack();
+            }
+
+            return;
+        }
+
+        navFrame.BackStack.Clear();
+        navFrame.Navigate(rootPageType);
+        navFrame.BackStack.Clear();
     }
 
     private void ConfigureTitleBar(IntPtr hwnd)

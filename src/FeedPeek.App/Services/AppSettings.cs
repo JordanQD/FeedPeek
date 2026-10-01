@@ -1,4 +1,6 @@
 using FeedPeek.Models;
+using FeedPeek.Core.Models;
+using FeedPeek.Core.Notifications;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -45,6 +47,12 @@ public static class AppSettings
 
     public static event EventHandler? NotificationSettingsChanged;
 
+    internal static void NotifyNotificationSettingsChanged()
+    {
+        NotificationStateChanges.Pulse();
+        NotificationSettingsChanged?.Invoke(null, EventArgs.Empty);
+    }
+
     /// <summary>Raised when a source/plugin "open website" URL is saved from any surface.</summary>
     public static event EventHandler? WebsiteSettingsChanged;
 
@@ -59,7 +67,8 @@ public static class AppSettings
             }
 
             LocalSettings.Values[VideoNotificationsEnabledKey] = value;
-            NotificationSettingsChanged?.Invoke(null, EventArgs.Empty);
+            NotificationStateChanges.MarkGlobal(NotificationKind.Updates);
+            NotifyNotificationSettingsChanged();
         }
     }
 
@@ -74,7 +83,8 @@ public static class AppSettings
             }
 
             LocalSettings.Values[LiveNotificationsEnabledKey] = value;
-            NotificationSettingsChanged?.Invoke(null, EventArgs.Empty);
+            NotificationStateChanges.MarkGlobal(NotificationKind.Live);
+            NotifyNotificationSettingsChanged();
         }
     }
 
@@ -90,7 +100,7 @@ public static class AppSettings
             }
 
             LocalSettings.Values[NotificationCheckIntervalMinutesKey] = normalizedValue;
-            NotificationSettingsChanged?.Invoke(null, EventArgs.Empty);
+            NotifyNotificationSettingsChanged();
         }
     }
 
@@ -111,7 +121,8 @@ public static class AppSettings
             }
 
             LocalSettings.Values[NotificationTargetModeKey] = (int)value;
-            NotificationSettingsChanged?.Invoke(null, EventArgs.Empty);
+            NotificationStateChanges.MarkMode();
+            NotifyNotificationSettingsChanged();
         }
     }
 
@@ -339,6 +350,7 @@ public static class AppSettings
         get => ReadCustomNotificationCreators();
         set
         {
+            var previous = CustomNotificationCreators;
             var creators = value
                 .Select(NormalizeCreatorSubscription)
                 .Where(IsValidCreatorSubscription)
@@ -347,8 +359,39 @@ public static class AppSettings
                 .ToList();
 
             LocalSettings.Values[CustomNotificationCreatorsKey] = JsonSerializer.Serialize(creators, JsonOptions);
-            NotificationSettingsChanged?.Invoke(null, EventArgs.Empty);
+            foreach (var identity in previous.Select(item => item.IdentityKey).Union(creators.Select(item => item.IdentityKey)))
+            {
+                var before = previous.FirstOrDefault(item => item.IdentityKey == identity);
+                var after = creators.FirstOrDefault(item => item.IdentityKey == identity);
+                var item = after ?? before!;
+                if (before?.VideoNotificationsEnabled != after?.VideoNotificationsEnabled)
+                    NotificationStateChanges.MarkScope(item.ProviderId, item.SourceId, NotificationKind.Updates, item.CreatorKey);
+                if (before?.LiveNotificationsEnabled != after?.LiveNotificationsEnabled)
+                    NotificationStateChanges.MarkScope(item.ProviderId, item.SourceId, NotificationKind.Live, item.CreatorKey);
+            }
+            NotifyNotificationSettingsChanged();
         }
+    }
+
+    // Source lifecycle callers publish one settings event after the full cleanup is committed.
+    internal static void RemoveSourceNotificationState(string providerId, string sourceId)
+    {
+        var creators = CustomNotificationCreators;
+        var remaining = creators.Where(item => item.ProviderId != providerId || item.SourceId != sourceId).ToArray();
+        if (remaining.Length != creators.Count)
+            LocalSettings.Values[CustomNotificationCreatorsKey] = JsonSerializer.Serialize(remaining, JsonOptions);
+
+        var prefix = $"{providerId}\n{sourceId}\n";
+        KnownVideoUpdateIds = KnownVideoUpdateIds.Where(id => !id.StartsWith(prefix, StringComparison.Ordinal)).ToArray();
+        KnownLiveRoomIds = KnownLiveRoomIds.Where(id => !id.StartsWith(prefix, StringComparison.Ordinal)).ToArray();
+    }
+
+    internal static void PruneOrphanedCreatorNotifications(IReadOnlySet<SourceNotificationKey> existingSources)
+    {
+        foreach (var key in CustomNotificationCreators
+            .Select(item => new SourceNotificationKey(item.ProviderId, item.SourceId)).Distinct()
+            .Where(key => !existingSources.Contains(key)))
+            RemoveSourceNotificationState(key.ProviderId, key.SourceId);
     }
 
     public static string AppLanguage

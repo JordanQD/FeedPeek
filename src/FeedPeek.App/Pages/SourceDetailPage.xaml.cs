@@ -1,5 +1,7 @@
 using FeedPeek.Helpers;
 using FeedPeek.Models;
+using FeedPeek.Core.Models;
+using FeedPeek.PluginContracts.Manifest;
 using FeedPeek.Rss;
 using FeedPeek.Services;
 using Microsoft.UI;
@@ -25,6 +27,8 @@ public sealed partial class SourceDetailPage : Page, IDisposable
     private FeedSourceRow? _source;
     private PluginSettingsRow? _plugin;
     private bool _disposed;
+    public event EventHandler? SourceChanged;
+    public string? SourceDisplayName => _source?.DisplayName;
 
     public SourceDetailPage()
     {
@@ -120,6 +124,9 @@ public sealed partial class SourceDetailPage : Page, IDisposable
         try
         {
             await _session.InitializeAsync();
+            _source = (await _session.GetSourcesAsync()).FirstOrDefault(item => item.ProviderId == _source.ProviderId
+                && item.SourceId == _source.SourceId) ?? throw new InvalidOperationException("来源已被删除。");
+            if (_disposed) return;
 
             HeroName.Text = _source.DisplayName;
             HeroCategory.Text = _source.Category;
@@ -128,18 +135,28 @@ public sealed partial class SourceDetailPage : Page, IDisposable
             var isRss = string.Equals(_source.ProviderId, RssProviderInfo.ProviderId, StringComparison.Ordinal);
             if (isRss)
             {
-                RssCard.Visibility = Visibility.Visible;
+                SourceAddressCard.Visibility = Visibility.Visible;
                 PluginCard.Visibility = Visibility.Collapsed;
                 EndpointTextBox.Text = _source.Endpoint;
             }
             else
             {
-                RssCard.Visibility = Visibility.Collapsed;
+                SourceAddressCard.Visibility = Visibility.Collapsed;
                 PluginCard.Visibility = Visibility.Visible;
                 var plugins = await _session.GetPluginsAsync();
                 var plugin = plugins.FirstOrDefault(item =>
                     string.Equals(item.PluginId, _source.ProviderId, StringComparison.Ordinal));
                 _plugin = plugin is null ? null : new PluginSettingsRow(plugin);
+                if (_disposed) return;
+                string? template = null;
+                _plugin?.Manifest?.RuntimeOptions?.TryGetValue("roomUrlTemplate", out template);
+                if (_plugin?.Manifest is { } manifest
+                    && PluginManifestRules.ResolveRuntime(manifest) == PluginManifestRules.LiveParseRuntime
+                    && SourceAddress.TryGetRoomAddress(_source.Source, template, out var roomAddress))
+                {
+                    SourceAddressCard.Visibility = Visibility.Visible;
+                    EndpointTextBox.Text = roomAddress;
+                }
                 PluginCard.IsClickEnabled = _plugin is not null;
                 HeroCategory.Text = new SourceSettingsRow(_source, _plugin).Detail;
                 PluginNameText.Text = _plugin?.DisplayName ?? _source.ProviderId;
@@ -153,14 +170,15 @@ public sealed partial class SourceDetailPage : Page, IDisposable
                     || !string.IsNullOrWhiteSpace(_plugin?.Manifest?.Website)))
                         ? Visibility.Visible
                         : Visibility.Collapsed;
-            WebsiteCard.Margin = isRss ? new Thickness(0, 4, 0, 0) : new Thickness(0);
-            PluginCard.Margin = !isRss && WebsiteCard.Visibility == Visibility.Visible
+            WebsiteCard.Margin = SourceAddressCard.Visibility == Visibility.Visible ? new Thickness(0, 4, 0, 0) : new Thickness(0);
+            PluginCard.Margin = !isRss && (WebsiteCard.Visibility == Visibility.Visible || SourceAddressCard.Visibility == Visibility.Visible)
                 ? new Thickness(0, 4, 0, 0)
                 : new Thickness(0);
             WebsiteBox.Text = sourceWebsite
                 ?? (isRss || _plugin is null ? null : AppSettings.GetPluginWebsite(_plugin.PluginId)
                     ?? _plugin.Manifest?.Website)
                 ?? string.Empty;
+            SourceChanged?.Invoke(this, EventArgs.Empty);
         }
         catch (Exception ex)
         {
@@ -272,10 +290,9 @@ public sealed partial class SourceDetailPage : Page, IDisposable
 
     private async void SaveEndpointButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_source is null) return;
+        if (_source is null || _disposed) return;
         var endpoint = EndpointTextBox.Text.Trim();
-        if (string.IsNullOrWhiteSpace(endpoint) || !Uri.TryCreate(endpoint, UriKind.Absolute, out var uri)
-            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        if (!SourceAddress.TryParseWebUri(endpoint, out _))
         {
             ShowStatus("请输入有效的源链接。", InfoBarSeverity.Warning);
             return;
@@ -283,8 +300,10 @@ public sealed partial class SourceDetailPage : Page, IDisposable
 
         await RunBusyAsync(async () =>
         {
-            await _session.UpdateRssEndpointAsync(_source.ProviderId, _source.SourceId, endpoint);
-            ShowStatus("源链接已保存。", InfoBarSeverity.Success);
+            _source = await _session.UpdateSourceAddressAsync(_source.ProviderId, _source.SourceId, endpoint);
+            if (_disposed) return;
+            await LoadAsync();
+            ShowStatus("源链接、名称和图标已更新。", InfoBarSeverity.Success);
         });
     }
 
@@ -321,8 +340,8 @@ public sealed partial class SourceDetailPage : Page, IDisposable
     {
         SetBusy(true);
         try { await operation(); }
-        catch (Exception ex) { ShowStatus(ex.Message, InfoBarSeverity.Error); }
-        finally { SetBusy(false); }
+        catch (Exception ex) { if (!_disposed) ShowStatus(ex.Message, InfoBarSeverity.Error); }
+        finally { if (!_disposed) SetBusy(false); }
     }
 
     private void SetBusy(bool isBusy)
@@ -344,6 +363,7 @@ public sealed partial class SourceDetailPage : Page, IDisposable
         Unloaded -= SourceDetailPage_Unloaded;
         _session.StatusRaised -= Session_StatusRaised;
         AppSettings.WebsiteSettingsChanged -= OnWebsiteSettingsChanged;
+        SourceChanged = null;
         _session.Dispose();
     }
 }

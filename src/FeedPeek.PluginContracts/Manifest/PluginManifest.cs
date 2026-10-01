@@ -15,7 +15,15 @@ public sealed record PluginManifest(
     string? Runtime = null,
     IReadOnlyDictionary<string, string>? RuntimeOptions = null,
     string? Icon = null,
-    string? Website = null);
+    string? Website = null,
+    PluginNotificationManifest? Notifications = null,
+    PluginCreatorResolutionManifest? CreatorResolution = null);
+
+/// <summary>Exact website hosts whose author links the plugin can resolve; does not grant HTTP access.</summary>
+public sealed record PluginCreatorResolutionManifest(IReadOnlyList<string> InputHosts);
+
+/// <summary>Source notification defaults; does not grant a Feed notification capability.</summary>
+public sealed record PluginNotificationManifest(bool AutoAddToCustom = false);
 
 public sealed record PluginAuthManifest(
     bool Required,

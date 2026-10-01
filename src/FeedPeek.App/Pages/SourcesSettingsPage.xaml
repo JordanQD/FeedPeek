@@ -4,7 +4,8 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:controls="using:CommunityToolkit.WinUI.Controls"
-    xmlns:models="using:FeedPeek.Models">
+    xmlns:models="using:FeedPeek.Models"
+    xmlns:helpers="using:FeedPeek.Helpers">
 
     <ScrollView
         x:Name="SettingsScrollView"
@@ -118,21 +119,11 @@
                                         AutomationProperties.Name="{x:Bind DisplayName}"
                                         DataContext="{x:Bind}"
                                         IsClickEnabled="True"
-                                        Click="SourceCard_Click">
-                                        <controls:SettingsCard.Header>
-                                            <Grid ColumnSpacing="12">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto" />
-                                                    <ColumnDefinition Width="*" />
-                                                </Grid.ColumnDefinitions>
-                                                <PersonPicture Width="32" Height="32" ProfilePicture="{x:Bind IconSource}" Initials="{x:Bind Initials}" IsHitTestVisible="False" />
-                                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
-                                                    <TextBlock Text="{x:Bind DisplayName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                                                    <TextBlock Text="{x:Bind Detail}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
-                                                </StackPanel>
-                                            </Grid>
-                                        </controls:SettingsCard.Header>
-                                    </controls:SettingsCard>
+                                        Click="SourceCard_Click"
+                                        Header="{x:Bind DisplayName}"
+                                        Description="{x:Bind Detail}"
+                                        helpers:SettingsCardAvatar.IsEnabled="True"
+                                        helpers:SettingsCardAvatar.Source="{x:Bind IconSource}" />
                                 </DataTemplate>
                             </ListView.ItemTemplate>
                         </ListView>
@@ -168,21 +159,11 @@
                                     AutomationProperties.Name="{x:Bind DisplayName}"
                                     DataContext="{x:Bind}"
                                     IsClickEnabled="True"
-                                    Click="PluginCard_Click">
-                                    <controls:SettingsCard.Header>
-                                        <Grid ColumnSpacing="12">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="*" />
-                                            </Grid.ColumnDefinitions>
-                                            <PersonPicture Width="32" Height="32" ProfilePicture="{x:Bind IconSource}" Initials="{x:Bind Initials}" IsHitTestVisible="False" />
-                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
-                                                <TextBlock Text="{x:Bind DisplayName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                                                <TextBlock Text="{x:Bind Detail}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
-                                            </StackPanel>
-                                        </Grid>
-                                    </controls:SettingsCard.Header>
-                                </controls:SettingsCard>
+                                    Click="PluginCard_Click"
+                                    Header="{x:Bind DisplayName}"
+                                    Description="{x:Bind Detail}"
+                                    helpers:SettingsCardAvatar.IsEnabled="True"
+                                    helpers:SettingsCardAvatar.Source="{x:Bind IconSource}" />
                             </DataTemplate>
                         </ListView.ItemTemplate>
                     </ListView>

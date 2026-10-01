@@ -2,6 +2,7 @@ using FeedPeek.Helpers;
 using FeedPeek.Models;
 using FeedPeek.Core.Models;
 using Microsoft.UI.Xaml;
+using DispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue;
 using Microsoft.Windows.AppNotifications;
 using Microsoft.Windows.AppNotifications.Builder;
 using System;
@@ -10,6 +11,7 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Threading;
 using Windows.System;
 
 namespace FeedPeek.Services;
@@ -18,14 +20,14 @@ public sealed class NotificationService
 {
     public const string OpenAction = "open";
     public const string WatchLaterAction = "watchLater";
-    private const int MaxStoredVideoUpdateIds = 80;
-    private const int MaxStoredLiveRoomIds = 80;
     private const int MaxNotificationsPerRefresh = 3;
     private const int MaxFeedNotificationsPerRefresh = 20;
     private static readonly TimeSpan NotificationSpacing = TimeSpan.FromMilliseconds(750);
     private DispatcherTimer? _timer;
     private Func<Task>? _refreshAction;
     private bool _isRefreshing;
+    private bool _refreshPending;
+    private DispatcherQueue? _dispatcherQueue;
     private DateTimeOffset _serviceStartedAt;
 
     public DateTimeOffset ServiceStartedAt => _serviceStartedAt;
@@ -33,6 +35,7 @@ public sealed class NotificationService
     public async Task TryStartAsync(Func<Task> refreshAction)
     {
         _refreshAction = refreshAction;
+        _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
         _serviceStartedAt = DateTimeOffset.Now;
         if (_timer is null)
         {
@@ -70,76 +73,35 @@ public sealed class NotificationService
         AppSettings.NotificationSettingsChanged -= AppSettings_NotificationSettingsChanged;
         _timer = null;
         _refreshAction = null;
+        _refreshPending = false;
     }
 
-    public async Task NotifyFeedUpdatesAsync(
-        IReadOnlyList<FeedItem> items,
-        Func<FeedItem, bool>? canAddToViewLater = null,
-        bool showNotifications = true)
+    // The monitor supplies a process-local, already filtered/deduplicated plan.
+    public async Task NotifyFeedUpdatesAsync(IReadOnlyList<FeedItem> items,
+        Func<FeedItem, bool>? canAddToViewLater = null, bool showNotifications = true,
+        Func<FeedItem, bool>? canNotify = null, CancellationToken cancellationToken = default)
     {
-        var plan = FeedNotificationBaselinePlanner.ForFeedItems(
-            items,
-            AppSettings.KnownVideoUpdateIds,
-            AppSettings.VideoNotificationBaselineInitialized,
-            MaxFeedNotificationsPerRefresh,
-            MaxStoredVideoUpdateIds);
-        AppSettings.KnownVideoUpdateIds = plan.KnownIds;
-        if (plan.InitializesBaseline)
+        if (!showNotifications) return;
+        foreach (var item in items.DistinctBy(item => item.Key).OrderBy(item => item.PublishedAt).Take(MaxFeedNotificationsPerRefresh))
         {
-            AppSettings.VideoNotificationBaselineInitialized = true;
-            TraceNotification($"Update baseline initialized with {plan.KnownIds.Count} item(s)");
-            return;
-        }
-
-        if (!showNotifications || !IsVideoNotificationEnabled() || plan.NewItems.Count == 0)
-        {
-            TraceNotification(
-                $"Update notification plan: new={plan.NewItems.Count}, " +
-                $"enabled={IsVideoNotificationEnabled()}, show={showNotifications}");
-            return;
-        }
-
-        TraceNotification($"Showing {plan.NewItems.Count} update notification(s)");
-
-        foreach (var item in plan.NewItems.OrderBy(item => item.PublishedAt))
-        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (canNotify?.Invoke(item) == false) continue;
             ShowFeedNotification(item, canAddToViewLater?.Invoke(item) == true);
-            await Task.Delay(NotificationSpacing);
+            await Task.Delay(NotificationSpacing, cancellationToken);
         }
     }
 
-    public async Task NotifyLiveStartsAsync(
-        IReadOnlyList<FeedLiveNotificationItem> liveItems,
-        bool showNotifications = true)
+    public async Task NotifyLiveStartsAsync(IReadOnlyList<FeedLiveNotificationItem> items,
+        bool showNotifications = true, Func<FeedLiveNotificationItem, bool>? canNotify = null,
+        CancellationToken cancellationToken = default)
     {
-        var plan = FeedNotificationBaselinePlanner.ForLiveItems(
-            liveItems,
-            AppSettings.KnownLiveRoomIds,
-            AppSettings.LiveNotificationBaselineInitialized,
-            MaxNotificationsPerRefresh,
-            MaxStoredLiveRoomIds);
-        AppSettings.KnownLiveRoomIds = plan.KnownIds;
-        if (plan.InitializesBaseline)
+        if (!showNotifications) return;
+        foreach (var item in items.DistinctBy(item => item.StableKey).Take(MaxNotificationsPerRefresh))
         {
-            AppSettings.LiveNotificationBaselineInitialized = true;
-            TraceNotification($"Live baseline initialized with {plan.KnownIds.Count} item(s)");
-            return;
-        }
-
-        if (!showNotifications || !IsLiveNotificationEnabled() || plan.NewItems.Count == 0)
-        {
-            TraceNotification(
-                $"Live notification plan: new={plan.NewItems.Count}, " +
-                $"enabled={IsLiveNotificationEnabled()}, show={showNotifications}");
-            return;
-        }
-
-        TraceNotification($"Showing {plan.NewItems.Count} live notification(s)");
-
-        foreach (var item in plan.NewItems)
-        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (canNotify?.Invoke(item) == false) continue;
             ShowLiveNotification(item);
-            await Task.Delay(NotificationSpacing);
+            await Task.Delay(NotificationSpacing, cancellationToken);
         }
     }
 
@@ -201,16 +163,15 @@ public sealed class NotificationService
 
     private void AppSettings_NotificationSettingsChanged(object? sender, EventArgs e)
     {
-        if (_timer is null)
+        void Apply()
         {
-            return;
-        }
-
-        UpdateTimerState();
-        if (_timer.IsEnabled)
-        {
+            if (_timer is null || _refreshAction is null) return;
+            UpdateTimerState();
+            // Even None must clear enabled watches; changes during a refresh queue a fresh pass.
             _ = RefreshForNotificationsAsync();
         }
+        if (_dispatcherQueue?.HasThreadAccess == true) Apply();
+        else _dispatcherQueue?.TryEnqueue(Apply);
     }
 
     private void UpdateTimerState()
@@ -241,20 +202,26 @@ public sealed class NotificationService
 
     private async Task RefreshForNotificationsAsync()
     {
-        if (_refreshAction is null || _isRefreshing)
+        if (_refreshAction is null) return;
+        if (_isRefreshing)
         {
+            _refreshPending = true;
             return;
         }
-
         _isRefreshing = true;
         try
         {
-            await _refreshAction();
+            do
+            {
+                _refreshPending = false;
+                var refresh = _refreshAction;
+                if (refresh is null) break;
+                try { await refresh(); }
+                catch (OperationCanceledException) { }
+                catch (Exception exception) { TraceNotification($"Notification refresh failed: {exception}"); }
+            } while (_refreshPending && _refreshAction is not null);
         }
-        finally
-        {
-            _isRefreshing = false;
-        }
+        finally { _isRefreshing = false; }
     }
 
     private static void ShowFeedNotification(FeedItem item, bool canAddToViewLater)
@@ -361,51 +328,14 @@ public sealed class NotificationService
     internal static void TraceNotification(string message)
         => Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] [Notification] {message}");
 
-    private static bool IsAnyNotificationEnabled()
+    private static bool IsAnyNotificationEnabled() => AppSettings.NotificationTargetMode switch
     {
-        if (AppSettings.NotificationTargetMode == NotificationTargetMode.None)
-        {
-            return false;
-        }
-
-        if (AppSettings.NotificationTargetMode == NotificationTargetMode.CustomCreators)
-        {
-            return AppSettings.CustomNotificationCreators.Any(item =>
-                item.VideoNotificationsEnabled || item.LiveNotificationsEnabled);
-        }
-
-        return AppSettings.VideoNotificationsEnabled || AppSettings.LiveNotificationsEnabled;
-    }
-
-    private static bool IsVideoNotificationEnabled()
-    {
-        if (AppSettings.NotificationTargetMode == NotificationTargetMode.None)
-        {
-            return false;
-        }
-
-        if (AppSettings.NotificationTargetMode == NotificationTargetMode.CustomCreators)
-        {
-            return AppSettings.CustomNotificationCreators.Any(item => item.VideoNotificationsEnabled);
-        }
-
-        return AppSettings.VideoNotificationsEnabled;
-    }
-
-    private static bool IsLiveNotificationEnabled()
-    {
-        if (AppSettings.NotificationTargetMode == NotificationTargetMode.None)
-        {
-            return false;
-        }
-
-        if (AppSettings.NotificationTargetMode == NotificationTargetMode.CustomCreators)
-        {
-            return AppSettings.CustomNotificationCreators.Any(item => item.LiveNotificationsEnabled);
-        }
-
-        return AppSettings.LiveNotificationsEnabled;
-    }
+        NotificationTargetMode.None => false,
+        // Source rules live in SQLite. Keep the timer available in Custom mode; an empty/off
+        // selection performs no provider requests, and newly added sources work immediately.
+        NotificationTargetMode.CustomCreators => true,
+        _ => AppSettings.VideoNotificationsEnabled || AppSettings.LiveNotificationsEnabled,
+    };
 
     public sealed record NotificationActivationRequest(
         string Action,

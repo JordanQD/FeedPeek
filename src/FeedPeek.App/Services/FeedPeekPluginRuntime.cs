@@ -229,6 +229,8 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
             }
 
             PluginAccountEvents.RaiseChanged();
+            NotificationStateChanges.MarkProvider(descriptor.PluginId);
+            AppSettings.NotifyNotificationSettingsChanged();
         }
         catch
         {
@@ -288,6 +290,8 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
         {
             _legacyCookieStore.Clear();
         }
+        NotificationStateChanges.MarkProvider(pluginId);
+        AppSettings.NotifyNotificationSettingsChanged();
         PluginAccountEvents.RaiseChanged();
     }
 
@@ -344,11 +348,29 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
         => new PluginCreatorService(subscription.ProviderId, _client)
             .GetFollowingAsync(subscription, cancellationToken);
 
+    public Task<FollowingCreatorsPage> GetFollowingCreatorPageAsync(
+        FeedSubscription subscription,
+        CancellationToken cancellationToken = default)
+        => new PluginCreatorService(subscription.ProviderId, _client)
+            .GetFollowingPageAsync(subscription, cancellationToken);
+
+    public Task<CreatorResolutionResult> ResolveCreatorAsync(
+        FeedSubscription subscription, string input,
+        CancellationToken cancellationToken = default)
+        => new PluginCreatorService(subscription.ProviderId, _client)
+            .ResolveAsync(subscription, input, cancellationToken);
+
     public Task<IReadOnlyList<PluginLiveItem>> GetLiveItemsAsync(
         FeedSubscription subscription,
         CancellationToken cancellationToken = default)
         => new PluginCreatorService(subscription.ProviderId, _client)
             .GetLiveAsync(subscription, cancellationToken);
+
+    public Task<PluginLivePage> GetLivePageAsync(
+        FeedSubscription subscription,
+        CancellationToken cancellationToken = default)
+        => new PluginCreatorService(subscription.ProviderId, _client)
+            .GetLivePageAsync(subscription, cancellationToken);
 
     public Task<ActionDescriptor[]> GetCreatorActionsAsync(
         FeedSubscription subscription,
@@ -447,6 +469,30 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
         return new PluginSourceCreationResult(source, subscriptions);
     }
 
+    public async Task<SourceDefinition> ResolveRoomSourceAsync(
+        FeedSubscription subscription,
+        IReadOnlyDictionary<string, string> options,
+        CancellationToken cancellationToken = default)
+    {
+        var manifest = GetManifest(subscription.ProviderId)
+            ?? throw new InvalidOperationException("网站插件尚未加载或已停用。");
+        if (PluginManifestRules.ResolveRuntime(manifest) != PluginManifestRules.LiveParseRuntime)
+            throw new InvalidOperationException("当前插件不支持修改直播间链接。");
+        var probe = subscription with { Options = options };
+        Register(probe);
+        try
+        {
+            var definition = await new PluginSourceService(subscription.ProviderId, _client)
+                .GetAsync(probe, cancellationToken).ConfigureAwait(false);
+            ValidateSourceDefinition(subscription.ProviderId, subscription.SourceId, subscription.CredentialProfileId, definition);
+            return new SourceDefinition(definition.ProviderId, definition.SourceId, definition.DisplayName,
+                definition.CredentialProfileId, definition.Feeds.Select(feed => new FeedDefinition(
+                    feed.FeedId, feed.DisplayName, feed.Kind, feed.SupportsPaging, feed.SupportsNotifications)).ToArray(),
+                definition.Options);
+        }
+        finally { Register(subscription); }
+    }
+
     public async Task DeleteSourceAsync(
         FeedSubscription subscription,
         CancellationToken cancellationToken = default)
@@ -478,6 +524,8 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
                 _sitePackage?.Manifest.Auth?.ExposedCookieNames?
                     .ToHashSet(StringComparer.OrdinalIgnoreCase),
                 cancellationToken).ConfigureAwait(false);
+            NotificationStateChanges.MarkProvider(LegacyVideoSiteCompatibility.PluginId);
+            AppSettings.NotifyNotificationSettingsChanged();
         }
     }
 

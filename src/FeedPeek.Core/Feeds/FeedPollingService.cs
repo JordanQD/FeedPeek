@@ -11,6 +11,7 @@ public sealed record FeedPollResult(
     DateTimeOffset CompletedAt)
 {
     public IReadOnlyList<FeedItem> FetchedItems { get; init; } = [];
+    public IReadOnlyList<FeedItem> NotificationItems { get; init; } = [];
 }
 
 public sealed record FeedLoadMoreResult(
@@ -40,6 +41,9 @@ public sealed class FeedPollingService
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(subscription);
+        using var lease = await FeedPollCoordinator.EnterAsync(subscription, cancellationToken);
+        subscription = await _store.GetSubscriptionAsync(subscription.SubscriptionId, cancellationToken)
+            ?? throw new InvalidOperationException("The subscription no longer exists.");
         var state = await _store.GetPollingStateAsync(subscription.SubscriptionId, cancellationToken);
         var now = _timeProvider.GetUtcNow();
 
@@ -49,6 +53,9 @@ public sealed class FeedPollingService
             var page = await provider.GetPageAsync(
                 new FeedPageRequest(subscription, null, 200, state?.ETag, state?.LastModified),
                 cancellationToken);
+
+            // An item is first seen when its response arrives, not when a slow request began.
+            now = _timeProvider.GetUtcNow();
 
             var initializedBaseline = state?.BaselineInitialized != true;
             IReadOnlyList<FeedItem> newItems = [];
@@ -60,6 +67,7 @@ public sealed class FeedPollingService
                     now,
                     cancellationToken);
                 newItems = initializedBaseline ? [] : upsert.InsertedItems;
+                FeedPollSnapshotCache.Record(subscription, page.Items);
             }
 
             await _store.SavePollingStateAsync(
@@ -78,6 +86,7 @@ public sealed class FeedPollingService
             return new FeedPollResult(subscription, newItems, initializedBaseline, page.NotModified, now)
             {
                 FetchedItems = page.Items,
+                NotificationItems = page.NotModified ? FeedPollSnapshotCache.Read(subscription) : page.Items,
             };
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -107,6 +116,9 @@ public sealed class FeedPollingService
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(subscription);
+        using var lease = await FeedPollCoordinator.EnterAsync(subscription, cancellationToken);
+        subscription = await _store.GetSubscriptionAsync(subscription.SubscriptionId, cancellationToken)
+            ?? throw new InvalidOperationException("The subscription no longer exists.");
         var state = await _store.GetPollingStateAsync(subscription.SubscriptionId, cancellationToken);
         var now = _timeProvider.GetUtcNow();
         if (string.IsNullOrWhiteSpace(state?.NextCursor))

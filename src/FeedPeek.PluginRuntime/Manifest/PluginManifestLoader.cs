@@ -100,6 +100,16 @@ public sealed partial class PluginManifestLoader
                 throw new PluginManifestException("CAPABILITY_UNSUPPORTED", $"Unsupported capability: {capability}");
         }
 
+        if (manifest.CreatorResolution is { } resolution)
+        {
+            if (!manifest.Capabilities!.Contains("creator.resolve", StringComparer.Ordinal))
+                throw new PluginManifestException("CAPABILITY_REQUIRED", "creatorResolution requires creator.resolve.");
+            if (resolution.InputHosts is null || resolution.InputHosts.Count is < 1 or > 16)
+                throw new PluginManifestException("CREATOR_INPUT_HOSTS_INVALID", "creatorResolution.inputHosts requires 1 to 16 exact hosts.");
+            EnsureUnique(resolution.InputHosts, "creatorResolution.inputHosts");
+            ValidateHosts(resolution.InputHosts, "creatorResolution.inputHosts");
+        }
+
         ValidateHosts(manifest.Network?.AllowedHosts, "network.allowedHosts");
         ValidateHosts(manifest.Network?.AllowRedirectHosts, "network.allowRedirectHosts");
 

@@ -1,62 +1,77 @@
-using FeedPeek.Helpers;
+﻿using FeedPeek.Helpers;
 using FeedPeek.Models;
 using FeedPeek.Services;
 using FeedPeek.Core.Models;
+using FeedPeek.PluginHost;
 using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Markup;
-using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Media.Animation;
-using Microsoft.UI.Xaml.Media.Imaging;
 using System;
 using System.Collections.ObjectModel;
+using System.Collections.Generic;
+using CommunityToolkit.WinUI.Controls;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace FeedPeek.Pages;
 
 public sealed partial class NotificationSettingsPage : Page
 {
-    private const string PersonAddIconData = "M17.5 12C20.5375661 12 23 14.4624339 23 17.5C23 20.5375661 20.5375661 23 17.5 23C14.4624339 23 12 20.5375661 12 17.5C12 14.4624339 14.4624339 12 17.5 12ZM12.0222607 13.9993086C11.7255613 14.4626083 11.4860296 14.9660345 11.3136172 15.4996352L4.25354153 15.499921C3.83932796 15.499921 3.50354153 15.8357075 3.50354153 16.249921L3.50354153 17.1572408C3.50354153 17.8128951 3.78953221 18.4359296 4.28670709 18.8633654C5.5447918 19.9450082 7.44080155 20.5010712 10 20.5010712C10.598839 20.5010712 11.1614445 20.4706245 11.6881394 20.4101192C11.9370538 20.9102887 12.2508544 21.3740111 12.6170965 21.7904935C11.8149076 21.9312924 10.9419626 22.0010712 10 22.0010712C7.11050247 22.0010712 4.87168436 21.3444691 3.30881727 20.0007885C2.48019625 19.2883988 2.00354153 18.2500002 2.00354153 17.1572408L2.00354153 16.249921C2.00354153 15.0072804 3.01090084 13.999921 4.25354153 13.999921L12.0222607 13.9993086ZM17.5 14.25C17.9142 14.25 18.25 14.5858 18.25 15V16.75H20C20.4142 16.75 20.75 17.0858 20.75 17.5C20.75 17.9142 20.4142 18.25 20 18.25H18.25V20C18.25 20.4142 17.9142 20.75 17.5 20.75C17.0858 20.75 16.75 20.4142 16.75 20V18.25H15C14.5858 18.25 14.25 17.9142 14.25 17.5C14.25 17.0858 14.5858 16.75 15 16.75H16.75V15C16.75 14.5858 17.0858 14.25 17.5 14.25ZM10 2.0046246C12.7614237 2.0046246 15 4.24320085 15 7.0046246C15 9.76604835 12.7614237 12.0046246 10 12.0046246C7.23857625 12.0046246 5 9.76604835 5 7.0046246C5 4.24320085 7.23857625 2.0046246 10 2.0046246ZM10 3.5046246C8.06700338 3.5046246 6.5 5.07162798 6.5 7.0046246C6.5 8.93762123 8.06700338 10.5046246 10 10.5046246C11.9329966 10.5046246 13.5 8.93762123 13.5 7.0046246C13.5 5.07162798 11.9329966 3.5046246 10 3.5046246Z";
 
     private FeedPeekNotificationSession? _notificationSession;
     private bool _isLoadingSettings;
+    private CancellationTokenSource? _sourceSynchronizationCancellation;
+    private int _modeChangeVersion;
+    private readonly object _defaultNotificationTargetDescription;
 
     private FeedPeekNotificationSession NotificationSession
         => _notificationSession ??= new FeedPeekNotificationSession(new CookieStore());
 
-    public ObservableCollection<NotificationCreatorSubscription> CustomNotificationCreators { get; } = [];
+    public ObservableCollection<NotificationSettingsGroup> NotificationGroups { get; } = [];
+    private readonly Dictionary<string, bool> _expandedPlugins = new(StringComparer.Ordinal);
+    private bool _addingNotification;
 
     public NotificationSettingsPage()
     {
         InitializeComponent();
-        AddCreatorButton.Content = CreateButtonPathIcon(PersonAddIconData, 20);
-        CustomNotificationCreatorsList.ItemsSource = CustomNotificationCreators;
+        _defaultNotificationTargetDescription = NotificationTargetCard.Description ?? string.Empty;
+        NotificationGroupsList.ItemsSource = NotificationGroups;
         Loaded += NotificationSettingsPage_Loaded;
         Unloaded += NotificationSettingsPage_Unloaded;
     }
 
-    private void NotificationSettingsPage_Loaded(object sender, RoutedEventArgs e)
+    private async void NotificationSettingsPage_Loaded(object sender, RoutedEventArgs e)
     {
+        _sourceSynchronizationCancellation?.Cancel();
+        _sourceSynchronizationCancellation?.Dispose();
+        _sourceSynchronizationCancellation = new CancellationTokenSource();
+        var loadCancellation = _sourceSynchronizationCancellation;
         _isLoadingSettings = true;
         NotificationCheckIntervalBox.Value = AppSettings.NotificationCheckIntervalMinutes;
         NotificationTargetModeBox.SelectedIndex = (int)AppSettings.NotificationTargetMode;
         VideoNotificationSwitch.IsOn = AppSettings.VideoNotificationsEnabled;
         LiveNotificationSwitch.IsOn = AppSettings.LiveNotificationsEnabled;
-        CustomNotificationCreators.Clear();
-        foreach (var creator in AppSettings.CustomNotificationCreators)
-        {
-            CustomNotificationCreators.Add(creator);
-        }
 
         UpdateNotificationModeVisibility();
         _isLoadingSettings = false;
         SettingsScrollView.ScrollTo(0, 0);
+        var loadedVersion = _modeChangeVersion;
+        var synchronized = await SynchronizeSourceNotificationsAsync(AppSettings.NotificationTargetMode);
+        if (!IsLoaded || !ReferenceEquals(loadCancellation, _sourceSynchronizationCancellation))
+            return;
+        if (loadedVersion == _modeChangeVersion)
+            NotificationTargetCard.Description = synchronized ? _defaultNotificationTargetDescription
+                : LocalizationHelper.GetString("SourceNotificationSyncFailed");
+        await ReloadNotificationRulesAsync();
+
     }
 
     private void NotificationSettingsPage_Unloaded(object sender, RoutedEventArgs e)
     {
+        _modeChangeVersion++;
+        _sourceSynchronizationCancellation?.Cancel();
+        _sourceSynchronizationCancellation?.Dispose();
+        _sourceSynchronizationCancellation = null;
         _notificationSession?.Dispose();
         _notificationSession = null;
     }
@@ -91,387 +106,128 @@ public sealed partial class NotificationSettingsPage : Page
         AppSettings.NotificationCheckIntervalMinutes = Math.Max(1, (int)Math.Round(args.NewValue));
     }
 
-    private void NotificationTargetModeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private async void NotificationTargetModeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_isLoadingSettings)
         {
             return;
         }
 
-        AppSettings.NotificationTargetMode = (NotificationTargetMode)NotificationTargetModeBox.SelectedIndex;
+        var mode = (NotificationTargetMode)NotificationTargetModeBox.SelectedIndex;
+        var version = ++_modeChangeVersion;
+        // Complete the custom-list backfill before publishing the new mode to the monitor.
+        var synchronized = mode != NotificationTargetMode.CustomCreators
+            || await SynchronizeSourceNotificationsAsync(mode);
+        if (version != _modeChangeVersion || !IsLoaded)
+            return;
+        if (!synchronized)
+        {
+            _isLoadingSettings = true;
+            NotificationTargetModeBox.SelectedIndex = (int)AppSettings.NotificationTargetMode;
+            _isLoadingSettings = false;
+            NotificationTargetCard.Description = LocalizationHelper.GetString("SourceNotificationSyncFailed");
+            return;
+        }
+        NotificationTargetCard.Description = _defaultNotificationTargetDescription;
+        AppSettings.NotificationTargetMode = mode;
         UpdateNotificationModeVisibility();
+        await ReloadNotificationRulesAsync();
     }
 
-    private async void AddCreatorButton_Click(object sender, RoutedEventArgs e)
+    private async Task<bool> SynchronizeSourceNotificationsAsync(NotificationTargetMode mode)
     {
-        const double dialogContentMaxWidth = 520;
-        const double dialogVerticalSpacing = 12;
-        var availableDialogWidth = Math.Max(360, (XamlRoot?.Size.Width ?? dialogContentMaxWidth) - 96);
-        var dialogContentMinWidth = Math.Min(420, availableDialogWidth);
-
-        // --- link input row ---
-        var linkBox = new AutoSuggestBox
+        if (_sourceSynchronizationCancellation is null)
+            return false;
+        var token = _sourceSynchronizationCancellation.Token;
+        try
         {
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            MinWidth = 0,
-            PlaceholderText = LocalizationHelper.GetString("CreatorLinkPlaceholder"),
-            QueryIcon = new SymbolIcon(Symbol.Find),
-        };
-        AutomationProperties.SetName(linkBox, LocalizationHelper.GetString("CreatorLinkAutomationName"));
-
-        // --- creator info (always visible, placeholder initially) ---
-        var avatarPicture = new PersonPicture
-        {
-            Width = 40,
-            Height = 40,
-            Initials = "UP",
-        };
-        var creatorNameText = new TextBlock
-        {
-            Text = LocalizationHelper.GetString("EnterLinkOrUid"),
-            Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"],
-            TextTrimming = TextTrimming.CharacterEllipsis,
-        };
-        var creatorDetailText = new TextBlock
-        {
-            Text = LocalizationHelper.GetString("ClickQueryToFetch"),
-            Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
-            TextWrapping = TextWrapping.Wrap,
-        };
-
-        var creatorInfoGrid = new Grid
-        {
-            ColumnSpacing = 12,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        creatorInfoGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        creatorInfoGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        creatorInfoGrid.Children.Add(avatarPicture);
-        var creatorTextPanel = new StackPanel
-        {
-            Spacing = 2,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        creatorTextPanel.Children.Add(creatorNameText);
-        creatorTextPanel.Children.Add(creatorDetailText);
-        Grid.SetColumn(creatorTextPanel, 1);
-        creatorInfoGrid.Children.Add(creatorTextPanel);
-
-        // --- error InfoBar (overlays creator info, animated) ---
-        var dialogInfoBar = new InfoBar
-        {
-            IsClosable = false,
-            IsOpen = false,
-            Opacity = 0,
-        };
-
-        var fadeInAnimation = new DoubleAnimation
-        {
-            From = 0,
-            To = 1,
-            Duration = TimeSpan.FromMilliseconds(200),
-        };
-        var fadeOutAnimation = new DoubleAnimation
-        {
-            From = 1,
-            To = 0,
-            Duration = TimeSpan.FromMilliseconds(300),
-        };
-
-        var fadeInStoryboard = new Storyboard();
-        fadeInStoryboard.Children.Add(fadeInAnimation);
-        Storyboard.SetTarget(fadeInAnimation, dialogInfoBar);
-        Storyboard.SetTargetProperty(fadeInAnimation, "Opacity");
-
-        var fadeOutStoryboard = new Storyboard();
-        fadeOutStoryboard.Children.Add(fadeOutAnimation);
-        Storyboard.SetTarget(fadeOutAnimation, dialogInfoBar);
-        Storyboard.SetTargetProperty(fadeOutAnimation, "Opacity");
-
-        var dialogInfoTimer = DispatcherQueue.CreateTimer();
-        dialogInfoTimer.Interval = TimeSpan.FromSeconds(3);
-        dialogInfoTimer.Tick += (_, _) =>
-        {
-            dialogInfoTimer.Stop();
-            fadeOutStoryboard.Begin();
-        };
-        fadeOutStoryboard.Completed += (_, _) =>
-        {
-            dialogInfoBar.IsOpen = false;
-        };
-
-        // overlay: InfoBar sits on top of creator info, same height
-        var infoOverlayGrid = new Grid
-        {
-            MinHeight = 52,
-        };
-        infoOverlayGrid.Children.Add(creatorInfoGrid);
-        infoOverlayGrid.Children.Add(dialogInfoBar);
-
-        // --- notification toggles ---
-        var videoSwitch = new ToggleSwitch { IsOn = true };
-        var liveSwitch = new ToggleSwitch { IsOn = true };
-        var notificationOptions = new StackPanel
-        {
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            Spacing = dialogVerticalSpacing,
-        };
-        notificationOptions.Children.Add(CreateDialogSwitchRow(LocalizationHelper.GetString("AddCreatorDialogVideoLabel"), videoSwitch));
-        notificationOptions.Children.Add(CreateDialogSwitchRow(LocalizationHelper.GetString("AddCreatorDialogLiveLabel"), liveSwitch));
-
-        // --- content panel ---
-        var contentPanel = new StackPanel
-        {
-            MinWidth = dialogContentMinWidth,
-            MaxWidth = dialogContentMaxWidth,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            Spacing = dialogVerticalSpacing,
-        };
-        contentPanel.Children.Add(linkBox);
-        contentPanel.Children.Add(infoOverlayGrid);
-        contentPanel.Children.Add(notificationOptions);
-
-        var dialog = new ContentDialog
-        {
-            XamlRoot = XamlRoot,
-            Title = LocalizationHelper.GetString("AddCreatorDialogTitle"),
-            Content = contentPanel,
-            PrimaryButtonText = LocalizationHelper.GetString("SaveButton"),
-            CloseButtonText = LocalizationHelper.GetString("CancelButton"),
-            DefaultButton = ContentDialogButton.Primary,
-            IsPrimaryButtonEnabled = false,
-        };
-
-        CreatorDescriptor? resolvedCreator = null;
-
-        // --- reset to placeholder ---
-        void ResetToPlaceholder()
-        {
-            resolvedCreator = null;
-            dialog.IsPrimaryButtonEnabled = false;
-            avatarPicture.ProfilePicture = null;
-            avatarPicture.Initials = "UP";
-            creatorNameText.Text = LocalizationHelper.GetString("EnterLinkOrUid");
-            creatorDetailText.Text = LocalizationHelper.GetString("ClickQueryToFetch");
-            DismissInfoBar();
+            await using var session = new FeedPeekPanelSession();
+            await session.SynchronizeSourceNotificationRulesAsync(mode, token);
+            return true;
         }
-
-        // --- show error overlay ---
-        void ShowError(InfoBarSeverity severity, string title, string message)
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
-            dialogInfoBar.Severity = severity;
-            dialogInfoBar.Title = title;
-            dialogInfoBar.Message = message;
-            dialogInfoBar.IsOpen = true;
-            fadeInStoryboard.Begin();
-            dialogInfoTimer.Stop();
-            dialogInfoTimer.Start();
         }
-
-        // --- dismiss info bar immediately ---
-        void DismissInfoBar()
+        catch (Exception exception)
         {
-            dialogInfoTimer.Stop();
-            if (dialogInfoBar.IsOpen)
-            {
-                dialogInfoBar.IsOpen = false;
-                dialogInfoBar.Opacity = 0;
-            }
+            NotificationService.TraceNotification($"Source notification rule synchronization failed: {exception}");
         }
-
-        // --- resolve creator ---
-        async Task ResolveCreatorForDialogAsync()
-        {
-            var input = linkBox.Text.Trim();
-            var creatorKey = ExtractCreatorKey(input);
-            if (string.IsNullOrWhiteSpace(creatorKey))
-            {
-                ShowError(InfoBarSeverity.Warning, LocalizationHelper.GetString("InputInvalid"), LocalizationHelper.GetString("InputInvalidDetail"));
-                return;
-            }
-
-            linkBox.IsEnabled = false;
-            creatorDetailText.Text = LocalizationHelper.GetString("FetchingCreatorInfo");
-            DismissInfoBar();
-            try
-            {
-                var creators = await NotificationSession.GetFollowingCreatorsAsync();
-                resolvedCreator = creators.FirstOrDefault(item =>
-                    string.Equals(item.CreatorKey, creatorKey, StringComparison.Ordinal));
-                if (resolvedCreator is null)
-                {
-                    ShowError(InfoBarSeverity.Warning, LocalizationHelper.GetString("CreatorNotFollowed"), LocalizationHelper.GetString("CreatorNotFollowedDetail"));
-                    return;
-                }
-
-                if (CustomNotificationCreators.Any(item =>
-                    string.Equals(item.ProviderId, resolvedCreator.ProviderId, StringComparison.Ordinal)
-                    && string.Equals(item.SourceId, resolvedCreator.SourceId, StringComparison.Ordinal)
-                    && string.Equals(item.CreatorKey, resolvedCreator.CreatorKey, StringComparison.Ordinal)))
-                {
-                    ShowError(InfoBarSeverity.Warning, LocalizationHelper.GetString("AlreadyExists"), LocalizationHelper.GetString("AlreadyExistsDetail"));
-                    resolvedCreator = null;
-                    return;
-                }
-
-                avatarPicture.Initials = string.IsNullOrWhiteSpace(resolvedCreator.DisplayName) ? "UP" : resolvedCreator.DisplayName[..1];
-                avatarPicture.ProfilePicture = ImageSourceCache.GetSettingsAvatar(resolvedCreator.AvatarUrl);
-                creatorNameText.Text = resolvedCreator.DisplayName;
-                creatorDetailText.Text = $"{resolvedCreator.ProviderId} · {resolvedCreator.CreatorKey}";
-                dialog.IsPrimaryButtonEnabled = true;
-            }
-            catch (Exception ex)
-            {
-                ShowError(InfoBarSeverity.Error, LocalizationHelper.GetString("FetchFailed"), ex.Message);
-            }
-            finally
-            {
-                linkBox.IsEnabled = true;
-            }
-        }
-
-        linkBox.TextChanged += (_, args) =>
-        {
-            if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput)
-            {
-                ResetToPlaceholder();
-            }
-        };
-        linkBox.QuerySubmitted += async (_, _) => await ResolveCreatorForDialogAsync();
-
-        dialog.PrimaryButtonClick += async (_, args) =>
-        {
-            args.Cancel = true;
-            if (resolvedCreator is null)
-            {
-                await ResolveCreatorForDialogAsync();
-            }
-
-            if (resolvedCreator is null)
-            {
-                return;
-            }
-
-            if (CustomNotificationCreators.Any(item =>
-                string.Equals(item.ProviderId, resolvedCreator.ProviderId, StringComparison.Ordinal)
-                && string.Equals(item.SourceId, resolvedCreator.SourceId, StringComparison.Ordinal)
-                && string.Equals(item.CreatorKey, resolvedCreator.CreatorKey, StringComparison.Ordinal)))
-            {
-                ShowError(InfoBarSeverity.Warning, LocalizationHelper.GetString("AlreadyExists"), LocalizationHelper.GetString("AlreadyExistsDetail"));
-                return;
-            }
-
-            var subscription = new NotificationCreatorSubscription
-            {
-                ProviderId = resolvedCreator.ProviderId,
-                SourceId = resolvedCreator.SourceId,
-                CreatorKey = resolvedCreator.CreatorKey,
-                Name = resolvedCreator.DisplayName,
-                AvatarUrl = resolvedCreator.AvatarUrl ?? string.Empty,
-                VideoNotificationsEnabled = videoSwitch.IsOn,
-                LiveNotificationsEnabled = liveSwitch.IsOn,
-            };
-
-            CustomNotificationCreators.Add(subscription);
-            await SeedNotificationBaselineAsync(subscription);
-            SaveCustomNotificationCreators();
-            SetCustomNotificationStatus(LocalizationHelper.Format("AddedCreator", subscription.Name));
-            dialog.Hide();
-        };
-
-        await dialog.ShowAsync();
+        return false;
     }
 
-    private static FrameworkElement CreateDialogSwitchRow(string label, ToggleSwitch toggleSwitch)
+    private async void PluginAddNotification_Click(object sender, RoutedEventArgs e)
     {
-        toggleSwitch.OnContent = null;
-        toggleSwitch.OffContent = null;
-        toggleSwitch.Width = 48;
-        toggleSwitch.MinWidth = 0;
-        toggleSwitch.HorizontalAlignment = HorizontalAlignment.Right;
-        AutomationProperties.SetName(toggleSwitch, label);
-
-        var row = new Grid
+        if (_addingNotification || _sourceSynchronizationCancellation is null
+            || sender is not FrameworkElement { DataContext: NotificationRuleRow row }) return;
+        var token = _sourceSynchronizationCancellation.Token;
+        _addingNotification = true;
+        NotificationGroupsList.IsEnabled = false;
+        try
         {
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            ColumnSpacing = 12,
-        };
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        row.Children.Add(new TextBlock
+            await ShowAddNotificationDialogAsync(token,
+                new NotificationAddRequest(row.ProviderId, row.SourceId, AuthorsOnly: true));
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (Exception exception)
         {
-            Text = label,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            VerticalAlignment = VerticalAlignment.Center,
-        });
-        var stateText = new TextBlock
+            if (IsLoaded && !token.IsCancellationRequested)
+                SetCustomNotificationStatus(LocalizationHelper.GetString("CreatorQueryFailed") + " " + exception.Message);
+        }
+        finally
         {
-            Width = 24,
-            Text = toggleSwitch.IsOn ? LocalizationHelper.GetString("On") : LocalizationHelper.GetString("Off"),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        toggleSwitch.Toggled += (_, _) => stateText.Text = toggleSwitch.IsOn ? LocalizationHelper.GetString("On") : LocalizationHelper.GetString("Off");
-        Grid.SetColumn(stateText, 1);
-        row.Children.Add(stateText);
-
-        Grid.SetColumn(toggleSwitch, 2);
-        row.Children.Add(toggleSwitch);
-
-        return row;
+            _addingNotification = false;
+            if (IsLoaded) NotificationGroupsList.IsEnabled = true;
+        }
     }
 
-    private static FrameworkElement CreateButtonPathIcon(string data, double size)
+    private void PluginExpander_Loaded(object sender, RoutedEventArgs e)
     {
-        return (FrameworkElement)XamlReader.Load($$"""
-            <Viewbox
-                xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                Width="{{size}}"
-                Height="{{size}}"
-                Stretch="Uniform">
-                <Path
-                    Width="24"
-                    Height="24"
-                    Data="{{data}}"
-                    Fill="{ThemeResource TextFillColorPrimaryBrush}"
-                    Stretch="Uniform" />
-            </Viewbox>
-            """);
+        if (sender is SettingsExpander { DataContext: NotificationSettingsGroup group } expander
+            && (group.Plugin?.PluginId ?? group.Items.FirstOrDefault()?.ProviderId) is { } providerId)
+            expander.IsExpanded = _expandedPlugins.GetValueOrDefault(providerId);
     }
 
-    private void CustomVideoNotificationSwitch_Toggled(object sender, RoutedEventArgs e)
+    private void PluginExpander_StateChanged(object sender, object e)
     {
-        if (_isLoadingSettings || sender is not ToggleSwitch { Tag: NotificationCreatorSubscription subscription })
-        {
+        if (sender is SettingsExpander { DataContext: NotificationSettingsGroup group } expander
+            && expander.IsLoaded
+            && (group.Plugin?.PluginId ?? group.Items.FirstOrDefault()?.ProviderId) is { } providerId)
+            _expandedPlugins[providerId] = expander.IsExpanded;
+    }
+
+    private int _ruleLoadVersion;
+
+    private async Task ReloadNotificationRulesAsync()
+    {
+        if (_sourceSynchronizationCancellation is null)
             return;
-        }
+        var token = _sourceSynchronizationCancellation.Token;
+        var version = ++_ruleLoadVersion;
+        try
+        {
+            await using var session = new FeedPeekPanelSession();
+            var data = await NotificationSettingsData.LoadAsync(session, token);
+            if (!IsLoaded || token.IsCancellationRequested || version != _ruleLoadVersion)
+                return;
+            NotificationGroups.Clear();
+            foreach (var group in data.Groups)
+                NotificationGroups.Add(group);
+            EmptyNotificationsText.Visibility = NotificationGroups.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
-        subscription.VideoNotificationsEnabled = ((ToggleSwitch)sender).IsOn;
-        SaveCustomNotificationCreators();
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (Exception exception)
+        {
+            if (IsLoaded && !token.IsCancellationRequested)
+                SetCustomNotificationStatus(LocalizationHelper.GetString("NotificationListLoadFailed", "无法加载通知列表，请重新打开此页面。"));
+            NotificationService.TraceNotification($"Notification settings list failed: {exception}");
+        }
     }
 
-    private void CustomLiveNotificationSwitch_Toggled(object sender, RoutedEventArgs e)
+    private void NotificationRule_Click(object sender, RoutedEventArgs e)
     {
-        if (_isLoadingSettings || sender is not ToggleSwitch { Tag: NotificationCreatorSubscription subscription })
-        {
-            return;
-        }
-
-        subscription.LiveNotificationsEnabled = ((ToggleSwitch)sender).IsOn;
-        SaveCustomNotificationCreators();
-    }
-
-    private void RemoveCreatorButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not FrameworkElement { Tag: NotificationCreatorSubscription subscription })
-        {
-            return;
-        }
-
-        CustomNotificationCreators.Remove(subscription);
-        SaveCustomNotificationCreators();
-        SetCustomNotificationStatus(LocalizationHelper.Format("RemovedCreator", subscription.Name));
+        if (sender is FrameworkElement { DataContext: NotificationRuleRow row })
+            Frame.Navigate(typeof(NotificationDetailPage), row);
     }
 
     private void SetCustomNotificationStatus(string message)
@@ -487,50 +243,9 @@ public sealed partial class NotificationSettingsPage : Page
         var showGlobal = mode == NotificationTargetMode.AllFollowing;
         var showCustom = mode == NotificationTargetMode.CustomCreators;
 
-        NotificationIntervalSectionHeader.Visibility = showSettings ? Visibility.Visible : Visibility.Collapsed;
-        NotificationIntervalCard.Visibility = showSettings ? Visibility.Visible : Visibility.Collapsed;
-        GlobalVideoNotificationCard.Visibility = showGlobal ? Visibility.Visible : Visibility.Collapsed;
-        GlobalLiveNotificationCard.Visibility = showGlobal ? Visibility.Visible : Visibility.Collapsed;
+        ActiveNotificationPanel.Visibility = showSettings ? Visibility.Visible : Visibility.Collapsed;
+        GlobalNotificationPanel.Visibility = showGlobal ? Visibility.Visible : Visibility.Collapsed;
         CustomNotificationPanel.Visibility = showCustom ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private void SaveCustomNotificationCreators()
-    {
-        AppSettings.CustomNotificationCreators = CustomNotificationCreators.ToList();
-    }
-
-    private async Task SeedNotificationBaselineAsync(NotificationCreatorSubscription subscription)
-    {
-        AppSettings.VideoNotificationBaselineInitialized = false;
-
-        try
-        {
-            var liveKeys = (await NotificationSession.GetLiveItemsAsync())
-                .Where(item =>
-                    string.Equals(item.ProviderId, subscription.ProviderId, StringComparison.Ordinal)
-                    && string.Equals(item.SourceId, subscription.SourceId, StringComparison.Ordinal)
-                    && string.Equals(item.Item.CreatorKey, subscription.CreatorKey, StringComparison.Ordinal))
-                .Select(item => item.StableKey);
-            AppSettings.KnownLiveRoomIds = liveKeys
-                .Concat(AppSettings.KnownLiveRoomIds)
-                .Distinct(StringComparer.Ordinal)
-                .ToList();
-
-            AppSettings.LiveNotificationBaselineInitialized = true;
-        }
-        catch
-        {
-        }
-    }
-
-    private static string ExtractCreatorKey(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-            return string.Empty;
-
-        var trimmed = text.Trim();
-        if (Uri.TryCreate(trimmed, UriKind.Absolute, out var uri))
-            return uri.Segments.LastOrDefault()?.Trim('/') ?? string.Empty;
-        return trimmed;
-    }
 }
