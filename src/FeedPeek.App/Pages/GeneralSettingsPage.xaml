@@ -116,7 +116,7 @@
             </controls:SettingsCard>
             <controls:SettingsCard
                 x:Uid="GeneralDefaultOpenPageCard"
-                Description="点击任务栏托盘图标打开应用时默认显示的页面。"
+                Description="重新打开托盘弹窗时的默认页面；开启“保留弹窗位置”后优先恢复上次页面。"
                 Header="默认打开页面">
                 <controls:SettingsCard.HeaderIcon>
                     <FontIcon Glyph="&#xE71B;" />
@@ -137,7 +137,7 @@
             </controls:SettingsCard>
             <controls:SettingsCard
                 x:Uid="GeneralSaveMainPanelPositionCard"
-                Description="关闭托盘弹窗后保留当前页面和直播区域展开状态。关闭时，每次打开都会按默认设置复位。"
+                Description="开启后记住上次页面和直播区域展开状态；关闭此选项后，每次打开按默认设置显示。"
                 Header="保留弹窗位置">
                 <controls:SettingsCard.HeaderIcon>
                     <FontIcon Glyph="&#xE81C;" />
@@ -156,7 +156,7 @@
                 Text="显示" />
             <controls:SettingsCard
                 x:Uid="GeneralMainPanelHeightCard"
-                Description="设置任务栏托盘主弹窗的高度。"
+                Description="设置托盘主弹窗的高度。关闭并重新打开弹窗后生效，实际高度受屏幕可用空间限制。"
                 Header="主弹窗高度">
                 <controls:SettingsCard.HeaderIcon>
                     <FontIcon Glyph="&#xE9D9;" />
@@ -177,7 +177,7 @@
             </controls:SettingsCard>
             <controls:SettingsCard
                 x:Uid="GeneralLiveSectionDisplayModeCard"
-                Description="控制关注页面中正在直播区域的显示方式。"
+                Description="设置关注页直播区域的默认显示方式。关闭并重新打开托盘弹窗后生效。"
                 Header="正在直播">
                 <controls:SettingsCard.HeaderIcon>
                     <FontIcon Glyph="&#xE8B2;" />
@@ -198,7 +198,7 @@
             </controls:SettingsCard>
             <controls:SettingsCard
                 x:Uid="GeneralKeepSourceFilterCard"
-                Description="关闭主弹窗后是否记住源筛选，下次打开继续只看该源。"
+                Description="开启后记住上次选择的来源，下次打开继续筛选；关闭后，下次打开显示所有来源。"
                 Header="保留源筛选">
                 <controls:SettingsCard.HeaderIcon>
                     <FontIcon Glyph="&#xE71C;" />
@@ -217,7 +217,7 @@
                 Text="配置" />
             <controls:SettingsCard
                 x:Uid="GeneralExportConfigCard"
-                Description="导出当前通知、启动和登录状态配置。"
+                Description="备份通用设置、来源订阅和通知规则；不包含插件文件和登录凭据。"
                 Header="导出配置">
                 <controls:SettingsCard.HeaderIcon>
                     <FontIcon Glyph="&#xEDE1;" />
@@ -236,7 +236,7 @@
                 </Grid.RowDefinitions>
                 <controls:SettingsCard
                     x:Uid="GeneralImportConfigCard"
-                    Description="从 JSON 配置文件恢复通知、启动和登录状态配置。"
+                    Description="从 JSON 文件合并恢复设置、来源订阅和通知规则。对应插件需另外安装并登录。"
                     Header="导入配置">
                     <controls:SettingsCard.HeaderIcon>
                         <FontIcon Glyph="&#xEDE2;" />

@@ -7,6 +7,8 @@ internal interface IMainPanelPage
 {
     void Initialize(FeedPeekPanelSession session);
 
+    Task LoadCachedAsync(CancellationToken cancellationToken = default);
+
     Task ActivateAsync(CancellationToken cancellationToken = default);
 
     void Deactivate();

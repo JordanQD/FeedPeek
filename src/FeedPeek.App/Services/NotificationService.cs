@@ -1,6 +1,7 @@
 using FeedPeek.Helpers;
 using FeedPeek.Models;
 using FeedPeek.Core.Models;
+using FeedPeek.Core.Notifications;
 using Microsoft.UI.Xaml;
 using DispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue;
 using Microsoft.Windows.AppNotifications;
@@ -20,8 +21,6 @@ public sealed class NotificationService
 {
     public const string OpenAction = "open";
     public const string WatchLaterAction = "watchLater";
-    private const int MaxNotificationsPerRefresh = 3;
-    private const int MaxFeedNotificationsPerRefresh = 20;
     private static readonly TimeSpan NotificationSpacing = TimeSpan.FromMilliseconds(750);
     private DispatcherTimer? _timer;
     private Func<Task>? _refreshAction;
@@ -79,28 +78,31 @@ public sealed class NotificationService
     // The monitor supplies a process-local, already filtered/deduplicated plan.
     public async Task NotifyFeedUpdatesAsync(IReadOnlyList<FeedItem> items,
         Func<FeedItem, bool>? canAddToViewLater = null, bool showNotifications = true,
-        Func<FeedItem, bool>? canNotify = null, CancellationToken cancellationToken = default)
+        Func<FeedItem, bool>? canNotify = null, CancellationToken cancellationToken = default,
+        Func<FeedItem, string>? getDisplayName = null, Action<FeedItem>? onSubmitted = null)
     {
         if (!showNotifications) return;
-        foreach (var item in items.DistinctBy(item => item.Key).OrderBy(item => item.PublishedAt).Take(MaxFeedNotificationsPerRefresh))
+        foreach (var item in items.DistinctBy(item => item.Key).OrderBy(item => item.PublishedAt))
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (canNotify?.Invoke(item) == false) continue;
-            ShowFeedNotification(item, canAddToViewLater?.Invoke(item) == true);
+            if (ShowFeedNotification(item, canAddToViewLater?.Invoke(item) == true,
+                getDisplayName?.Invoke(item) ?? item.AuthorName))
+                onSubmitted?.Invoke(item);
             await Task.Delay(NotificationSpacing, cancellationToken);
         }
     }
 
     public async Task NotifyLiveStartsAsync(IReadOnlyList<FeedLiveNotificationItem> items,
         bool showNotifications = true, Func<FeedLiveNotificationItem, bool>? canNotify = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, Action<FeedLiveNotificationItem>? onSubmitted = null)
     {
         if (!showNotifications) return;
-        foreach (var item in items.DistinctBy(item => item.StableKey).Take(MaxNotificationsPerRefresh))
+        foreach (var item in items.DistinctBy(item => item.StableKey))
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (canNotify?.Invoke(item) == false) continue;
-            ShowLiveNotification(item);
+            if (ShowLiveNotification(item)) onSubmitted?.Invoke(item);
             await Task.Delay(NotificationSpacing, cancellationToken);
         }
     }
@@ -224,16 +226,19 @@ public sealed class NotificationService
         finally { _isRefreshing = false; }
     }
 
-    private static void ShowFeedNotification(FeedItem item, bool canAddToViewLater)
+    private static bool ShowFeedNotification(
+        FeedItem item,
+        bool canAddToViewLater,
+        string displayName)
     {
+        var text = NotificationTextFormatter.FormatUpdate(displayName, item.Title, item.Summary);
         var builder = new AppNotificationBuilder()
             .AddArgument("kind", "update")
             .AddArgument("action", OpenAction)
             .AddArgument("url", item.Url)
-            .AddText(LocalizationHelper.Format(
-                canAddToViewLater ? "VideoNotificationTitle" : "UpdateNotificationTitle",
-                item.AuthorName))
-            .AddText(item.Title);
+            .AddText(text.Title);
+        if (!string.IsNullOrWhiteSpace(text.Subtitle))
+            builder.AddText(text.Subtitle);
 
         if (canAddToViewLater)
         {
@@ -250,23 +255,24 @@ public sealed class NotificationService
             .AddArgument("action", OpenAction)
             .AddArgument("url", item.Url));
         AddImages(builder, item.AuthorImageUrl ?? string.Empty, item.ImageUrl ?? string.Empty);
-        TryShow(builder.BuildNotification());
+        return TryShow(builder.BuildNotification());
     }
 
-    private static void ShowLiveNotification(FeedLiveNotificationItem liveItem)
+    private static bool ShowLiveNotification(FeedLiveNotificationItem liveItem)
     {
         var item = liveItem.Item;
-        var title = string.IsNullOrWhiteSpace(item.Title)
-            ? LocalizationHelper.GetString("LiveNotificationFallbackTitle")
-            : item.Title;
+        var text = NotificationTextFormatter.FormatLive(
+            item.DisplayName,
+            item.Title,
+            LocalizationHelper.GetString("LiveNotificationFallbackTitle"));
         var builder = new AppNotificationBuilder()
             .AddArgument("kind", "live")
             .AddArgument("action", OpenAction)
             .AddArgument("url", item.Url)
-            .AddText(LocalizationHelper.Format("LiveNotificationTitle", item.DisplayName))
-            .AddText(title);
+            .AddText(text.Title)
+            .AddText(text.Subtitle);
         AddImages(builder, item.AvatarUrl ?? string.Empty, item.CoverUrl ?? string.Empty);
-        TryShow(builder.BuildNotification());
+        return TryShow(builder.BuildNotification());
     }
 
     private static void AddFeedItemKey(AppNotificationButton button, FeedItemKey key)
@@ -311,17 +317,19 @@ public sealed class NotificationService
         }
     }
 
-    private static void TryShow(AppNotification notification)
+    private static bool TryShow(AppNotification notification)
     {
         try
         {
             AppNotificationManager.Default.Show(notification);
             TraceNotification("App notification submitted");
+            return true;
         }
         catch (Exception exception)
         {
             TraceNotification(
                 $"App notification submission failed: {exception.GetType().Name}: {exception.Message}");
+            return false;
         }
     }
 

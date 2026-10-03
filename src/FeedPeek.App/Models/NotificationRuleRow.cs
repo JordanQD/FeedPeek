@@ -82,22 +82,16 @@ public sealed class NotificationRuleRow
     }
     public string Detail => Describe(KindText);
 
-    /// <summary>The parent expander already identifies the plugin.</summary>
-    public string GroupDetail => Describe(Creator is not null || Policy is not null
-        ? L("NotificationAuthor", "作者")
-        : Source?.SortOrder switch
-        {
-            1 => L("NotificationRoomKind", "直播间"),
-            2 => Source.Source.Category,
-            _ => L("NotificationWebsiteKind", "网站订阅"),
-        });
+    /// <summary>Grouped rows only show notification state; their parent identifies the source.</summary>
+    public string GroupDetail => Describe(string.Empty);
 
     private string Describe(string kindText)
     {
+        var prefix = string.IsNullOrWhiteSpace(kindText) ? string.Empty : kindText + " · ";
         if (Creator is not null && FollowState is CreatorFollowState.NotFollowed)
-            return kindText + " · " + L("NotificationCreatorNotFollowed", "已取消关注 / 暂不可用");
+            return prefix + L("NotificationCreatorNotFollowed", "已取消关注 / 暂不可用");
         if (Creator is not null && FollowState is CreatorFollowState.Unknown)
-            return kindText + " · " + L("NotificationCreatorRelationUnknown", "关系待确认");
+            return prefix + L("NotificationCreatorRelationUnknown", "关系待确认");
         if (Policy is not null && Creator is null)
         {
             // A missing/disabled plugin may temporarily hide capabilities;
@@ -112,17 +106,17 @@ public sealed class NotificationRuleRow
             };
             var detail = string.Join(" / ", policyStates.Where(value => value is not null));
             return string.IsNullOrWhiteSpace(detail)
-                ? kindText + " · " + L("NotificationUnavailable", "暂不可用")
-                : kindText + " · " + detail;
+                ? prefix + L("NotificationUnavailable", "暂不可用")
+                : prefix + detail;
         }
         if (!IsAvailable)
-            return kindText + " · " + L("NotificationUnavailable", "暂不可用");
+            return prefix + L("NotificationUnavailable", "暂不可用");
         var states = new[]
         {
             SupportsUpdates ? L("NotificationUpdates", "更新通知") + " " + L(UpdatesEnabled ? "On" : "Off", UpdatesEnabled ? "开" : "关") : null,
             SupportsLive ? L("NotificationLive", "开播通知") + " " + L(LiveEnabled ? "On" : "Off", LiveEnabled ? "开" : "关") : null,
         };
-        return kindText + " · " + string.Join(" / ", states.Where(value => value is not null));
+        return prefix + string.Join(" / ", states.Where(value => value is not null));
     }
 
     private string ScopeDetail(CreatorNotificationScope scope, bool enabled, string key, string fallback)

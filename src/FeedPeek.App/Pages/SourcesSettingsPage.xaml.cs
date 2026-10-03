@@ -1,12 +1,14 @@
 using CommunityToolkit.WinUI.Controls;
 using FeedPeek.Helpers;
 using FeedPeek.Models;
+using FeedPeek.Rss;
 using FeedPeek.Services;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Linq;
@@ -19,17 +21,17 @@ namespace FeedPeek.Pages;
 
 public sealed partial class SourcesSettingsPage : Page, IDisposable
 {
-    private readonly ObservableCollection<SourceSettingsRow> _sources = [];
-    private readonly ObservableCollection<PluginSettingsRow> _plugins = [];
+    private readonly ObservableCollection<SourceSettingsGroup> _groups = [];
+    private readonly Dictionary<string, bool> _expandedPlugins = new(StringComparer.Ordinal);
     private readonly FeedPeekPanelSession _session = new();
     private readonly PluginInstallationService _installations = new();
     private bool _disposed;
+    private int _reloadVersion;
 
     public SourcesSettingsPage()
     {
         InitializeComponent();
-        SourcesListView.ItemsSource = _sources;
-        PluginsListView.ItemsSource = _plugins;
+        SourceGroupsListView.ItemsSource = _groups;
         Loaded += SourcesSettingsPage_Loaded;
         Unloaded += SourcesSettingsPage_Unloaded;
     }
@@ -49,7 +51,7 @@ public sealed partial class SourcesSettingsPage : Page, IDisposable
             Trace("reload start");
             await _session.InitializeAsync();
             await ReloadSourcesAsync();
-            Trace($"reload done sources={_sources.Count} plugins={_plugins.Count}");
+            Trace($"reload done groups={_groups.Count}");
         }
         catch (Exception ex) { ShowStatus(ex.Message, InfoBarSeverity.Error); }
     }
@@ -57,22 +59,27 @@ public sealed partial class SourcesSettingsPage : Page, IDisposable
     private void SourceCard_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not SettingsCard { DataContext: SourceSettingsRow source }) return;
-        if (source.OpensPluginDetails && source.Plugin is not null)
-        {
-            Frame.Navigate(typeof(PluginDetailPage), source.Plugin);
-        }
-        else
-        {
-            Frame.Navigate(typeof(SourceDetailPage), source.Source);
-        }
+        Frame.Navigate(typeof(SourceDetailPage), source.Source);
     }
 
     private void PluginCard_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is SettingsCard { DataContext: PluginSettingsRow plugin })
+        if (sender is FrameworkElement { DataContext: PluginSettingsRow plugin })
         {
             Frame.Navigate(typeof(PluginDetailPage), plugin);
         }
+    }
+
+    private void PluginExpander_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is SettingsExpander { DataContext: SourceSettingsGroup group } expander)
+            expander.IsExpanded = _expandedPlugins.GetValueOrDefault(group.ProviderId);
+    }
+
+    private void PluginExpander_StateChanged(object sender, object e)
+    {
+        if (sender is SettingsExpander { DataContext: SourceSettingsGroup group } expander && expander.IsLoaded)
+            _expandedPlugins[group.ProviderId] = expander.IsExpanded;
     }
 
     private async void AddButton_Click(object sender, RoutedEventArgs e) => await AddSourceFromAddressAsync();
@@ -133,28 +140,36 @@ public sealed partial class SourcesSettingsPage : Page, IDisposable
 
     private async Task ReloadSourcesAsync()
     {
+        var version = ++_reloadVersion;
         var sources = await _session.GetSourcesAsync();
         var pluginRows = (await _session.GetPluginsAsync())
             .Select(plugin => new PluginSettingsRow(plugin))
             .OrderBy(plugin => plugin.DisplayName, StringComparer.CurrentCulture)
             .ToArray();
         var plugins = pluginRows.ToDictionary(plugin => plugin.PluginId, StringComparer.Ordinal);
-        if (_disposed) return;
-        _sources.Clear();
-        foreach (var row in sources
+        if (_disposed || version != _reloadVersion) return;
+        var rows = sources
             .Select(source => new SourceSettingsRow(source,
                 plugins.TryGetValue(source.ProviderId, out var plugin) ? plugin : null))
             .OrderBy(row => row.SortOrder)
-            .ThenBy(row => row.DisplayName, StringComparer.CurrentCulture))
-        {
-            _sources.Add(row);
-        }
-
-        _plugins.Clear();
-        foreach (var plugin in pluginRows)
-        {
-            _plugins.Add(plugin);
-        }
+            .ThenBy(row => row.DisplayName, StringComparer.CurrentCulture).ToArray();
+        var pluginSources = rows.Where(row => row.Source.ProviderId != RssProviderInfo.ProviderId)
+            .GroupBy(row => row.Source.ProviderId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+        // Start with installed plugins too: empty/disabled/error entries still need a settings route.
+        var groups = pluginRows.Select(plugin => plugin.PluginId).Concat(pluginSources.Keys)
+            .Distinct(StringComparer.Ordinal)
+            .Select(providerId => new SourceSettingsGroup(providerId,
+                plugins.GetValueOrDefault(providerId), null,
+                pluginSources.GetValueOrDefault(providerId) ?? []))
+            .OrderBy(group => group.DisplayName, StringComparer.CurrentCulture).ToList();
+        groups.AddRange(rows.Where(row => row.Source.ProviderId == RssProviderInfo.ProviderId)
+            .Select(row => new SourceSettingsGroup(row.Source.ProviderId, null, row, [])));
+        foreach (var stale in _expandedPlugins.Keys.Where(providerId =>
+            !groups.Any(group => group.Source is null && group.ProviderId == providerId)).ToArray())
+            _expandedPlugins.Remove(stale);
+        _groups.Clear();
+        foreach (var group in groups) _groups.Add(group);
 
         UpdateEmptyState();
     }
@@ -171,10 +186,13 @@ public sealed partial class SourcesSettingsPage : Page, IDisposable
         => ShowStatus(status.Message, status.Severity);
 
     private void ShowStatus(string message, InfoBarSeverity severity)
-        => InfoBarAutoDismiss.Show(StatusInfoBar, message, severity);
+    {
+        if (!_disposed) InfoBarAutoDismiss.Show(StatusInfoBar, message, severity);
+    }
 
     private void SetBusy(bool isBusy)
     {
+        if (_disposed) return;
         AddButton.IsEnabled = !isBusy;
         EndpointTextBox.IsEnabled = !isBusy;
         InstallPluginButton.IsEnabled = !isBusy;
@@ -182,8 +200,8 @@ public sealed partial class SourcesSettingsPage : Page, IDisposable
 
     private void UpdateEmptyState()
     {
-        EmptyPanel.Visibility = _sources.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        PluginsEmptyPanel.Visibility = _plugins.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        EmptyPanel.Visibility = _groups.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        SourceGroupsContainer.MinHeight = _groups.Count == 0 ? 180 : 0;
     }
 
     /// <summary>Step markers so a crash report can name the last step that ran (Debug output window).</summary>
@@ -197,10 +215,9 @@ public sealed partial class SourcesSettingsPage : Page, IDisposable
         Loaded -= SourcesSettingsPage_Loaded;
         Unloaded -= SourcesSettingsPage_Unloaded;
         _session.StatusRaised -= Session_StatusRaised;
-        SourcesListView.ItemsSource = null;
-        PluginsListView.ItemsSource = null;
-        _sources.Clear();
-        _plugins.Clear();
+        SourceGroupsListView.ItemsSource = null;
+        _groups.Clear();
+        _expandedPlugins.Clear();
         _session.Dispose();
     }
 }

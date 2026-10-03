@@ -62,25 +62,43 @@ public static class NotificationWatchSelector
     }
 }
 
-/// <summary>One process only. Failed queries never call Observe, and so cannot establish an offline state.</summary>
-public sealed class NotificationBaselineTracker
+/// <summary>
+/// One process only. Callers can suppress baseline initialization for failed or incomplete
+/// observations while still allowing already initialized watches to process partial results.
+/// </summary>
+public sealed class NotificationBaselineTracker : IDisposable
 {
     private readonly Dictionary<NotificationWatchKey, WatchState> _states = [];
+    private readonly NotificationDiskMap<SeenKey, bool> _seen = new(key => key.Scope);
+
+    /// <summary>Diagnostic count of the process-local disk ledger records.</summary>
+    public int RecordCount => _seen.Count;
 
     public void Synchronize(IReadOnlyList<NotificationWatch> watches)
     {
         var desired = watches.ToDictionary(watch => watch.Key);
         foreach (var removed in _states.Keys.Where(key => !desired.ContainsKey(key)).ToArray())
+        {
+            _seen.RemoveScope(_states[removed].Scope);
             _states.Remove(removed);
+        }
         foreach (var watch in watches)
             if (!_states.TryGetValue(watch.Key, out var state) || state.Generation != watch.Generation)
+            {
+                if (state is not null)
+                    _seen.RemoveScope(state.Scope);
                 _states[watch.Key] = new(watch.Generation);
+            }
+        if (_states.Count == 0)
+            _seen.Clear();
     }
 
     public IReadOnlyList<FeedItem> ObserveUpdates(NotificationFeedKey feed,
-        IReadOnlyList<NotificationUpdateObservation> items, DateTimeOffset observedAt)
+        IReadOnlyList<NotificationUpdateObservation> items, DateTimeOffset observedAt,
+        bool canInitializeBaseline = true)
     {
         var notifications = new Dictionary<FeedItemKey, FeedItem>();
+        using var batch = _seen.BeginBatch();
         foreach (var (key, state) in _states.Where(pair => pair.Key.Feed == feed))
         {
             var current = items.Where(item => item.Item.ProviderId == feed.ProviderId
@@ -88,17 +106,43 @@ public sealed class NotificationBaselineTracker
                 && (key.CreatorKey is null || item.Item.CreatorKey == key.CreatorKey)).ToArray();
             if (!state.Initialized)
             {
+                if (!canInitializeBaseline)
+                    continue;
                 state.Initialized = true;
                 state.BaselineAt = observedAt;
-                foreach (var item in current) state.SeenUpdateIds.Add(item.Item.ItemId);
+                foreach (var item in current)
+                    _seen.TryAdd(new(state.Scope, item.Item.ItemId), true);
                 continue;
             }
             foreach (var item in current)
-                if (state.SeenUpdateIds.Add(item.Item.ItemId) && item.FirstSeenAt > state.BaselineAt)
-                    notifications.TryAdd(item.Item.Key, item.Item);
+            {
+                if (!_seen.TryAdd(new(state.Scope, item.Item.ItemId), true))
+                    continue;
+                if (item.FirstSeenAt <= state.BaselineAt
+                    || !IsNotificationDate(item.Item.PublishedAt)
+                    || item.Item.PublishedAt <= state.BaselineAt
+                    || item.Item.PublishedAt > observedAt
+                    || !HasReliablePublishedAt(item.Item))
+                    continue;
+                notifications.TryAdd(item.Item.Key, item.Item);
+            }
         }
         return notifications.Values.OrderBy(item => item.PublishedAt).ToArray();
     }
+
+    public void Dispose()
+    {
+        _states.Clear();
+        _seen.Dispose();
+    }
+
+    private static bool IsNotificationDate(DateTimeOffset publishedAt)
+        => publishedAt != default && publishedAt != DateTimeOffset.UnixEpoch;
+
+    private static bool HasReliablePublishedAt(FeedItem item)
+        => item.Metadata is null
+            || !item.Metadata.TryGetValue("feedpeek.publishedAtReliable", out var reliable)
+            || !string.Equals(reliable.Trim(), "false", StringComparison.OrdinalIgnoreCase);
 
     public IReadOnlyList<string> ObserveLive(NotificationFeedKey feed, IReadOnlyList<NotificationLiveObservation> items)
     {
@@ -115,12 +159,14 @@ public sealed class NotificationBaselineTracker
         return notifications.ToArray();
     }
 
+    private readonly record struct SeenKey(string Scope, string ItemId);
+
     private sealed class WatchState(string generation)
     {
         public string Generation { get; } = generation;
+        public string Scope { get; } = Guid.NewGuid().ToString("N");
         public bool Initialized { get; set; }
         public DateTimeOffset BaselineAt { get; set; }
-        public HashSet<string> SeenUpdateIds { get; } = new(StringComparer.Ordinal);
         public HashSet<string> OnlineLiveIds { get; set; } = new(StringComparer.Ordinal);
     }
 }

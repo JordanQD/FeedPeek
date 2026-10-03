@@ -22,7 +22,9 @@ BiliRadar stores app settings and notification state on your device using Window
 
 If you sign in, BiliRadar stores the login data needed to keep you signed in on your device. You can clear the saved login state from inside the app.
 
-If you export app settings, the exported file may include your saved login cookie and other configuration data. Treat exported configuration files as private and do not share them with others unless you have reviewed their contents.
+FeedPeek configuration exports contain general settings, source subscriptions, notification rules, and selected creators. They do not export login credentials from Windows Credential Locker, plugin programs, cached feed content, or notification baselines. Source addresses and selected creators are part of the configuration file.
+
+FeedPeek also stores the most recent live-room display data locally, including names, titles, and avatar/link URLs, so the tray panel can show cached rooms while refreshing. These snapshots are excluded from configuration exports and do not determine notification baselines. Cache context uses a credential fingerprint; no credentials are written into these display snapshots.
 
 ## Third-Party Services
 

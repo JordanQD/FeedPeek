@@ -28,6 +28,8 @@ public static class AppSettings
     private const string CustomLaunchWebPageUrlKey = "CustomLaunchWebPageUrl";
     private const string DefaultOpenPageKey = "DefaultOpenPage";
     private const string SaveMainPanelPositionKey = "SaveMainPanelPosition";
+    private const string LastMainPanelSectionKey = "LastMainPanelSection";
+    private const string LastLiveSectionExpandedKey = "LastLiveSectionExpanded";
     private const string LiveSectionDisplayModeKey = "LiveSectionDisplayMode";
     private const string MainPanelHeightKey = "MainPanelHeight";
     private const string CustomNotificationCreatorsKey = "CustomNotificationCreators";
@@ -167,7 +169,42 @@ public static class AppSettings
     public static bool SaveMainPanelPosition
     {
         get => ReadBool(SaveMainPanelPositionKey, false);
-        set => LocalSettings.Values[SaveMainPanelPositionKey] = value;
+        set
+        {
+            LocalSettings.Values[SaveMainPanelPositionKey] = value;
+            if (!value)
+            {
+                LocalSettings.Values.Remove(LastMainPanelSectionKey);
+                LocalSettings.Values.Remove(LastLiveSectionExpandedKey);
+            }
+        }
+    }
+
+    // Local interaction state only; configuration files carry the retention switch and defaults.
+    internal static MainPanelSection? LastMainPanelSection
+    {
+        get => SaveMainPanelPosition
+            && LocalSettings.Values.TryGetValue(LastMainPanelSectionKey, out var value)
+            && value is int index && Enum.IsDefined(typeof(MainPanelSection), index)
+                ? (MainPanelSection)index
+                : null;
+        set
+        {
+            if (SaveMainPanelPosition && value is { } section)
+                LocalSettings.Values[LastMainPanelSectionKey] = (int)section;
+        }
+    }
+
+    internal static bool? LastLiveSectionExpanded
+    {
+        get => SaveMainPanelPosition
+            && LocalSettings.Values.TryGetValue(LastLiveSectionExpandedKey, out var value)
+            && value is bool expanded ? expanded : null;
+        set
+        {
+            if (SaveMainPanelPosition && value is { } expanded)
+                LocalSettings.Values[LastLiveSectionExpandedKey] = expanded;
+        }
     }
 
     /// <summary>
@@ -223,7 +260,12 @@ public static class AppSettings
                 ? (LiveSectionDisplayMode)value
                 : LiveSectionDisplayMode.Expanded;
         }
-        set => LocalSettings.Values[LiveSectionDisplayModeKey] = (int)value;
+        set
+        {
+            if (LiveSectionDisplayMode != value)
+                LocalSettings.Values.Remove(LastLiveSectionExpandedKey);
+            LocalSettings.Values[LiveSectionDisplayModeKey] = (int)value;
+        }
     }
 
     public static int MainPanelHeight
@@ -297,6 +339,12 @@ public static class AppSettings
         WriteStringList(
             AutoCreatedPluginSourcesKey,
             ids.Where(item => !string.Equals(item, pluginId, StringComparison.Ordinal)).ToArray());
+    }
+
+    internal static IReadOnlyList<string> AutoCreatedPluginSources
+    {
+        get => ReadStringList(AutoCreatedPluginSourcesKey);
+        set => WriteStringList(AutoCreatedPluginSourcesKey, value);
     }
 
     /// <summary>

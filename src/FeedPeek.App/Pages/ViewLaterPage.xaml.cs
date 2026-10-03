@@ -37,6 +37,9 @@ public sealed partial class ViewLaterPage : Page, IMainPanelPage, IDisposable
         _session.ItemSavedChanged += Session_ItemSavedChanged;
     }
 
+    public Task LoadCachedAsync(CancellationToken cancellationToken = default)
+        => ActivateAsync(cancellationToken);
+
     public async Task ActivateAsync(CancellationToken cancellationToken = default)
     {
         if (_session is null || _isDisposed) return;

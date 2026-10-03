@@ -12,7 +12,7 @@ public sealed class NotificationBaselineTrackerTests
     {
         var updates = UpdatesFeed();
         var live = LiveFeed();
-        var tracker = new NotificationBaselineTracker();
+        using var tracker = new NotificationBaselineTracker();
         tracker.Synchronize([Watch(updates), Watch(live)]);
 
         var update = Update("old", "creator", T0);
@@ -26,7 +26,7 @@ public sealed class NotificationBaselineTrackerTests
     public void Updates_OnlyItemsFirstSeenAfterInitialSuccessfulObservationCanNotify()
     {
         var feed = UpdatesFeed();
-        var tracker = new NotificationBaselineTracker();
+        using var tracker = new NotificationBaselineTracker();
         tracker.Synchronize([Watch(feed)]);
 
         var existing = Update("existing", "creator", T0.AddMinutes(-10));
@@ -52,6 +52,175 @@ public sealed class NotificationBaselineTrackerTests
     }
 
     [Fact]
+    public void Updates_SuppressItemsPublishedBeforeBaselineEvenWhenTheyArriveDuringCatchup()
+    {
+        var feed = UpdatesFeed();
+        using var tracker = new NotificationBaselineTracker();
+        tracker.Synchronize([Watch(feed)]);
+        Assert.Empty(tracker.ObserveUpdates(feed, [], T0));
+
+        var historical = Update("historical", "creator", T0.AddMinutes(-1));
+        Assert.Empty(tracker.ObserveUpdates(
+            feed, [new(historical, T0.AddMinutes(1))], T0.AddMinutes(2)));
+    }
+
+    [Fact]
+    public void Updates_SuppressUnknownAndFuturePublishedDates()
+    {
+        var feed = UpdatesFeed();
+        using var tracker = new NotificationBaselineTracker();
+        tracker.Synchronize([Watch(feed)]);
+        Assert.Empty(tracker.ObserveUpdates(feed, [], T0));
+
+        var unknown = Update("unix-epoch", "creator", DateTimeOffset.UnixEpoch);
+        var defaultDate = Update("default-date", "creator", default);
+        var future = Update("future", "creator", T0.AddMinutes(10));
+        var notifications = tracker.ObserveUpdates(
+            feed,
+            [
+                new(unknown, T0.AddMinutes(1)),
+                new(defaultDate, T0.AddMinutes(1)),
+                new(future, T0.AddMinutes(1)),
+            ],
+            T0.AddMinutes(1));
+
+        Assert.Empty(notifications);
+    }
+
+    [Fact]
+    public void Updates_RequirePublishedDateAfterBaselineAndAtOrBeforeObservation()
+    {
+        var feed = UpdatesFeed();
+        using var tracker = new NotificationBaselineTracker();
+        tracker.Synchronize([Watch(feed)]);
+        Assert.Empty(tracker.ObserveUpdates(feed, [], T0));
+
+        var sameSecond = Update("same-second", "creator", T0);
+        var reliable = Update("reliable", "creator", T0.AddMinutes(1));
+        var future = Update("not-yet", "creator", T0.AddMinutes(3));
+        var notifications = tracker.ObserveUpdates(
+            feed,
+            [
+                new(sameSecond, T0.AddMinutes(1)),
+                new(reliable, T0.AddMinutes(1)),
+                new(future, T0.AddMinutes(1)),
+            ],
+            T0.AddMinutes(1));
+
+        Assert.Equal(["reliable"], notifications.Select(item => item.ItemId));
+    }
+
+    [Fact]
+    public void Updates_SuppressExplicitlyUnreliablePublishedDates()
+    {
+        var feed = UpdatesFeed();
+        using var tracker = new NotificationBaselineTracker();
+        tracker.Synchronize([Watch(feed)]);
+        Assert.Empty(tracker.ObserveUpdates(feed, [], T0));
+
+        var unreliable = Update("unreliable", "creator", T0.AddMinutes(1)) with
+        {
+            Metadata = new Dictionary<string, string>
+            {
+                ["feedpeek.publishedAtReliable"] = "false",
+            },
+        };
+        Assert.Empty(tracker.ObserveUpdates(
+            feed, [new(unreliable, T0.AddMinutes(1))], T0.AddMinutes(2)));
+    }
+
+    [Fact]
+    public void FailedUpdateObservation_DoesNotEstablishNewCreatorBaseline()
+    {
+        var feed = UpdatesFeed();
+        var sourceWatch = Watch(feed, "source-generation");
+        var creatorWatch = new NotificationWatch(new NotificationWatchKey(feed, "creator-a"), "creator-generation");
+        using var tracker = new NotificationBaselineTracker();
+        tracker.Synchronize([sourceWatch]);
+
+        var old = Update("old", "creator-a", T0);
+        Assert.Empty(tracker.ObserveUpdates(feed, [new(old, T0)], T0));
+
+        var existing = Update("existing", "creator-a", T0.AddMinutes(1));
+        Assert.Equal(["existing"], tracker.ObserveUpdates(
+            feed, [new(old, T0), new(existing, T0.AddMinutes(1))], T0.AddMinutes(2))
+            .Select(item => item.ItemId));
+
+        tracker.Synchronize([sourceWatch, creatorWatch]);
+
+        // A failed/partial source query must not initialize the newly added creator watch,
+        // even if the poller returned a few staged items alongside the error.
+        Assert.Empty(tracker.ObserveUpdates(
+            feed, [new(old, T0), new(existing, T0.AddMinutes(1))], T0.AddMinutes(3),
+            canInitializeBaseline: false));
+
+        // The first successful observation is the creator's silent baseline.
+        Assert.Empty(tracker.ObserveUpdates(
+            feed, [new(old, T0), new(existing, T0.AddMinutes(1))], T0.AddMinutes(4)));
+
+        var next = Update("next", "creator-a", T0.AddMinutes(5));
+        Assert.Equal(["next"], tracker.ObserveUpdates(
+            feed,
+            [new(old, T0), new(existing, T0.AddMinutes(1)), new(next, T0.AddMinutes(5))],
+            T0.AddMinutes(6)).Select(item => item.ItemId));
+    }
+
+    [Fact]
+    public void InitializedUpdateWatch_StillProcessesPartialObservationWhenBaselineInitializationIsBlocked()
+    {
+        var feed = UpdatesFeed();
+        using var tracker = new NotificationBaselineTracker();
+        tracker.Synchronize([Watch(feed)]);
+        Assert.Empty(tracker.ObserveUpdates(feed, [], T0));
+
+        var update = Update("partial", "creator", T0.AddMinutes(1));
+        Assert.Equal(["partial"], tracker.ObserveUpdates(
+            feed, [new(update, T0.AddMinutes(1))], T0.AddMinutes(2),
+            canInitializeBaseline: false).Select(item => item.ItemId));
+    }
+
+    [Fact]
+    public void SuccessfulEmptyHead_InitializesNewUpdateWatch()
+    {
+        var feed = UpdatesFeed();
+        using var tracker = new NotificationBaselineTracker();
+        tracker.Synchronize([Watch(feed)]);
+
+        Assert.Empty(tracker.ObserveUpdates(feed, [], T0, canInitializeBaseline: true));
+
+        var update = Update("after-empty-head", "creator", T0.AddMinutes(1));
+        Assert.Equal(["after-empty-head"], tracker.ObserveUpdates(
+            feed, [new(update, T0.AddMinutes(1))], T0.AddMinutes(2))
+            .Select(item => item.ItemId));
+    }
+
+    [Fact]
+    public void DiskSeenLedger_DeduplicatesLargeBatchAndCleansReplacedScopes()
+    {
+        var feed = UpdatesFeed();
+        using var tracker = new NotificationBaselineTracker();
+        tracker.Synchronize([Watch(feed, "generation-1")]);
+
+        var items = Enumerable.Range(0, 2501)
+            .Select(index => Update($"item-{index}", "creator", T0))
+            .Select(item => new NotificationUpdateObservation(item, T0))
+            .ToArray();
+        Assert.Empty(tracker.ObserveUpdates(feed, items, T0));
+        Assert.Equal(2501, tracker.RecordCount);
+
+        Assert.Empty(tracker.ObserveUpdates(feed, items, T0.AddMinutes(1)));
+        Assert.Equal(2501, tracker.RecordCount);
+
+        tracker.Synchronize([Watch(feed, "generation-2")]);
+        Assert.Equal(0, tracker.RecordCount);
+        Assert.Empty(tracker.ObserveUpdates(feed, [items[0]], T0.AddMinutes(2)));
+        Assert.Equal(1, tracker.RecordCount);
+
+        tracker.Synchronize([]);
+        Assert.Equal(0, tracker.RecordCount);
+    }
+
+    [Fact]
     public void Updates_DeduplicateSourceWideAndCreatorWatches()
     {
         var feed = UpdatesFeed();
@@ -65,7 +234,7 @@ public sealed class NotificationBaselineTrackerTests
         var watches = NotificationWatchSelector.Select(feed, selection);
         Assert.Equal(2, watches.Count);
 
-        var tracker = new NotificationBaselineTracker();
+        using var tracker = new NotificationBaselineTracker();
         tracker.Synchronize(watches.Select(key => new NotificationWatch(key, "generation")).ToArray());
         var oldItem = Update("old", "creator", T0);
         var newItem = Update("new", "creator", T0.AddMinutes(2));
@@ -94,7 +263,7 @@ public sealed class NotificationBaselineTrackerTests
         var watches = NotificationWatchSelector.Select(feed, selection);
         Assert.Equal(2, watches.Count);
 
-        var tracker = new NotificationBaselineTracker();
+        using var tracker = new NotificationBaselineTracker();
         tracker.Synchronize(watches.Select(key => new NotificationWatch(key, "generation")).ToArray());
         Assert.Empty(tracker.ObserveLive(feed, [new("room-1", "creator")]));
 
@@ -144,7 +313,7 @@ public sealed class NotificationBaselineTrackerTests
         var first = UpdatesFeed("updates", "provider-a", "source-a");
         var second = UpdatesFeed("updates", "provider-b", "source-a");
         var third = UpdatesFeed("updates", "provider-a", "source-b");
-        var tracker = new NotificationBaselineTracker();
+        using var tracker = new NotificationBaselineTracker();
         tracker.Synchronize([Watch(first), Watch(second), Watch(third)]);
 
         Assert.Empty(tracker.ObserveUpdates(first, [new(Update("same", "creator", T0), T0)], T0));
@@ -163,7 +332,7 @@ public sealed class NotificationBaselineTrackerTests
     {
         var pendingFeed = LiveFeed("pending-source");
         var onlineFeed = LiveFeed("online-source");
-        var tracker = new NotificationBaselineTracker();
+        using var tracker = new NotificationBaselineTracker();
         tracker.Synchronize([Watch(pendingFeed), Watch(onlineFeed)]);
 
         // A failed query is represented by not calling Observe at all.
@@ -180,7 +349,7 @@ public sealed class NotificationBaselineTrackerTests
     {
         var failed = LiveFeed("failed-source");
         var healthy = LiveFeed("healthy-source");
-        var tracker = new NotificationBaselineTracker();
+        using var tracker = new NotificationBaselineTracker();
         tracker.Synchronize([Watch(failed), Watch(healthy)]);
         Assert.Empty(tracker.ObserveLive(failed, [new("room-f", "creator")]));
         Assert.Empty(tracker.ObserveLive(healthy, [new("room-h", "creator")]));
@@ -193,7 +362,7 @@ public sealed class NotificationBaselineTrackerTests
     public void Live_RequiresSuccessfulOfflineObservationBeforeNotifyingAgain()
     {
         var feed = LiveFeed();
-        var tracker = new NotificationBaselineTracker();
+        using var tracker = new NotificationBaselineTracker();
         tracker.Synchronize([Watch(feed)]);
         Assert.Empty(tracker.ObserveLive(feed, [new("room-1", "creator")]));
 
@@ -208,7 +377,7 @@ public sealed class NotificationBaselineTrackerTests
     public void RemovingAndReaddingWatchOrChangingGeneration_RebuildsItsBaseline()
     {
         var feed = UpdatesFeed();
-        var tracker = new NotificationBaselineTracker();
+        using var tracker = new NotificationBaselineTracker();
         tracker.Synchronize([Watch(feed, "generation-1")]);
         var first = Update("first", "creator", T0);
         Assert.Empty(tracker.ObserveUpdates(feed, [new(first, T0)], T0));
@@ -233,7 +402,7 @@ public sealed class NotificationBaselineTrackerTests
         var feed = UpdatesFeed();
         var sourceWatch = Watch(feed, "source-generation");
         var creatorWatch = new NotificationWatch(new NotificationWatchKey(feed, "creator-a"), "creator-generation");
-        var tracker = new NotificationBaselineTracker();
+        using var tracker = new NotificationBaselineTracker();
         tracker.Synchronize([sourceWatch]);
 
         var old = Update("old", "creator-a", T0);
@@ -256,7 +425,7 @@ public sealed class NotificationBaselineTrackerTests
         var feed = LiveFeed();
         var sourceWatch = Watch(feed, "source-generation");
         var creatorWatch = new NotificationWatch(new NotificationWatchKey(feed, "creator-a"), "creator-generation");
-        var tracker = new NotificationBaselineTracker();
+        using var tracker = new NotificationBaselineTracker();
         tracker.Synchronize([sourceWatch]);
         Assert.Empty(tracker.ObserveLive(feed, [new("room-a", "creator-a")]));
 

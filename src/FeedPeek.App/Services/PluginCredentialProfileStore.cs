@@ -3,6 +3,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,6 +18,18 @@ internal sealed class PluginCredentialProfileStore : IPluginCredentialStore, IPl
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly PasswordVault _vault = new();
     private readonly SemaphoreSlim _gate = new(1, 1);
+
+    internal async Task<string> GetCacheFingerprintAsync(string pluginId, string profileId, CancellationToken token)
+    {
+        var profile = await ReadAsync(pluginId, profileId, token).ConfigureAwait(false);
+        if (profile is null) return "anonymous";
+        var canonical = JsonSerializer.Serialize(new
+        {
+            profile.CookieHeader,
+            Secrets = profile.Secrets.OrderBy(pair => pair.Key, StringComparer.Ordinal).ToArray(),
+        }, JsonOptions);
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
+    }
 
     public async Task<bool> ExistsAsync(
         string pluginId,

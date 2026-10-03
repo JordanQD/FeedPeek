@@ -18,10 +18,9 @@ using Windows.Storage;
 
 namespace FeedPeek.Services;
 
-internal sealed record NotificationUpdatePoll(NotificationFeedKey Feed, IReadOnlyList<NotificationUpdateObservation> Items, DateTimeOffset ObservedAt);
 internal sealed record NotificationLivePoll(NotificationFeedKey Feed, IReadOnlyList<FeedLiveNotificationItem> Items);
 internal sealed record NotificationPollBatch(IReadOnlyList<NotificationWatch> Watches,
-    IReadOnlyList<NotificationUpdatePoll> Updates, IReadOnlyList<NotificationLivePoll> Live);
+    IReadOnlyList<NotificationCatchUpResult> Updates, IReadOnlyList<NotificationLivePoll> Live);
 
 internal sealed class FeedPeekNotificationSession : IDisposable, IAsyncDisposable
 {
@@ -31,6 +30,9 @@ internal sealed class FeedPeekNotificationSession : IDisposable, IAsyncDisposabl
     private readonly FeedProviderRegistry _providerRegistry;
     private readonly FeedPollingService _pollingService;
     private readonly FeedSession _feedSession;
+    private readonly NotificationUpdatePoller _updatePoller;
+    private readonly Dictionary<SourceNotificationKey, string> _sourceNames = [];
+    private readonly Dictionary<(SourceNotificationKey Source, string Creator), string> _creatorNames = [];
     private readonly SemaphoreSlim _operationGate = new(1, 1);
     private readonly HashSet<string> _registeredPluginProviders = new(StringComparer.Ordinal);
     private readonly CreatorNotificationMembershipTracker _creatorMembership = new();
@@ -49,6 +51,7 @@ internal sealed class FeedPeekNotificationSession : IDisposable, IAsyncDisposabl
         _providerRegistry = new FeedProviderRegistry([_rssProvider]);
         _pollingService = new FeedPollingService(_store, _providerRegistry);
         _feedSession = new FeedSession(_store, _pollingService);
+        _updatePoller = new NotificationUpdatePoller(_store, _providerRegistry);
     }
 
     public Task<NotificationPollBatch> PollNotificationsAsync(NotificationSelection selection,
@@ -56,12 +59,19 @@ internal sealed class FeedPeekNotificationSession : IDisposable, IAsyncDisposabl
         => RunExclusiveAsync(async token =>
         {
             if (selection.Mode == NotificationSelectionMode.None)
+            {
+                _updatePoller.Prune([]);
                 return new NotificationPollBatch([], [], []);
+            }
             await EnsureInitializedAsync(token).ConfigureAwait(false);
             selection = selection with { Sources = await _store.GetSourceNotificationRulesAsync(token).ConfigureAwait(false) };
             var sources = (await _feedSession.GetSourceSummariesAsync(token).ConfigureAwait(false))
                 .ToDictionary(item => new SourceNotificationKey(item.Source.ProviderId, item.Source.SourceId), item => item.Source);
             var subscriptions = await _feedSession.GetSubscriptionsAsync(token).ConfigureAwait(false);
+            _sourceNames.Clear();
+            _creatorNames.Clear();
+            foreach (var source in sources.Values)
+                _sourceNames[new(source.ProviderId, source.SourceId)] = source.DisplayName;
             selection = selection with { CreatorPolicies = await CreatorNotificationPolicies.MigrateAsync(_store,
                 sources.Values.ToArray(), subscriptions, _pluginRuntime.GetManifest, selection.Creators, token).ConfigureAwait(false) };
             _creatorMembership.Prune(sources.Keys);
@@ -78,7 +88,7 @@ internal sealed class FeedPeekNotificationSession : IDisposable, IAsyncDisposabl
                     .ApplyTo(rule);
             }).ToArray() };
             var watches = new List<NotificationWatch>();
-            var updates = new List<NotificationUpdatePoll>();
+            var updates = new List<NotificationCatchUpResult>();
             var live = new List<NotificationLivePoll>();
             foreach (var subscription in subscriptions.Where(item => item.IsEnabled && IsAvailableProvider(item.ProviderId)))
             {
@@ -115,6 +125,8 @@ internal sealed class FeedPeekNotificationSession : IDisposable, IAsyncDisposabl
                         membership[sourceKey] = authorSnapshot;
                     }
                     selected = CreatorNotificationMembershipTracker.ExpandWatches(key, selected, authorSnapshot);
+                    foreach (var creator in authorSnapshot.Creators.Values)
+                        _creatorNames[(sourceKey, creator.CreatorKey)] = creator.DisplayName;
                 }
                 var policy = selection.CreatorPolicies?.FirstOrDefault(item => item.Key == sourceKey);
                 var useCreatorScope = policy is null || (kind == NotificationKind.Updates
@@ -129,13 +141,13 @@ internal sealed class FeedPeekNotificationSession : IDisposable, IAsyncDisposabl
                 {
                     if (kind == NotificationKind.Updates)
                     {
-                        var poll = await _feedSession.RefreshAsync(subscription, token).ConfigureAwait(false);
-                        var currentKeys = poll.NotificationItems.Select(item => item.Key).ToHashSet();
-                        var stored = await _store.GetItemsAsync(new FeedQuery(ProviderId: key.ProviderId,
-                            SourceId: key.SourceId, FeedId: key.FeedId, Limit: 5000), token).ConfigureAwait(false);
-                        // FirstSeenAt also captures items inserted by a foreground refresh before our 304 response.
-                        updates.Add(new(key, stored.Where(item => currentKeys.Contains(item.Item.Key))
-                            .Select(item => new NotificationUpdateObservation(item.Item, item.FirstSeenAt)).ToArray(), DateTimeOffset.UtcNow));
+                        var generation = NotificationStateChanges.Generation(new(key), selection.Mode,
+                            subscription.SubscriptionId + "|" + subscription.CredentialProfileId + "|" + subscription.Endpoint,
+                            includeCreatorScope: false);
+                        var poll = await _updatePoller.PollAsync(subscription, generation, token).ConfigureAwait(false);
+                        updates.Add(poll);
+                        if (!poll.IsComplete)
+                            NotificationService.TraceNotification($"Notification catch-up pending. provider={key.ProviderId}, source={key.SourceId}, feed={key.FeedId}, gaps={poll.PendingGaps}, cursor={poll.ContinuationCursor}, error={poll.Error}");
                     }
                     else
                     {
@@ -157,6 +169,8 @@ internal sealed class FeedPeekNotificationSession : IDisposable, IAsyncDisposabl
                     NotificationService.TraceNotification($"Notification query failed. provider={key.ProviderId}, source={key.SourceId}, feed={key.FeedId}: {exception}");
                 }
             }
+            _updatePoller.Prune(watches.Where(watch => watch.Key.Feed.Kind == NotificationKind.Updates)
+                .Select(watch => watch.Key.Feed));
             return new NotificationPollBatch(watches, updates, live);
         }, cancellationToken);
 
@@ -247,6 +261,19 @@ internal sealed class FeedPeekNotificationSession : IDisposable, IAsyncDisposabl
     public bool CanAddToViewLater(string providerId)
         => _pluginRuntime.SupportsCapability(providerId, "collection.viewLater")
             && _pluginRuntime.SupportsCapability(providerId, "item.actions");
+
+    public void AcknowledgeUpdates(NotificationPollBatch batch)
+    {
+        foreach (var result in batch.Updates) _updatePoller.Acknowledge(result);
+    }
+
+    public string GetNotificationDisplayName(FeedItem item)
+    {
+        if (CreatorNotificationPolicies.SupportsAuthors(_pluginRuntime.GetManifest(item.ProviderId)))
+            return item.CreatorKey is not null && _creatorNames.TryGetValue((new(item.ProviderId, item.SourceId), item.CreatorKey), out var name)
+                ? name : string.IsNullOrWhiteSpace(item.AuthorName) ? "作者" : item.AuthorName;
+        return _sourceNames.GetValueOrDefault(new(item.ProviderId, item.SourceId)) ?? item.AuthorName;
+    }
 
     public Task<IReadOnlyList<NotificationCreatorTarget>> GetCreatorNotificationTargetsAsync(
         CancellationToken cancellationToken = default)
@@ -511,6 +538,7 @@ internal sealed class FeedPeekNotificationSession : IDisposable, IAsyncDisposabl
         await _operationGate.WaitAsync().ConfigureAwait(false);
         try
         {
+            _updatePoller.Dispose();
             await _pluginRuntime.DisposeAsync().ConfigureAwait(false);
             _rssProvider.Dispose();
             await _store.DisposeAsync().ConfigureAwait(false);

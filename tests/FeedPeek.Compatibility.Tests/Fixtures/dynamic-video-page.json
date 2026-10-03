@@ -35,11 +35,12 @@
               "pgc": {
                 "bvid": "BV1PGC",
                 "aid": "202",
-                "title": "PGC 标题"
+                "title": "PGC 标题",
+                "desc": "PGC 描述"
               }
             }
           },
-          "module_author": { "mid": 1002, "name": "PGC 作者", "pub_ts": "1700000100" }
+          "module_author": { "mid": 1002, "name": "PGC 作者" }
         }
       },
       {
@@ -48,6 +49,7 @@
             "major": {
               "opus": {
                 "title": "Opus 标题",
+                "summary": { "text": "Opus 摘要" },
                 "jump_url": "https://www.bilibili.com/av303",
                 "pics": [ { "url": "//img.example/opus.jpg" } ]
               }

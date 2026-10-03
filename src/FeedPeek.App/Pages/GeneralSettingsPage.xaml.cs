@@ -1,17 +1,13 @@
 using FeedPeek.Helpers;
-using FeedPeek.Models;
+using FeedPeek.Core.Configuration;
 using FeedPeek.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.Win32;
 using Microsoft.Windows.Storage.Pickers;
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Windows.ApplicationModel;
 
 namespace FeedPeek.Pages;
@@ -21,17 +17,12 @@ public sealed partial class GeneralSettingsPage : Page
     private const string StartupTaskId = "FeedPeekPreviewStartupTask";
     private const string StartupRegistryName = "FeedPeek";
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        WriteIndented = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    };
-
     private bool _isLoadingSettings;
     private bool _isInitializingKeepSourceFilter;
     private bool _useRegistryStartup;
     private StartupTask? _startupTask;
+    private bool _configurationBusy;
+    private bool _startupReady;
 
     public GeneralSettingsPage()
     {
@@ -39,6 +30,8 @@ public sealed partial class GeneralSettingsPage : Page
         // 关闭状态的 InfoBar 自身仍是 Visible 并保留 Margin，会占位；统一让它跟随 IsOpen 折叠。
         InfoBarAutoDismiss.CollapseWhenClosed(StartupInfoBar);
         InfoBarAutoDismiss.CollapseWhenClosed(ConfigInfoBar);
+        ExportConfigButton.IsEnabled = false;
+        ImportConfigButton.IsEnabled = false;
         Loaded += GeneralSettingsPage_Loaded;
         Unloaded += GeneralSettingsPage_Unloaded;
     }
@@ -63,6 +56,9 @@ public sealed partial class GeneralSettingsPage : Page
         UpdateCustomLaunchWebPageUrlBoxState();
         await LoadStartupStateAsync();
         _isLoadingSettings = false;
+        _startupReady = true;
+        ExportConfigButton.IsEnabled = true;
+        ImportConfigButton.IsEnabled = true;
 
         SettingsScrollView.ScrollTo(0, 0);
         InitLanguageSelector();
@@ -123,15 +119,29 @@ public sealed partial class GeneralSettingsPage : Page
             return;
         }
 
-        await SetAutoStartEnabledAsync(AutoStartSwitch.IsOn);
+        if (!await SetAutoStartEnabledAsync(AutoStartSwitch.IsOn))
+            SetConfigStatus(LocalizationHelper.GetString("ConfigStartupRestoreFailed"), InfoBarSeverity.Warning);
     }
 
-    private async System.Threading.Tasks.Task SetAutoStartEnabledAsync(bool isEnabled)
+    private async System.Threading.Tasks.Task<bool> SetAutoStartEnabledAsync(bool isEnabled)
     {
         if (_useRegistryStartup)
         {
-            SetRegistryStartupEnabled(isEnabled);
-            return;
+            try
+            {
+                SetRegistryStartupEnabled(isEnabled);
+                var actual = IsRegistryStartupEnabled();
+                SetAutoStartSwitchState(actual);
+                return actual == isEnabled;
+            }
+            catch
+            {
+                _isLoadingSettings = true;
+                try { AutoStartSwitch.IsOn = IsRegistryStartupEnabled(); }
+                catch { AutoStartSwitch.IsOn = false; }
+                _isLoadingSettings = false;
+                return false;
+            }
         }
 
         if (_startupTask is null)
@@ -139,7 +149,7 @@ public sealed partial class GeneralSettingsPage : Page
             _isLoadingSettings = true;
             AutoStartSwitch.IsOn = false;
             _isLoadingSettings = false;
-            return;
+            return !isEnabled;
         }
 
         try
@@ -152,19 +162,32 @@ public sealed partial class GeneralSettingsPage : Page
                     _isLoadingSettings = true;
                     AutoStartSwitch.IsOn = false;
                     _isLoadingSettings = false;
+                    return false;
                 }
             }
             else if (_startupTask.State is StartupTaskState.Enabled)
             {
                 _startupTask.Disable();
             }
+            var actual = _startupTask.State == StartupTaskState.Enabled;
+            SetAutoStartSwitchState(actual);
+            return actual == isEnabled;
         }
         catch
         {
             _isLoadingSettings = true;
             AutoStartSwitch.IsOn = _startupTask.State is StartupTaskState.Enabled;
             _isLoadingSettings = false;
+            return false;
         }
+    }
+
+    private void SetAutoStartSwitchState(bool enabled)
+    {
+        var wasLoading = _isLoadingSettings;
+        _isLoadingSettings = true;
+        try { AutoStartSwitch.IsOn = enabled; }
+        finally { _isLoadingSettings = wasLoading; }
     }
 
     private void RunningLaunchActionBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -271,112 +294,112 @@ public sealed partial class GeneralSettingsPage : Page
 
     private async void ExportConfigButton_Click(object sender, RoutedEventArgs e)
     {
-        var picker = new FileSavePicker(((FrameworkElement)sender).XamlRoot.ContentIslandEnvironment.AppWindowId)
-        {
-            SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
-            SuggestedFileName = $"FeedPeek-config-{DateTime.Now:yyyyMMdd-HHmmss}",
-        };
-        picker.FileTypeChoices.Add(LocalizationHelper.GetString("FilePickerJsonLabel"), [".json"]);
-
-        var result = await picker.PickSaveFileAsync();
-        if (result is null)
-        {
-            return;
-        }
-
+        if (!_startupReady || _configurationBusy) return;
+        SetConfigurationBusy(true);
         try
         {
-            var export = await CreateSettingsExportAsync();
-            var json = JsonSerializer.Serialize(export, JsonOptions);
-            await File.WriteAllTextAsync(result.Path, json);
+            var picker = new FileSavePicker(((FrameworkElement)sender).XamlRoot.ContentIslandEnvironment.AppWindowId)
+            {
+                SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
+                SuggestedFileName = $"FeedPeek-config-{DateTime.Now:yyyyMMdd-HHmmss}",
+            };
+            picker.FileTypeChoices.Add(LocalizationHelper.GetString("FilePickerJsonLabel"), [".json"]);
+            var result = await picker.PickSaveFileAsync();
+            if (result is null) return;
+            var export = await ConfigurationTransferService.ExportAsync(AutoStartSwitch.IsOn);
+            var temporaryPath = result.Path + $".{Guid.NewGuid():N}.tmp";
+            try
+            {
+                await File.WriteAllTextAsync(temporaryPath, export.ToJson());
+                File.Move(temporaryPath, result.Path, overwrite: true);
+            }
+            finally
+            {
+                if (File.Exists(temporaryPath)) File.Delete(temporaryPath);
+            }
             SetConfigStatus(LocalizationHelper.Format("ExportedTo", result.Path), InfoBarSeverity.Success);
         }
         catch (Exception ex)
         {
             SetConfigStatus(LocalizationHelper.Format("ExportFailed", ex.Message), InfoBarSeverity.Error);
         }
+        finally { SetConfigurationBusy(false); }
     }
 
     private async void ImportConfigButton_Click(object sender, RoutedEventArgs e)
     {
-        var picker = new FileOpenPicker(((FrameworkElement)sender).XamlRoot.ContentIslandEnvironment.AppWindowId)
-        {
-            SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
-        };
-        picker.FileTypeFilter.Add(".json");
-
-        var result = await picker.PickSingleFileAsync();
-        if (result is null)
-        {
-            return;
-        }
-
+        if (!_startupReady || _configurationBusy) return;
+        SetConfigurationBusy(true);
         try
         {
-            var json = await File.ReadAllTextAsync(result.Path);
-            var import = JsonSerializer.Deserialize<SettingsExport>(json, JsonOptions)
-                ?? throw new InvalidOperationException(LocalizationHelper.GetString("InvalidConfigFile"));
-
-            await ApplySettingsExportAsync(import);
-            SetConfigStatus(LocalizationHelper.Format("ImportedFrom", result.Path), InfoBarSeverity.Success);
+            var picker = new FileOpenPicker(((FrameworkElement)sender).XamlRoot.ContentIslandEnvironment.AppWindowId)
+            {
+                SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
+            };
+            picker.FileTypeFilter.Add(".json");
+            var result = await picker.PickSingleFileAsync();
+            if (result is null) return;
+            if (new FileInfo(result.Path).Length > 16 * 1024 * 1024)
+                throw new InvalidOperationException(LocalizationHelper.GetString("InvalidConfigFile"));
+            var document = ConfigurationDocument.Parse(await File.ReadAllTextAsync(result.Path));
+            var previousLanguage = AppSettings.AppLanguage;
+            await ConfigurationTransferService.ImportAsync(document);
+            var startupRestored = document.Settings.AutoStartEnabled is not { } startup
+                || await SetAutoStartEnabledAsync(startup);
+            PopulateSettingsControls();
+            if (!string.Equals(previousLanguage, AppSettings.AppLanguage, StringComparison.Ordinal))
+                LocalizationHelper.SetLanguage(AppSettings.AppLanguage);
+            var message = LocalizationHelper.Format("ImportedFrom", result.Path);
+            if (document.IsLegacy) message += " " + LocalizationHelper.GetString("ConfigLegacyImported");
+            if (!string.Equals(previousLanguage, AppSettings.AppLanguage, StringComparison.Ordinal))
+                message += " " + LocalizationHelper.GetString("ConfigLanguageRestart");
+            if (!startupRestored) message += " " + LocalizationHelper.GetString("ConfigStartupRestoreFailed");
+            SetConfigStatus(message, startupRestored ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
         }
         catch (Exception ex)
         {
             SetConfigStatus(LocalizationHelper.Format("ImportFailed", ex.Message), InfoBarSeverity.Error);
         }
+        finally { SetConfigurationBusy(false); }
     }
 
-    private System.Threading.Tasks.Task<SettingsExport> CreateSettingsExportAsync()
+    private void SetConfigurationBusy(bool busy)
     {
-        return System.Threading.Tasks.Task.FromResult(new SettingsExport
+        _configurationBusy = busy;
+        foreach (var control in new Control[]
         {
-            ExportedAt = DateTimeOffset.Now,
-            AutoStartEnabled = AutoStartSwitch.IsOn,
-            RunningLaunchActionValue = AppSettings.RunningLaunchAction.ToString(),
-            CustomLaunchWebPageUrl = AppSettings.CustomLaunchWebPageUrl,
-            DefaultOpenPageValue = AppSettings.DefaultOpenPage.ToString(),
-            SaveMainPanelPosition = AppSettings.SaveMainPanelPosition,
-            MainPanelHeight = AppSettings.MainPanelHeight,
-            NotificationCheckIntervalMinutes = AppSettings.NotificationCheckIntervalMinutes,
-            NotificationTargetMode = AppSettings.NotificationTargetMode.ToString(),
-            LiveSectionDisplayMode = AppSettings.LiveSectionDisplayMode.ToString(),
-            VideoNotificationsEnabled = AppSettings.VideoNotificationsEnabled,
-            LiveNotificationsEnabled = AppSettings.LiveNotificationsEnabled,
-            CustomNotificationCreators = AppSettings.CustomNotificationCreators.ToList(),
-        });
+            RunningLaunchActionBox, CustomLaunchWebPageUrlBox, DefaultOpenPageBox,
+            SaveMainPanelPositionSwitch, MainPanelHeightBox, LiveSectionDisplayModeBox,
+            KeepSourceFilterSwitch, LanguageSelectorBox,
+        }) control.IsEnabled = !busy;
+        AutoStartSwitch.IsEnabled = !busy && (_useRegistryStartup
+            || _startupTask?.State is StartupTaskState.Disabled or StartupTaskState.Enabled);
+        if (!busy) UpdateCustomLaunchWebPageUrlBoxState();
+        ExportConfigButton.IsEnabled = !busy && _startupReady;
+        ImportConfigButton.IsEnabled = !busy && _startupReady;
     }
 
-    private async System.Threading.Tasks.Task ApplySettingsExportAsync(SettingsExport import)
+    private void PopulateSettingsControls()
     {
-        AppSettings.RunningLaunchAction = ParseRunningLaunchAction(import.RunningLaunchActionValue);
-        AppSettings.CustomLaunchWebPageUrl = import.CustomLaunchWebPageUrl;
-        AppSettings.DefaultOpenPage = ParseEnum(import.DefaultOpenPageValue, DefaultOpenPage.Following);
-        AppSettings.SaveMainPanelPosition = import.SaveMainPanelPosition;
-        AppSettings.MainPanelHeight = NormalizeMainPanelHeight(import.MainPanelHeight);
-        AppSettings.NotificationCheckIntervalMinutes = Math.Max(1, import.NotificationCheckIntervalMinutes);
-        AppSettings.NotificationTargetMode = ParseEnum(import.NotificationTargetMode, NotificationTargetMode.AllFollowing);
-        AppSettings.VideoNotificationsEnabled = import.VideoNotificationsEnabled;
-        AppSettings.LiveNotificationsEnabled = import.LiveNotificationsEnabled;
-        AppSettings.LiveSectionDisplayMode = ParseEnum(import.LiveSectionDisplayMode, LiveSectionDisplayMode.Expanded);
-        AppSettings.CustomNotificationCreators = import.CustomNotificationCreators ?? [];
-
         _isLoadingSettings = true;
-        RunningLaunchActionBox.SelectedIndex = AppSettings.RunningLaunchAction == RunningLaunchAction.OpenCustomWebPage ? 1 : 0;
-        CustomLaunchWebPageUrlBox.Text = AppSettings.CustomLaunchWebPageUrl;
-        DefaultOpenPageBox.SelectedIndex = (int)AppSettings.DefaultOpenPage;
-        SaveMainPanelPositionSwitch.IsOn = AppSettings.SaveMainPanelPosition;
-        MainPanelHeightBox.SelectedIndex = AppSettings.MainPanelHeight switch
+        _isInitializingKeepSourceFilter = true;
+        try
         {
-            600 => 0,
-            1000 => 2,
-            _ => 1,
-        };
-        LiveSectionDisplayModeBox.SelectedIndex = (int)AppSettings.LiveSectionDisplayMode;
-        UpdateCustomLaunchWebPageUrlBoxState();
-        AutoStartSwitch.IsOn = import.AutoStartEnabled;
-        _isLoadingSettings = false;
-
-        await SetAutoStartEnabledAsync(import.AutoStartEnabled);
+            RunningLaunchActionBox.SelectedIndex = AppSettings.RunningLaunchAction == RunningLaunchAction.OpenCustomWebPage ? 1 : 0;
+            CustomLaunchWebPageUrlBox.Text = AppSettings.CustomLaunchWebPageUrl;
+            DefaultOpenPageBox.SelectedIndex = (int)AppSettings.DefaultOpenPage;
+            SaveMainPanelPositionSwitch.IsOn = AppSettings.SaveMainPanelPosition;
+            MainPanelHeightBox.SelectedIndex = AppSettings.MainPanelHeight switch { 600 => 0, 1000 => 2, _ => 1 };
+            LiveSectionDisplayModeBox.SelectedIndex = (int)AppSettings.LiveSectionDisplayMode;
+            KeepSourceFilterSwitch.IsOn = AppSettings.KeepPanelSourceFilter;
+            LanguageSelectorBox.SelectedIndex = AppSettings.AppLanguage switch { "zh-CN" => 1, "zh-HK" => 2, _ => 0 };
+            UpdateCustomLaunchWebPageUrlBoxState();
+        }
+        finally
+        {
+            _isInitializingKeepSourceFilter = false;
+            _isLoadingSettings = false;
+        }
     }
 
     private static bool IsRegistryStartupEnabled()
@@ -408,33 +431,6 @@ public sealed partial class GeneralSettingsPage : Page
         }
 
         return $"\"{path}\"";
-    }
-
-    private static TEnum ParseEnum<TEnum>(string? value, TEnum fallback)
-        where TEnum : struct, Enum
-    {
-        return Enum.TryParse<TEnum>(value, ignoreCase: true, out var parsed)
-            ? parsed
-            : fallback;
-    }
-
-    private static RunningLaunchAction ParseRunningLaunchAction(string? value)
-    {
-        if (string.Equals(value, "OpenBilibiliWebPage", StringComparison.OrdinalIgnoreCase))
-        {
-            return RunningLaunchAction.OpenCustomWebPage;
-        }
-
-        return ParseEnum(value, RunningLaunchAction.OpenSettings);
-    }
-
-    private static int NormalizeMainPanelHeight(int value)
-    {
-        return value switch
-        {
-            600 or 800 or 1000 => value,
-            _ => 800,
-        };
     }
 
     private void InitLanguageSelector()
@@ -476,39 +472,7 @@ public sealed partial class GeneralSettingsPage : Page
 
     private void SetConfigStatus(string message, InfoBarSeverity severity)
     {
-        ConfigInfoBar.Message = message ?? string.Empty;
-        ConfigInfoBar.Severity = severity;
-        ConfigInfoBar.IsOpen = !string.IsNullOrWhiteSpace(message);
+        if (!string.IsNullOrWhiteSpace(message)) InfoBarAutoDismiss.Show(ConfigInfoBar, message, severity);
     }
 
-    private sealed class SettingsExport
-    {
-        public DateTimeOffset ExportedAt { get; set; }
-
-        public bool AutoStartEnabled { get; set; }
-
-        [JsonPropertyName("RunningLaunchAction")]
-        public string RunningLaunchActionValue { get; set; } = nameof(Services.RunningLaunchAction.OpenSettings);
-
-        public string CustomLaunchWebPageUrl { get; set; } = "https://github.com/JordanQD/FeedPeek";
-
-        [JsonPropertyName("DefaultOpenPage")]
-        public string DefaultOpenPageValue { get; set; } = nameof(Services.DefaultOpenPage.Following);
-
-        public bool SaveMainPanelPosition { get; set; }
-
-        public int MainPanelHeight { get; set; } = 800;
-
-        public int NotificationCheckIntervalMinutes { get; set; } = 15;
-
-        public string NotificationTargetMode { get; set; } = nameof(Services.NotificationTargetMode.AllFollowing);
-
-        public string LiveSectionDisplayMode { get; set; } = nameof(Services.LiveSectionDisplayMode.Expanded);
-
-        public bool VideoNotificationsEnabled { get; set; } = true;
-
-        public bool LiveNotificationsEnabled { get; set; } = true;
-
-        public List<NotificationCreatorSubscription> CustomNotificationCreators { get; set; } = [];
-    }
 }

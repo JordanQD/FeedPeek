@@ -21,4 +21,5 @@ public sealed record FeedQuery(
     bool SavedOnly = false,
     string? ProviderId = null,
     string? FeedId = null,
-    int Offset = 0);
+    int Offset = 0,
+    IReadOnlyList<string>? ItemIds = null);

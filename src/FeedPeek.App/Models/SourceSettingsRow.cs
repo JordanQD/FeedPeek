@@ -51,6 +51,13 @@ public sealed class SourceSettingsRow
     public bool OpensPluginDetails { get; }
     public string DisplayName => Source.DisplayName;
     public string Detail { get; }
+    /// <summary>The plugin is already named by the parent expander.</summary>
+    public string GroupDetail => SortOrder switch
+    {
+        1 => LocalizationHelper.GetString("NotificationRoomKind"),
+        0 => LocalizationHelper.GetString("NotificationWebsiteKind"),
+        _ => Source.Category,
+    };
     public int SortOrder { get; }
 
     public ImageSource? IconSource => ImageSourceCache.GetIcon(_sourceIconUrl)

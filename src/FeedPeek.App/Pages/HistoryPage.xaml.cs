@@ -32,6 +32,9 @@ public sealed partial class HistoryPage : Page, IMainPanelPage, IDisposable
 
     public void Initialize(FeedPeekPanelSession session) => _session = session;
 
+    public Task LoadCachedAsync(CancellationToken cancellationToken = default)
+        => ActivateAsync(cancellationToken);
+
     public async Task ActivateAsync(CancellationToken cancellationToken = default)
     {
         if (_session is null || _isDisposed) return;

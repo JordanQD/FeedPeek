@@ -44,6 +44,8 @@ public sealed record FeedFollowingExtras(
     IReadOnlyList<CreatorDescriptor> FollowingCreators,
     IReadOnlyList<PluginLiveItem> LiveItems);
 
+public sealed record FeedCachedLiveItems(IReadOnlyList<PluginLiveItem> Items, bool IsComplete);
+
 public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, IAsyncDisposable
 {
     private const string RssEndpointOption = "rss.endpoint";
@@ -56,6 +58,7 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
     internal const int PanelPageSize = 30;
 
     private readonly SqliteFeedStore _store;
+    private readonly PanelLiveCache _liveCache;
     private readonly CookieStore _cookieStore;
     private readonly RssFeedProvider _rssProvider;
     private readonly FeedPeekPluginRuntime _pluginRuntime;
@@ -80,6 +83,7 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
             "feedpeek.db");
 
         _store = new SqliteFeedStore(databasePath);
+        _liveCache = new PanelLiveCache(Path.Combine(Path.GetDirectoryName(databasePath)!, "PanelLiveCache"));
         _rssProvider = new RssFeedProvider();
         _pluginRuntime = new FeedPeekPluginRuntime(_cookieStore);
         _providerRegistry = new FeedProviderRegistry([_rssProvider]);
@@ -452,6 +456,30 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
             new FeedQuery(FeedId: PluginFeedIds.Updates, Limit: PanelPageSize, Offset: 0),
             cancellationToken);
 
+    public async Task<FeedCachedLiveItems> GetCachedLiveItemsAsync(CancellationToken cancellationToken = default)
+    {
+        var result = new FeedCachedLiveItems([], false);
+        await RunExclusiveAsync(async token =>
+        {
+            await EnsureInitializedAsync(token).ConfigureAwait(false);
+            var subscriptions = await _feedSession.GetSubscriptionsAsync(token).ConfigureAwait(false);
+            var items = new List<PluginLiveItem>();
+            var complete = true;
+            foreach (var subscription in subscriptions.Where(item =>
+                MatchesSourceFilter(item) && IsPluginFeed(item, PluginFeedIds.Live)
+                && _pluginRuntime.SupportsCapability(item.ProviderId, "feed.live")))
+            {
+                var context = await _pluginRuntime.TryGetLiveCacheContextAsync(subscription, token).ConfigureAwait(false);
+                if (context is null) { complete = false; continue; }
+                var cached = await _liveCache.ReadAsync(subscription, context, token).ConfigureAwait(false);
+                if (cached is null) complete = false;
+                else items.AddRange(cached);
+            }
+            result = new(items, complete);
+        }, cancellationToken);
+        return result;
+    }
+
     public async Task<FeedFollowingExtras> GetFollowingExtrasAsync(
         CancellationToken cancellationToken = default)
     {
@@ -484,18 +512,34 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
 
                 var liveItems = new List<PluginLiveItem>();
                 foreach (var liveSubscription in subscriptions.Where(item =>
-                    MatchesSourceFilter(item) && IsPluginFeed(item, PluginFeedIds.Live)))
+                    MatchesSourceFilter(item) && IsPluginFeed(item, PluginFeedIds.Live)
+                    && _pluginRuntime.SupportsCapability(item.ProviderId, "feed.live")))
                 {
+                    var context = await _pluginRuntime.TryGetLiveCacheContextAsync(liveSubscription, operationToken)
+                        .ConfigureAwait(false);
+                    var generation = NotificationStateChanges.MembershipGeneration(
+                        new(liveSubscription.ProviderId, liveSubscription.SourceId), liveSubscription.CredentialProfileId);
                     try
                     {
-                        liveItems.AddRange(await _pluginRuntime.GetLiveItemsAsync(
+                        var page = await _pluginRuntime.GetLivePageAsync(
                             liveSubscription,
-                            operationToken).ConfigureAwait(false));
+                            operationToken).ConfigureAwait(false);
+                        if (generation != NotificationStateChanges.MembershipGeneration(
+                            new(liveSubscription.ProviderId, liveSubscription.SourceId), liveSubscription.CredentialProfileId)
+                            || (context is not null && context != await _pluginRuntime.TryGetLiveCacheContextAsync(liveSubscription, operationToken).ConfigureAwait(false)))
+                            continue;
+                        liveItems.AddRange(context is null ? page.Items
+                            : await _liveCache.RecordAsync(liveSubscription, context, page, operationToken).ConfigureAwait(false));
                     }
                     catch (OperationCanceledException) when (operationToken.IsCancellationRequested) { throw; }
                     catch (Exception exception)
                     {
                         RaiseStatus($"直播列表：{DescribeError(exception)}", InfoBarSeverity.Error);
+                        var currentContext = await _pluginRuntime.TryGetLiveCacheContextAsync(liveSubscription, operationToken)
+                            .ConfigureAwait(false);
+                        if (currentContext is null) continue;
+                        liveItems.AddRange(await _liveCache.ReadAsync(liveSubscription, currentContext, operationToken)
+                            .ConfigureAwait(false) ?? []);
                     }
                 }
 
@@ -1105,6 +1149,7 @@ public sealed class FeedPeekPanelSession : INotifyPropertyChanged, IDisposable, 
         CreatorNotificationStatusCache.Remove(new SourceNotificationKey(providerId, sourceId));
         AppSettings.RemoveSourceNotificationState(providerId, sourceId);
         FeedPollSnapshotCache.RemoveSource(providerId, sourceId);
+        await _liveCache.RemoveSourceAsync(providerId, sourceId, token).ConfigureAwait(false);
         NotificationStateChanges.MarkSource(providerId, sourceId);
         AppSettings.NotifyNotificationSettingsChanged();
     }

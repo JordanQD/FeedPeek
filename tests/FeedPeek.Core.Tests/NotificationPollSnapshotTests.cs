@@ -17,7 +17,10 @@ public sealed class NotificationPollSnapshotTests
         var time = new TestTimeProvider(DateTimeOffset.Parse("2026-01-01T00:00:00Z"));
 
         var first = CreateItem(subscription, "first");
-        var second = CreateItem(subscription, "second");
+        var second = CreateItem(subscription, "second") with
+        {
+            PublishedAt = time.GetUtcNow().AddSeconds(1),
+        };
         using var providers = new FeedProviderRegistry([
             new SequenceProvider(
                 new FeedPage([first], null, false, "v1"),
@@ -36,7 +39,7 @@ public sealed class NotificationPollSnapshotTests
 
         var feed = new NotificationFeedKey(subscription.ProviderId, subscription.SourceId,
             subscription.FeedId, NotificationKind.Updates);
-        var tracker = new NotificationBaselineTracker();
+        using var tracker = new NotificationBaselineTracker();
         tracker.Synchronize([new NotificationWatch(new NotificationWatchKey(feed), "test-generation")]);
         Assert.Empty(tracker.ObserveUpdates(feed,
             [new NotificationUpdateObservation(first, firstSeenAt)], time.GetUtcNow()));
@@ -74,7 +77,10 @@ public sealed class NotificationPollSnapshotTests
 
         var provider = new BlockingSequenceProvider(
             CreateItem(subscription, "baseline"),
-            CreateItem(subscription, "after-wait"));
+            CreateItem(subscription, "after-wait") with
+            {
+                PublishedAt = DateTimeOffset.UtcNow.AddSeconds(-1),
+            });
         using var providers = new FeedProviderRegistry([provider]);
         var firstService = new FeedPollingService(store, providers);
         var secondService = new FeedPollingService(store, providers);
@@ -203,7 +209,9 @@ public sealed class NotificationPollSnapshotTests
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            return new FeedPage([first, second], null, false, "v2");
+            return new FeedPage(
+                [first, second with { PublishedAt = DateTimeOffset.UtcNow.AddMilliseconds(-1) }],
+                null, false, "v2");
         }
     }
 

@@ -25,24 +25,25 @@ public sealed class CreatorNotificationLifecycleTests
         var source = new SourceNotificationKey("updates-provider", "updates-source");
         var feed = new NotificationFeedKey(source.ProviderId, source.SourceId, "updates", NotificationKind.Updates);
         var membership = new CreatorNotificationMembershipTracker();
-        var baseline = new NotificationBaselineTracker();
+        using var baseline = new NotificationBaselineTracker();
         var start = DateTimeOffset.Parse("2026-10-01T00:00:00Z");
         void Synchronize(params string[] creators) => baseline.Synchronize(
             CreatorNotificationMembershipTracker.ExpandWatches(feed, [new(feed)],
                 membership.Observe(source, "account", new(creators.Select(id => Creator(source, id)).ToArray(), true)))
                 .Select(key => new NotificationWatch(key, "account")).ToArray());
-        FeedItem Item(string id, string author) => new(source.ProviderId, source.SourceId, feed.FeedId,
-            id, id, author, author, null, "https://example.test/" + id, start, null, null, null, null, null);
+        FeedItem Item(string id, string author, DateTimeOffset? publishedAt = null) => new(source.ProviderId, source.SourceId, feed.FeedId,
+            id, id, author, author, null, "https://example.test/" + id,
+            publishedAt ?? start, null, null, null, null, null);
         Synchronize("existing");
         Assert.Empty(baseline.ObserveUpdates(feed, [], start));
         Synchronize("existing", "new");
         var arrived = start.AddMinutes(1);
-        var first = baseline.ObserveUpdates(feed, [new(Item("existing-update", "existing"), arrived),
+        var first = baseline.ObserveUpdates(feed, [new(Item("existing-update", "existing", arrived), arrived),
             new(Item("new-history", "new"), arrived)], arrived);
         Assert.Equal(["existing-update"], first.Select(item => item.ItemId));
         var later = start.AddMinutes(2);
         Assert.Equal(["new-update"], baseline.ObserveUpdates(feed,
-            [new(Item("new-history", "new"), arrived), new(Item("new-update", "new"), later)], later)
+            [new(Item("new-history", "new"), arrived), new(Item("new-update", "new", later), later)], later)
             .Select(item => item.ItemId));
     }
 
@@ -52,7 +53,7 @@ public sealed class CreatorNotificationLifecycleTests
         var source = new SourceNotificationKey("membership-provider", "membership-source");
         var feed = new NotificationFeedKey(source.ProviderId, source.SourceId, "live", NotificationKind.Live);
         var membership = new CreatorNotificationMembershipTracker();
-        var baseline = new NotificationBaselineTracker();
+        using var baseline = new NotificationBaselineTracker();
         void Synchronize(params string[] creators)
         {
             var snapshot = membership.Observe(source, "account", new(creators.Select(id => Creator(source, id)).ToArray(), true));
@@ -75,7 +76,7 @@ public sealed class CreatorNotificationLifecycleTests
         var source = new SourceNotificationKey("failure-provider", "failure-source");
         var feed = new NotificationFeedKey(source.ProviderId, source.SourceId, "live", NotificationKind.Live);
         var membership = new CreatorNotificationMembershipTracker();
-        var baseline = new NotificationBaselineTracker();
+        using var baseline = new NotificationBaselineTracker();
         void Synchronize(CreatorNotificationMembershipSnapshot snapshot) => baseline.Synchronize(
             CreatorNotificationMembershipTracker.ExpandWatches(feed, [new(feed)], snapshot)
                 .Select(key => new NotificationWatch(key, "account")).ToArray());

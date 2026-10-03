@@ -70,6 +70,20 @@ internal sealed class FeedPeekPluginRuntime : IDisposable, IAsyncDisposable
     public PluginManifest? GetManifest(string pluginId)
         => _packages.TryGetValue(pluginId, out var package) ? package.Manifest : null;
 
+    internal async Task<string?> TryGetLiveCacheContextAsync(FeedSubscription subscription, CancellationToken token)
+    {
+        try
+        {
+            var fingerprint = string.IsNullOrWhiteSpace(subscription.CredentialProfileId)
+                ? "anonymous"
+                : await _credentials.GetCacheFingerprintAsync(subscription.ProviderId, subscription.CredentialProfileId, token)
+                    .ConfigureAwait(false);
+            return PanelLiveCache.ContextKey(subscription, GetManifest(subscription.ProviderId)?.Version, fingerprint);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception) { return null; } // Cache unavailable: fetching fresh data can still succeed.
+    }
+
     public Task<IReadOnlyList<PluginManagementEntry>> GetPluginEntriesAsync(
         CancellationToken cancellationToken = default)
         => _installations.GetEntriesAsync(cancellationToken);

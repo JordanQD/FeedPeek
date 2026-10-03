@@ -18,7 +18,10 @@ public sealed partial class FollowingPage : Page, IMainPanelPage, IDisposable
     private readonly System.Collections.ObjectModel.ObservableCollection<FeedLiveItemRow> _liveItems = [];
     private FeedPeekPanelSession? _session;
     private bool _isLiveSectionExpanded;
+    private readonly LiveSectionDisplayMode _initialLiveSectionDisplayMode;
     private bool _isDisposed;
+    private bool _hasLoadedItems;
+    private bool _hasLoadedExtras;
 
     public FollowingPage()
     {
@@ -32,31 +35,58 @@ public sealed partial class FollowingPage : Page, IMainPanelPage, IDisposable
             new PointerEventHandler(ItemsListView_PointerPressed),
             handledEventsToo: true);
         LiveItemsRepeater.ItemsSource = _liveItems;
-        _isLiveSectionExpanded = AppSettings.LiveSectionDisplayMode != LiveSectionDisplayMode.Collapsed;
+        _initialLiveSectionDisplayMode = AppSettings.LiveSectionDisplayMode;
+        _isLiveSectionExpanded = AppSettings.LastLiveSectionExpanded
+            ?? (_initialLiveSectionDisplayMode != LiveSectionDisplayMode.Collapsed);
+        ApplyLiveSectionState();
     }
 
     public void Initialize(FeedPeekPanelSession session) => _session = session;
 
-    public async Task ActivateAsync(CancellationToken cancellationToken = default)
+    public async Task LoadCachedAsync(CancellationToken cancellationToken = default)
     {
         var session = _session;
         if (session is null || _isDisposed) return;
         var result = await session.GetFollowingPageAsync(cancellationToken);
-        if (_isDisposed) return;
+        if (_isDisposed || cancellationToken.IsCancellationRequested) return;
         _items.Reset(result.Items, result.HasMore);
-        EmptyPanel.Visibility = _items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        _hasLoadedItems = true;
+        ApplyLiveSectionState();
+        var live = await session.GetCachedLiveItemsAsync(cancellationToken);
+        if (_isDisposed || cancellationToken.IsCancellationRequested) return;
+        _liveItems.Clear();
+        foreach (var item in live.Items) _liveItems.Add(new FeedLiveItemRow(item));
+        _hasLoadedExtras = live.IsComplete;
+        ApplyLiveSectionState();
+    }
+
+    public async Task ActivateAsync(CancellationToken cancellationToken = default)
+    {
+        await LoadCachedAsync(cancellationToken);
+        var session = _session;
+        if (session is null || _isDisposed || cancellationToken.IsCancellationRequested) return;
         var extras = await session.GetFollowingExtrasAsync(cancellationToken);
-        if (_isDisposed) return;
+        if (_isDisposed || cancellationToken.IsCancellationRequested) return;
         _liveItems.Clear();
         // BitmapImage is a WinUI object and must be created on the UI thread.
         foreach (var item in extras.LiveItems) _liveItems.Add(new FeedLiveItemRow(item));
+        _hasLoadedExtras = true;
         ApplyLiveSectionState();
     }
 
     private void LiveSectionToggleButton_Click(object sender, RoutedEventArgs e)
     {
         _isLiveSectionExpanded = !_isLiveSectionExpanded;
+        RememberLiveSectionState();
         ApplyLiveSectionState();
+    }
+
+    internal void RememberLiveSectionState()
+    {
+        // An explicit display-mode change in settings wins over a page created before that change.
+        if (!_isDisposed && _initialLiveSectionDisplayMode != LiveSectionDisplayMode.Hidden
+            && _initialLiveSectionDisplayMode == AppSettings.LiveSectionDisplayMode)
+            AppSettings.LastLiveSectionExpanded = _isLiveSectionExpanded;
     }
 
     private async void LiveItem_Click(object sender, RoutedEventArgs e)
@@ -136,7 +166,8 @@ public sealed partial class FollowingPage : Page, IMainPanelPage, IDisposable
             ? Visibility.Visible
             : Visibility.Collapsed;
         LiveSectionChevron.Glyph = _isLiveSectionExpanded ? "\uE70D" : "\uE76C";
-        EmptyPanel.Visibility = _items.Count == 0 && (isHidden || _liveItems.Count == 0)
+        EmptyPanel.Visibility = _hasLoadedItems && _items.Count == 0
+            && (isHidden || (_hasLoadedExtras && _liveItems.Count == 0))
             ? Visibility.Visible
             : Visibility.Collapsed;
     }

@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <root>
   <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
   <resheader name="version"><value>2.0</value></resheader>
@@ -35,13 +35,13 @@
   <data name="GeneralCustomLaunchWebPageCard.Description" xml:space="preserve"><value>重复打开应用并选择打开网页时使用。</value></data>
   <data name="GeneralCustomLaunchWebPageUrlBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>自定义网页</value></data>
   <data name="GeneralDefaultOpenPageCard.Header" xml:space="preserve"><value>默认打开页面</value></data>
-  <data name="GeneralDefaultOpenPageCard.Description" xml:space="preserve"><value>点击任务栏托盘图标打开应用时默认显示的页面。</value></data>
+  <data name="GeneralDefaultOpenPageCard.Description" xml:space="preserve"><value>重新打开托盘弹窗时的默认页面；开启“保留弹窗位置”后优先恢复上次页面。</value></data>
   <data name="GeneralDefaultOpenPageBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>默认打开页面</value></data>
   <data name="GeneralDefaultOpenFollowingItem.Content" xml:space="preserve"><value>关注</value></data>
   <data name="GeneralDefaultOpenHistoryItem.Content" xml:space="preserve"><value>历史</value></data>
   <data name="GeneralDefaultOpenViewLaterItem.Content" xml:space="preserve"><value>稍后再看</value></data>
   <data name="GeneralSaveMainPanelPositionCard.Header" xml:space="preserve"><value>保留弹窗位置</value></data>
-  <data name="GeneralSaveMainPanelPositionCard.Description" xml:space="preserve"><value>关闭托盘弹窗后保留当前页面和直播区域展开状态。关闭时，每次打开都会按默认设置复位。</value></data>
+  <data name="GeneralSaveMainPanelPositionCard.Description" xml:space="preserve"><value>开启后记住上次页面和直播区域展开状态；关闭此选项后，每次打开按默认设置显示。</value></data>
   <data name="GeneralSaveMainPanelPositionSwitch.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>保留弹窗位置</value></data>
   <data name="GeneralLoginStatusCard.Header" xml:space="preserve"><value>登录状态</value></data>
   <data name="GeneralLoginStatusCard.Description" xml:space="preserve"><value>登录 Bilibili 账号后可以获取关注动态。</value></data>
@@ -53,23 +53,26 @@
   <data name="GeneralAccountInfoBar.Message" xml:space="preserve"><value>正在检查登录状态...</value></data>
   <data name="GeneralDisplaySectionHeader.Text" xml:space="preserve"><value>显示</value></data>
   <data name="GeneralMainPanelHeightCard.Header" xml:space="preserve"><value>主弹窗高度</value></data>
-  <data name="GeneralMainPanelHeightCard.Description" xml:space="preserve"><value>设置任务栏托盘主弹窗的高度。</value></data>
+  <data name="GeneralMainPanelHeightCard.Description" xml:space="preserve"><value>设置托盘主弹窗的高度。关闭并重新打开弹窗后生效，实际高度受屏幕可用空间限制。</value></data>
   <data name="GeneralMainPanelHeightBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>主弹窗高度</value></data>
   <data name="GeneralMainPanelHeight600Item.Content" xml:space="preserve"><value>600</value></data>
   <data name="GeneralMainPanelHeight800Item.Content" xml:space="preserve"><value>800</value></data>
   <data name="GeneralMainPanelHeight1000Item.Content" xml:space="preserve"><value>1000</value></data>
   <data name="GeneralLiveSectionDisplayModeCard.Header" xml:space="preserve"><value>正在直播</value></data>
-  <data name="GeneralLiveSectionDisplayModeCard.Description" xml:space="preserve"><value>控制关注页面中正在直播区域的显示方式。</value></data>
+  <data name="GeneralLiveSectionDisplayModeCard.Description" xml:space="preserve"><value>设置关注页直播区域的默认显示方式。关闭并重新打开托盘弹窗后生效。</value></data>
   <data name="GeneralLiveSectionDisplayModeBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>正在直播</value></data>
   <data name="GeneralLiveExpandedItem.Content" xml:space="preserve"><value>默认展开显示</value></data>
   <data name="GeneralLiveCollapsedItem.Content" xml:space="preserve"><value>默认折叠显示</value></data>
   <data name="GeneralLiveHiddenItem.Content" xml:space="preserve"><value>不显示</value></data>
+  <data name="GeneralKeepSourceFilterCard.Header" xml:space="preserve"><value>保留源筛选</value></data>
+  <data name="GeneralKeepSourceFilterCard.Description" xml:space="preserve"><value>开启后记住上次选择的来源，下次打开继续筛选；关闭后，下次打开显示所有来源。</value></data>
+  <data name="GeneralKeepSourceFilterSwitch.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>保留源筛选</value></data>
   <data name="GeneralConfigSectionHeader.Text" xml:space="preserve"><value>配置</value></data>
   <data name="GeneralExportConfigCard.Header" xml:space="preserve"><value>导出配置</value></data>
-  <data name="GeneralExportConfigCard.Description" xml:space="preserve"><value>导出当前通知、启动和登录状态配置。</value></data>
+  <data name="GeneralExportConfigCard.Description" xml:space="preserve"><value>备份通用设置、来源订阅和通知规则；不包含插件文件和登录凭据。</value></data>
   <data name="GeneralExportConfigButton.Content" xml:space="preserve"><value>导出</value></data>
   <data name="GeneralImportConfigCard.Header" xml:space="preserve"><value>导入配置</value></data>
-  <data name="GeneralImportConfigCard.Description" xml:space="preserve"><value>从 JSON 配置文件恢复通知、启动和登录状态配置。</value></data>
+  <data name="GeneralImportConfigCard.Description" xml:space="preserve"><value>从 JSON 文件合并恢复设置、来源订阅和通知规则。对应插件需另外安装并登录。</value></data>
   <data name="GeneralImportConfigButton.Content" xml:space="preserve"><value>导入</value></data>
   <data name="GeneralDebugSectionHeader.Text" xml:space="preserve"><value>调试</value></data>
   <data name="GeneralFeedPeekPreviewCard.Header" xml:space="preserve"><value>FeedPeek RSS 预览界面</value></data>
@@ -313,9 +316,18 @@
   <data name="NotificationPluginAddCard.Header" xml:space="preserve"><value>添加通知</value></data>
   <data name="NotificationPluginAddButton.Content" xml:space="preserve"><value>添加通知</value></data>
   <data name="NotificationPluginAddButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>添加通知</value></data>
-  <data name="NotificationPluginGroupCount" xml:space="preserve"><value>{0} 个来源 · {1} 个自选作者</value></data>
+  <data name="NotificationPluginGroupCount" xml:space="preserve"><value>{0} 个关注</value></data>
   <data name="NotificationPluginSettingsCard.Header" xml:space="preserve"><value>通知设置</value></data>
   <data name="NotificationPluginSettingsButton.Content" xml:space="preserve"><value>设置</value></data>
   <data name="NotificationRoomKind" xml:space="preserve"><value>直播间</value></data>
   <data name="NotificationWebsiteKind" xml:space="preserve"><value>网站订阅</value></data>
+  <data name="SourcesMySourcesHeader.Text" xml:space="preserve"><value>我的来源</value></data>
+  <data name="SourcesPluginSettingsCard.Header" xml:space="preserve"><value>插件设置</value></data>
+  <data name="SourcesPluginSettingsButton.Content" xml:space="preserve"><value>设置</value></data>
+  <data name="SourcesEmptyList.Text" xml:space="preserve"><value>还没有添加来源或安装插件</value></data>
+  <data name="SourcesPluginUnavailable" xml:space="preserve"><value>插件不可用</value></data>
+  <data name="SourcesPluginKind" xml:space="preserve"><value>插件</value></data>
+  <data name="ConfigStartupRestoreFailed" xml:space="preserve"><value>开机启动设置未能生效，请在 Windows 的启动应用中检查。</value></data>
+  <data name="ConfigLegacyImported" xml:space="preserve"><value>旧格式文件仅恢复其中已有的字段，不包含来源订阅。</value></data>
+  <data name="ConfigLanguageRestart" xml:space="preserve"><value>界面语言将在重启应用后完整生效。</value></data>
 </root>

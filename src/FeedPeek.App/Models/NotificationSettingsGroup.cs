@@ -65,15 +65,13 @@ public sealed class NotificationSettingsGroup
             if (Source is not null)
                 return Source.Detail;
 
-            var sourceCount = Items.Where(item => item.Creator is null)
-                .Select(item => item.Key)
-                .Distinct()
-                .Count();
-            // AllFollowing hides personal cards, but the saved selection count stays visible.
-            var authorCount = Items.Where(item => item.Creator is null)
+            // Each room/source is one followed target. An author policy is a
+            // configuration entry, so count its saved authors instead of the policy itself.
+            // AllFollowing may hide personal cards; retain the saved selection count.
+            var count = Items.Where(item => item.Creator is null)
                 .GroupBy(item => item.Key)
-                .Sum(group => group.First().SelectedCreatorCount);
-            return LocalizationHelper.Format("NotificationPluginGroupCount", sourceCount, authorCount);
+                .Sum(group => (group.First().Policy is null ? 1 : 0) + group.First().SelectedCreatorCount);
+            return LocalizationHelper.Format("NotificationPluginGroupCount", count);
         }
     }
 

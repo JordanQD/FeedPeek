@@ -51,7 +51,7 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
         ContentFrame.Navigated += ContentFrame_Navigated;
         Loaded += MainPanelControl_Loaded;
         ApplyBusyState();
-        SelectDefaultPage();
+        SelectInitialPage();
     }
 
     private void OnSourceDirectoryUpdated(object? sender, EventArgs e)
@@ -435,12 +435,18 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
         Height = height;
     }
 
-    private void SelectDefaultPage()
+    private void SelectInitialPage()
     {
-        var selectedItem = AppSettings.DefaultOpenPage switch
+        var section = AppSettings.LastMainPanelSection ?? (AppSettings.DefaultOpenPage switch
         {
-            DefaultOpenPage.History => HistorySelectorItem,
-            DefaultOpenPage.ViewLater => ViewLaterSelectorItem,
+            DefaultOpenPage.History => MainPanelSection.History,
+            DefaultOpenPage.ViewLater => MainPanelSection.ViewLater,
+            _ => MainPanelSection.Following,
+        });
+        var selectedItem = section switch
+        {
+            MainPanelSection.History => HistorySelectorItem,
+            MainPanelSection.ViewLater => ViewLaterSelectorItem,
             _ => FollowingSelectorItem,
         };
 
@@ -458,16 +464,14 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
         _flyoutCts?.Dispose();
         _flyoutCts = new CancellationTokenSource();
 
-        if (!AppSettings.SaveMainPanelPosition)
-        {
-            SelectDefaultPage();
-        }
-
+        // The constructor already selected the restored/default page. Do not activate it here:
+        // initialization below renders local data first, before any network refresh can take the gate.
         _ = InitializeAndRefreshAsync(_flyoutCts.Token);
     }
 
     public void OnFlyoutClosed()
     {
+        if (_isFlyoutOpen) RememberPanelState();
         _isFlyoutOpen = false;
         _flyoutCts?.Cancel();
     }
@@ -494,6 +498,10 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
         try
         {
             await Session.InitializeAsync(cancellationToken);
+            if (_isDisposed || cancellationToken.IsCancellationRequested) return;
+            if (ContentFrame.Content is IMainPanelPage page)
+                await page.LoadCachedAsync(cancellationToken);
+            if (_isDisposed || cancellationToken.IsCancellationRequested) return;
             await RefreshFilterEntriesAsync();
             await Session.RefreshAllAsync(cancellationToken);
             await ActivateCurrentPageAsync(cancellationToken);
@@ -503,6 +511,7 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
         }
         catch
         {
+            if (_isDisposed || cancellationToken.IsCancellationRequested) return;
             await ActivateCurrentPageAsync(cancellationToken);
         }
     }
@@ -513,6 +522,17 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
     {
         if (_isSettingDefaultPage || _isDisposed) return;
         NavigateToSelectedPage(resetScrollPosition: true);
+        if (_isFlyoutOpen) RememberPanelState();
+    }
+
+    private void RememberPanelState()
+    {
+        AppSettings.LastMainPanelSection = ContentSelectorBar.SelectedItem == HistorySelectorItem
+            ? MainPanelSection.History
+            : ContentSelectorBar.SelectedItem == ViewLaterSelectorItem
+                ? MainPanelSection.ViewLater
+                : MainPanelSection.Following;
+        (ContentFrame.Content as FollowingPage)?.RememberLiveSectionState();
     }
 
     private void NavigateToSelectedPage(bool resetScrollPosition)
@@ -563,6 +583,8 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
 
     private void DisposeCurrentPage()
     {
+        if (_isFlyoutOpen)
+            (ContentFrame.Content as FollowingPage)?.RememberLiveSectionState();
         if (ContentFrame.Content is IDisposable disposable)
         {
             disposable.Dispose();
@@ -644,6 +666,7 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
     public void Dispose()
     {
         if (_isDisposed) return;
+        if (_isFlyoutOpen) RememberPanelState();
         _isDisposed = true;
         _isFlyoutOpen = false;
         _flyoutCts?.Cancel();

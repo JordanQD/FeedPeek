@@ -7,6 +7,22 @@
     xmlns:models="using:FeedPeek.Models"
     xmlns:helpers="using:FeedPeek.Helpers">
 
+    <Page.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="ms-appx:///CommunityToolkit.WinUI.Controls.SettingsControls/SettingsExpander/SettingsExpander.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <DataTemplate x:Key="PluginSubscriptionTemplate" x:DataType="models:SourceSettingsRow">
+                <controls:SettingsCard
+                    Header="{x:Bind DisplayName}" Description="{x:Bind GroupDetail}"
+                    AutomationProperties.Name="{x:Bind DisplayName}"
+                    DataContext="{x:Bind}" IsClickEnabled="True" Click="SourceCard_Click"
+                    helpers:SettingsCardAvatar.IsEnabled="True"
+                    helpers:SettingsCardAvatar.Source="{x:Bind IconSource}" />
+            </DataTemplate>
+        </ResourceDictionary>
+    </Page.Resources>
+
     <ScrollView
         x:Name="SettingsScrollView"
         VerticalScrollBarVisibility="Auto"
@@ -96,15 +112,18 @@
                         IsOpen="False"
                         Visibility="Collapsed" />
                     <TextBlock
+                        x:Uid="SourcesMySourcesHeader"
                         Grid.Row="1"
                         Style="{StaticResource SettingsSectionHeaderTextBlockStyle}"
-                        Text="我的订阅" />
+                        Text="我的来源" />
                 </Grid>
-                <Grid MinHeight="180">
+                <Grid x:Name="SourceGroupsContainer">
                         <ListView
-                            x:Name="SourcesListView"
+                            x:Name="SourceGroupsListView"
                             IsItemClickEnabled="False"
                             IsSwipeEnabled="False"
+                            ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                            ScrollViewer.VerticalScrollMode="Disabled"
                             SelectionMode="None">
                             <ListView.ItemContainerStyle>
                                 <Style TargetType="ListViewItem">
@@ -114,16 +133,35 @@
                                 </Style>
                             </ListView.ItemContainerStyle>
                             <ListView.ItemTemplate>
-                                <DataTemplate x:DataType="models:SourceSettingsRow">
-                                    <controls:SettingsCard
-                                        AutomationProperties.Name="{x:Bind DisplayName}"
-                                        DataContext="{x:Bind}"
-                                        IsClickEnabled="True"
-                                        Click="SourceCard_Click"
-                                        Header="{x:Bind DisplayName}"
-                                        Description="{x:Bind Detail}"
-                                        helpers:SettingsCardAvatar.IsEnabled="True"
-                                        helpers:SettingsCardAvatar.Source="{x:Bind IconSource}" />
+                                <DataTemplate x:DataType="models:SourceSettingsGroup">
+                                    <Grid>
+                                        <controls:SettingsCard
+                                            Visibility="{x:Bind SourceVisibility}"
+                                            AutomationProperties.Name="{x:Bind Source.DisplayName}"
+                                            DataContext="{x:Bind Source}"
+                                            IsClickEnabled="True" Click="SourceCard_Click"
+                                            Header="{x:Bind Source.DisplayName}" Description="{x:Bind Source.Detail}"
+                                            helpers:SettingsCardAvatar.IsEnabled="True"
+                                            helpers:SettingsCardAvatar.Source="{x:Bind Source.IconSource}" />
+                                        <controls:SettingsExpander
+                                            Visibility="{x:Bind PluginVisibility}"
+                                            Header="{x:Bind DisplayName}" Description="{x:Bind Detail}"
+                                            AutomationProperties.Name="{x:Bind DisplayName}" DataContext="{x:Bind}"
+                                            ItemsSource="{x:Bind Subscriptions}" ItemTemplate="{StaticResource PluginSubscriptionTemplate}"
+                                            helpers:SettingsCardAvatar.IsEnabled="True" helpers:SettingsCardAvatar.Source="{x:Bind IconSource}"
+                                            Loaded="PluginExpander_Loaded" Expanded="PluginExpander_StateChanged" Collapsed="PluginExpander_StateChanged">
+                                            <controls:SettingsExpander.ItemsFooter>
+                                                <controls:SettingsCard
+                                                    x:Uid="SourcesPluginSettingsCard" Header="插件设置"
+                                                    Visibility="{x:Bind PluginSettingsVisibility}"
+                                                    Style="{StaticResource DefaultSettingsExpanderItemStyle}">
+                                                    <Button x:Uid="SourcesPluginSettingsButton" Content="设置"
+                                                        AutomationProperties.Name="{x:Bind DisplayName}"
+                                                        DataContext="{x:Bind Plugin}" Click="PluginCard_Click" />
+                                                </controls:SettingsCard>
+                                            </controls:SettingsExpander.ItemsFooter>
+                                        </controls:SettingsExpander>
+                                    </Grid>
                                 </DataTemplate>
                             </ListView.ItemTemplate>
                         </ListView>
@@ -134,48 +172,8 @@
                             VerticalAlignment="Center"
                             Spacing="8">
                             <FontIcon HorizontalAlignment="Center" FontSize="28" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Glyph="&#xE774;" />
-                            <TextBlock FontWeight="SemiBold" Text="还没有订阅" />
+                            <TextBlock x:Uid="SourcesEmptyList" FontWeight="SemiBold" Text="还没有添加来源或安装插件" />
                         </StackPanel>
-                </Grid>
-                <TextBlock
-                    Style="{StaticResource SettingsSectionHeaderTextBlockStyle}"
-                    Text="已安装插件" />
-                <Grid MinHeight="180">
-                    <ListView
-                        x:Name="PluginsListView"
-                        IsItemClickEnabled="False"
-                        IsSwipeEnabled="False"
-                        SelectionMode="None">
-                        <ListView.ItemContainerStyle>
-                            <Style TargetType="ListViewItem">
-                                <Setter Property="Padding" Value="0" />
-                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                                <Setter Property="IsTabStop" Value="False" />
-                            </Style>
-                        </ListView.ItemContainerStyle>
-                        <ListView.ItemTemplate>
-                            <DataTemplate x:DataType="models:PluginSettingsRow">
-                                <controls:SettingsCard
-                                    AutomationProperties.Name="{x:Bind DisplayName}"
-                                    DataContext="{x:Bind}"
-                                    IsClickEnabled="True"
-                                    Click="PluginCard_Click"
-                                    Header="{x:Bind DisplayName}"
-                                    Description="{x:Bind Detail}"
-                                    helpers:SettingsCardAvatar.IsEnabled="True"
-                                    helpers:SettingsCardAvatar.Source="{x:Bind IconSource}" />
-                            </DataTemplate>
-                        </ListView.ItemTemplate>
-                    </ListView>
-                    <StackPanel
-                        x:Name="PluginsEmptyPanel"
-                        HorizontalAlignment="Center"
-                        VerticalAlignment="Center"
-                        Spacing="8">
-                        <FontIcon HorizontalAlignment="Center" FontSize="28"
-                                  Foreground="{ThemeResource TextFillColorTertiaryBrush}" Glyph="&#xE74C;" />
-                        <TextBlock FontWeight="SemiBold" Text="还没有安装插件" />
-                    </StackPanel>
                 </Grid>
             </StackPanel>
         </Grid>

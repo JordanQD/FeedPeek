@@ -287,6 +287,7 @@ public sealed partial class SqliteFeedStore : IFeedStore
               AND (@provider_id IS NULL OR i.provider_id = @provider_id)
               AND (@source_id IS NULL OR i.source_id = @source_id)
               AND (@feed_id IS NULL OR i.feed_id = @feed_id)
+                AND (@item_ids IS NULL OR i.item_id IN (SELECT value FROM json_each(@item_ids)))
             ORDER BY i.published_at DESC, i.item_id COLLATE NOCASE
             LIMIT @limit OFFSET @offset;
             """);
@@ -296,6 +297,7 @@ public sealed partial class SqliteFeedStore : IFeedStore
         AddParameter(command, "@provider_id", query.ProviderId);
         AddParameter(command, "@source_id", query.SourceId);
         AddParameter(command, "@feed_id", query.FeedId);
+        AddParameter(command, "@item_ids", query.ItemIds is null ? null : Serialize(query.ItemIds));
         AddParameter(command, "@limit", NormalizeLimit(query.Limit));
         AddParameter(command, "@offset", Math.Max(0, query.Offset));
 

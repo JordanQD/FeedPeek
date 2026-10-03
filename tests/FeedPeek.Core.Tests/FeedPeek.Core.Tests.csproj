@@ -26,6 +26,7 @@
     <Compile Include="..\..\src\FeedPeek.App\Helpers\LocalImageFile.cs" Link="AppHelpers\LocalImageFile.cs" />
     <Compile Include="..\..\src\FeedPeek.App\Services\NotificationStateChanges.cs" Link="AppServices\NotificationStateChanges.cs" />
     <Compile Include="..\..\src\FeedPeek.App\Services\CreatorNotificationStatusCache.cs" Link="AppServices\CreatorNotificationStatusCache.cs" />
+    <Compile Include="..\..\src\FeedPeek.App\Services\PanelLiveCache.cs" Link="AppServices\PanelLiveCache.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Fixtures\Plugins\**\*" CopyToOutputDirectory="PreserveNewest" />
