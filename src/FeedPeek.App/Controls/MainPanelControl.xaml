@@ -106,7 +106,11 @@
                     VerticalAlignment="Bottom"
                     IsClosable="True"
                     IsOpen="False"
+                    Closing="StatusInfoBar_Closing"
                     CloseButtonClick="StatusNotificationInfoBar_CloseButtonClick">
+                    <InfoBar.RenderTransform>
+                        <TranslateTransform x:Name="StatusNotificationTranslate" />
+                    </InfoBar.RenderTransform>
                     <TextBlock
                         x:Name="StatusInfoBarText"
                         VerticalAlignment="Center"

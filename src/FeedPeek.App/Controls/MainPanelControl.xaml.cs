@@ -15,6 +15,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Windows.UI.ViewManagement;
 
 namespace FeedPeek.Controls;
 
@@ -28,6 +29,10 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
     private bool _isFlyoutOpen;
     private bool _isDisposed;
     private bool _isSettingDefaultPage;
+    private readonly UISettings _statusUiSettings = new();
+    private Storyboard? _statusStoryboard;
+    private bool _isStatusHiding;
+    private bool _allowStatusClose;
 
     public FeedPeekPanelSession Session { get; }
 
@@ -629,13 +634,104 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
         DispatcherQueue.TryEnqueue(() =>
         {
             if (_isDisposed) return;
-            StatusNotificationLayer.Visibility = Visibility.Visible;
             StatusInfoBarText.Text = status.Message;
             StatusInfoBar.Severity = status.Severity;
-            InfoBarAutoDismiss.Show(
-                StatusInfoBar,
-                () => StatusNotificationLayer.Visibility = Visibility.Collapsed);
+            ShowStatusNotification();
         });
+    }
+
+    private void ShowStatusNotification()
+    {
+        var wasVisible = StatusNotificationLayer.Visibility == Visibility.Visible && StatusInfoBar.IsOpen;
+        var wasAnimating = _statusStoryboard is not null;
+        var opacity = wasVisible ? StatusInfoBar.Opacity : 0d;
+        var offset = wasVisible ? StatusNotificationTranslate.Y : 12d;
+        StopStatusAnimation();
+        _isStatusHiding = false;
+        StatusNotificationLayer.Visibility = Visibility.Visible;
+        StatusInfoBar.IsHitTestVisible = true;
+        InfoBarAutoDismiss.Show(StatusInfoBar);
+        if (!_statusUiSettings.AnimationsEnabled)
+        {
+            StatusInfoBar.Opacity = 1;
+            StatusNotificationTranslate.Y = 0;
+        }
+        else if (!wasVisible || wasAnimating)
+        {
+            AnimateStatusNotification(opacity, offset, 1, 0, TimeSpan.FromMilliseconds(160));
+        }
+    }
+
+    private void StatusInfoBar_Closing(InfoBar sender, InfoBarClosingEventArgs args)
+    {
+        if (_allowStatusClose || _isDisposed || !_statusUiSettings.AnimationsEnabled)
+        {
+            StopStatusAnimation();
+            _isStatusHiding = false;
+            StatusNotificationLayer.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        // Keep the native template open until the exit finishes; IsOpen=false would hide it immediately.
+        args.Cancel = true;
+        if (_isStatusHiding) return;
+        _isStatusHiding = true;
+        StatusInfoBar.IsHitTestVisible = false;
+        AnimateStatusNotification(StatusInfoBar.Opacity, StatusNotificationTranslate.Y,
+            0, 8, TimeSpan.FromMilliseconds(120), CloseStatusNotification);
+    }
+
+    private void AnimateStatusNotification(double fromOpacity, double fromOffset, double toOpacity,
+        double toOffset, TimeSpan duration, Action? onCompleted = null)
+    {
+        StopStatusAnimation();
+        StatusInfoBar.Opacity = fromOpacity;
+        StatusNotificationTranslate.Y = fromOffset;
+        var storyboard = new Storyboard();
+        var fade = new DoubleAnimation
+        {
+            From = fromOpacity, To = toOpacity, Duration = new Duration(duration),
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+        };
+        Storyboard.SetTarget(fade, StatusInfoBar);
+        Storyboard.SetTargetProperty(fade, "Opacity");
+        var slide = new DoubleAnimation
+        {
+            From = fromOffset, To = toOffset, Duration = new Duration(duration),
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+        };
+        Storyboard.SetTarget(slide, StatusNotificationTranslate);
+        Storyboard.SetTargetProperty(slide, "Y");
+        storyboard.Children.Add(fade);
+        storyboard.Children.Add(slide);
+        storyboard.Completed += (_, _) =>
+        {
+            // A newer notification can cancel/reverse an exit; its older completion must do nothing.
+            if (_isDisposed || _statusStoryboard != storyboard) return;
+            _statusStoryboard = null;
+            storyboard.Stop();
+            StatusInfoBar.Opacity = toOpacity;
+            StatusNotificationTranslate.Y = toOffset;
+            onCompleted?.Invoke();
+        };
+        _statusStoryboard = storyboard;
+        storyboard.Begin();
+    }
+
+    private void StopStatusAnimation()
+    {
+        var previous = _statusStoryboard;
+        _statusStoryboard = null;
+        previous?.Stop();
+    }
+
+    private void CloseStatusNotification()
+    {
+        _allowStatusClose = true;
+        try { InfoBarAutoDismiss.Dismiss(StatusInfoBar); }
+        finally { _allowStatusClose = false; }
+        _isStatusHiding = false;
+        StatusNotificationLayer.Visibility = Visibility.Collapsed;
     }
 
     private void PluginAccountEvents_Changed(object? sender, EventArgs e)
@@ -668,6 +764,8 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
         if (_isDisposed) return;
         if (_isFlyoutOpen) RememberPanelState();
         _isDisposed = true;
+        StopStatusAnimation();
+        CloseStatusNotification();
         _isFlyoutOpen = false;
         _flyoutCts?.Cancel();
         _flyoutCts?.Dispose();
