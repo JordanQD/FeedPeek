@@ -155,12 +155,12 @@ public sealed class JintPluginTransport : IPluginTransport
         var runtime = new JintPluginTransport(package, host, options);
         try
         {
-            await runtime.InitializeAsync(cancellationToken);
+            await runtime.InitializeAsync(cancellationToken).ConfigureAwait(false);
             return runtime;
         }
         catch
         {
-            await runtime.DisposeAsync();
+            await runtime.DisposeAsync().ConfigureAwait(false);
             throw;
         }
     }
@@ -195,7 +195,8 @@ public sealed class JintPluginTransport : IPluginTransport
             return SerializeFailure(request.RequestId, "REQUEST_INVALID", "Plugin payload is required.");
 
         using var gateCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _lifetime.Token);
-        await _invocationGate.WaitAsync(gateCancellation.Token);
+        // Runtime work and cancellation cleanup must finish even while the caller's UI is closing.
+        await _invocationGate.WaitAsync(gateCancellation.Token).ConfigureAwait(false);
         try
         {
             using var timeout = new CancellationTokenSource(_options.InvocationTimeout);
@@ -217,7 +218,7 @@ public sealed class JintPluginTransport : IPluginTransport
                     request.RequestId,
                     request.Method,
                     requestedContext,
-                    linked.Token);
+                    linked.Token).ConfigureAwait(false);
             }
             catch (PluginHostBridgeException ex)
             {
@@ -244,7 +245,7 @@ public sealed class JintPluginTransport : IPluginTransport
                 _cookieHeader = await LoadCookieHeaderAsync(
                     request.PluginId,
                     authorizedContext.CredentialProfileId,
-                    linked.Token);
+                    linked.Token).ConfigureAwait(false);
             }
 
             var invocationScope = new PluginInvocationScope(authorizedContext, linked.Token);
@@ -254,7 +255,7 @@ public sealed class JintPluginTransport : IPluginTransport
             try
             {
                 var script = BuildInvocationScript(requestJson);
-                var value = await _engine.EvaluateAsync(script, "feedpeek-invoke.js", linked.Token);
+                var value = await _engine.EvaluateAsync(script, "feedpeek-invoke.js", linked.Token).ConfigureAwait(false);
                 linked.Token.ThrowIfCancellationRequested();
                 if (!value.IsString())
                     return SerializeFailure(request.RequestId, "PROTOCOL_RESPONSE_INVALID", "Plugin response was not JSON text.");
@@ -299,7 +300,7 @@ public sealed class JintPluginTransport : IPluginTransport
             finally
             {
                 _activeScope = null;
-                if (!await invocationScope.StopAsync(_options.HostTaskDrainTimeout))
+                if (!await invocationScope.StopAsync(_options.HostTaskDrainTimeout).ConfigureAwait(false))
                     Interlocked.Exchange(ref _faulted, 1);
             }
         }
@@ -314,7 +315,7 @@ public sealed class JintPluginTransport : IPluginTransport
         if (Interlocked.Exchange(ref _disposeState, 1) != 0)
             return;
         _lifetime.Cancel();
-        await _invocationGate.WaitAsync();
+        await _invocationGate.WaitAsync().ConfigureAwait(false);
         try
         {
             _engine.Dispose();
@@ -490,7 +491,7 @@ public sealed class JintPluginTransport : IPluginTransport
         {
             var request = JsonSerializer.Deserialize<HostHttpRequest>(requestJson, PluginJson.SerializerOptions)
                 ?? throw new PluginHostBridgeException("HTTP_REQUEST_INVALID", "Host.http.request requires an options object.");
-            var result = await _host.Http.SendAsync(_package.Manifest, scope.Context, request, scope.Token);
+            var result = await _host.Http.SendAsync(_package.Manifest, scope.Context, request, scope.Token).ConfigureAwait(false);
             var isText = string.Equals(result.BodyEncoding, "utf8", StringComparison.OrdinalIgnoreCase);
             // The host always exposes the raw bytes as base64 in addition to bodyText.
             return SerializeBridgeSuccess(new
@@ -530,14 +531,14 @@ public sealed class JintPluginTransport : IPluginTransport
             object? result = operation switch
             {
                 "getStatus" => new CredentialStatus(await _host.Credentials.ExistsAsync(
-                    context.PluginId, request.CredentialProfileId, scope.Token)),
+                    context.PluginId, request.CredentialProfileId, scope.Token).ConfigureAwait(false)),
                 "getOpaqueSecret" => new Dictionary<string, string?>
                 {
                     ["value"] = await _host.Credentials.GetOpaqueSecretAsync(
-                        context.PluginId, request.CredentialProfileId, RequireSecretName(request.Name), scope.Token),
+                        context.PluginId, request.CredentialProfileId, RequireSecretName(request.Name), scope.Token).ConfigureAwait(false),
                 },
-                "setOpaqueSecret" => await SetSecretAsync(context, request, scope.Token),
-                "deleteOpaqueSecret" => await DeleteSecretAsync(context, request, scope.Token),
+                "setOpaqueSecret" => await SetSecretAsync(context, request, scope.Token).ConfigureAwait(false),
+                "deleteOpaqueSecret" => await DeleteSecretAsync(context, request, scope.Token).ConfigureAwait(false),
                 _ => throw new PluginHostBridgeException("CREDENTIAL_OPERATION_UNSUPPORTED", "Credential operation is not supported."),
             };
             return SerializeBridgeSuccess(result);
@@ -553,14 +554,14 @@ public sealed class JintPluginTransport : IPluginTransport
         if (request.Value is null)
             throw new PluginHostBridgeException("CREDENTIAL_VALUE_REQUIRED", "Credential value is required.");
         await _host.Credentials.SetOpaqueSecretAsync(
-            context.PluginId, request.CredentialProfileId, RequireSecretName(request.Name), request.Value, cancellationToken);
+            context.PluginId, request.CredentialProfileId, RequireSecretName(request.Name), request.Value, cancellationToken).ConfigureAwait(false);
         return new { updated = true };
     }
 
     private async Task<object> DeleteSecretAsync(PluginHostContext context, CredentialRequest request, CancellationToken cancellationToken)
     {
         await _host.Credentials.DeleteOpaqueSecretAsync(
-            context.PluginId, request.CredentialProfileId, RequireSecretName(request.Name), cancellationToken);
+            context.PluginId, request.CredentialProfileId, RequireSecretName(request.Name), cancellationToken).ConfigureAwait(false);
         return new { deleted = true };
     }
 
@@ -733,7 +734,7 @@ public sealed class JintPluginTransport : IPluginTransport
                     }
                     try
                     {
-                        await Task.WhenAll(tasks).WaitAsync(timeoutSource.Token);
+                        await Task.WhenAll(tasks).WaitAsync(timeoutSource.Token).ConfigureAwait(false);
                     }
                     catch when (!timeoutSource.IsCancellationRequested)
                     {

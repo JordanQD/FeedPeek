@@ -19,7 +19,7 @@ using Windows.UI.ViewManagement;
 
 namespace FeedPeek.Controls;
 
-public sealed partial class MainPanelControl : UserControl, IDisposable
+public sealed partial class MainPanelControl : UserControl, IAsyncDisposable
 {
     private readonly HashSet<IDisposable> _initializedPages = [];
     private readonly List<(string Key, string Text, string? IconUrl, string? WebsiteUrl, string? SuggestedUrl)> _filterEntries = [];
@@ -28,6 +28,7 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
     private int _previousSelectedPageIndex = -1;
     private bool _isFlyoutOpen;
     private bool _isDisposed;
+    private Task? _disposeTask;
     private bool _isSettingDefaultPage;
     private readonly UISettings _statusUiSettings = new();
     private Storyboard? _statusStoryboard;
@@ -232,7 +233,7 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
         WebsiteDialogTitle.Text = $"打开「{displayName}」";
         WebsiteDialogInput.Text = suggestedUrl ?? string.Empty;
         WebsiteDialogLayer.Visibility = Visibility.Visible;
-        _websiteDialogTcs = new TaskCompletionSource<WebsiteDialogResult>();
+        _websiteDialogTcs = new TaskCompletionSource<WebsiteDialogResult>(TaskCreationOptions.RunContinuationsAsynchronously);
         WebsiteDialogInput.Focus(FocusState.Programmatic);
 
         WebsiteDialogResult result;
@@ -248,7 +249,7 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
             _websiteDialogName = null;
         }
 
-        if (!result.Save || !IsUsableWebsite(result.Url))
+        if (_isDisposed || !result.Save || !IsUsableWebsite(result.Url))
         {
             return;
         }
@@ -274,6 +275,8 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
         {
             // Session already surfaces actionable errors.
         }
+
+        if (_isDisposed) return;
 
         for (var i = 0; i < _filterEntries.Count; i++)
         {
@@ -508,7 +511,9 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
                 await page.LoadCachedAsync(cancellationToken);
             if (_isDisposed || cancellationToken.IsCancellationRequested) return;
             await RefreshFilterEntriesAsync();
+            if (_isDisposed || cancellationToken.IsCancellationRequested) return;
             await Session.RefreshAllAsync(cancellationToken);
+            if (_isDisposed || cancellationToken.IsCancellationRequested) return;
             await ActivateCurrentPageAsync(cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -582,7 +587,8 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
     }
 
     private Task ActivateCurrentPageAsync(CancellationToken cancellationToken)
-        => ContentFrame.Content is IMainPanelPage page
+        => !_isDisposed && !cancellationToken.IsCancellationRequested
+            && ContentFrame.Content is IMainPanelPage page
             ? page.ActivateAsync(cancellationToken)
             : Task.CompletedTask;
 
@@ -759,7 +765,15 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
     private void StatusNotificationInfoBar_CloseButtonClick(InfoBar sender, object args)
         => InfoBarAutoDismiss.Dismiss(StatusInfoBar);
 
-    public void Dispose()
+    public ValueTask DisposeAsync()
+    {
+        // The host calls this on the UI thread. Keep the synchronous UI teardown
+        // here, but never block that thread while an in-flight session operation drains.
+        _disposeTask ??= DisposeCoreAsync();
+        return new ValueTask(_disposeTask);
+    }
+
+    private async Task DisposeCoreAsync()
     {
         if (_isDisposed) return;
         if (_isFlyoutOpen) RememberPanelState();
@@ -770,6 +784,7 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
         _flyoutCts?.Cancel();
         _flyoutCts?.Dispose();
         _flyoutCts = null;
+        _websiteDialogTcs?.TrySetResult(new WebsiteDialogResult(false, null));
         Loaded -= MainPanelControl_Loaded;
         SourceDirectory.Updated -= OnSourceDirectoryUpdated;
         PluginAccountEvents.Changed -= PluginAccountEvents_Changed;
@@ -780,8 +795,8 @@ public sealed partial class MainPanelControl : UserControl, IDisposable
         DisposeCurrentPage();
         foreach (var page in _initializedPages) page.Dispose();
         _initializedPages.Clear();
-        Session.Dispose();
         ImageSourceCache.Clear();
+        await Session.DisposeAsync().ConfigureAwait(false);
         WorkingSetTrimmer.RequestTrim();
     }
 }

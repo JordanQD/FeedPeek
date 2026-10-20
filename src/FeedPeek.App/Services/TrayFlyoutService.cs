@@ -155,13 +155,7 @@ internal sealed class TrayFlyoutService : IDisposable
             DesktopFlyout.IsOpenProperty,
             _mainFlyoutIsOpenCallbackToken);
 
-        if (_mainFlyoutIsland.Content is MainPanelControl panel)
-        {
-            panel.OnFlyoutClosed();
-            panel.Dispose();
-        }
-
-        _mainFlyoutIsland.Content = null;
+        ReleaseFlyoutContent();
         _mainFlyout.Dispose();
         _contextMenu.Dispose();
     }
@@ -287,13 +281,7 @@ internal sealed class TrayFlyoutService : IDisposable
         _lastMainFlyoutClosedAt = DateTime.UtcNow;
         TraceFlyout("DesktopFlyout closed");
 
-        if (_mainFlyoutIsland.Content is MainPanelControl closedPanel)
-        {
-            closedPanel.OnFlyoutClosed();
-            closedPanel.Dispose();
-            _mainFlyoutIsland.Content = null;
-            Helpers.WorkingSetTrimmer.RequestTrim();
-        }
+        ReleaseFlyoutContent();
 
         QueuePendingContextMenuShow();
     }
@@ -639,13 +627,35 @@ internal sealed class TrayFlyoutService : IDisposable
     private void CancelPendingMainFlyoutShow(bool disposeUnopenedContent)
     {
         CompletePendingMainFlyoutShow();
-        if (disposeUnopenedContent
-            && !_mainFlyout.IsOpen
-            && _mainFlyoutIsland.Content is MainPanelControl panel)
+        if (disposeUnopenedContent && !_mainFlyout.IsOpen)
         {
-            panel.OnFlyoutClosed();
-            panel.Dispose();
-            _mainFlyoutIsland.Content = null;
+            ReleaseFlyoutContent();
+        }
+    }
+
+    private void ReleaseFlyoutContent()
+    {
+        if (_mainFlyoutIsland.Content is not MainPanelControl panel)
+        {
+            return;
+        }
+
+        panel.OnFlyoutClosed();
+        _mainFlyoutIsland.Content = null;
+        // DesktopFlyouts hides the native host only after the IsOpen callback
+        // returns. Awaiting synchronously here would leave its transparent HWND visible.
+        _ = DisposePanelAsync(panel);
+    }
+
+    private static async Task DisposePanelAsync(MainPanelControl panel)
+    {
+        try
+        {
+            await panel.DisposeAsync().ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            TraceFlyout($"Main panel disposal failed: {exception}");
         }
     }
 

@@ -334,6 +334,83 @@ public sealed class PluginRuntimeTests
     }
 
     [Fact]
+    public async Task Runtime_DisposeCancelsActiveCallWithoutPumpingCallerContext()
+    {
+        var package = await new PluginManifestLoader().LoadAsync(FixturePluginRoot);
+        var http = new SignalingBlockingHttpBridge();
+        var runtime = await JintPluginTransport.CreateAsync(package, CreateHost(http: http));
+        var context = new NonPumpingSynchronizationContext();
+        Task? disposal = null;
+        try
+        {
+            var invocation = context.Run(() => InvokeAsync(
+                runtime, PluginMethods.FeedGetUpdates, FeedPayload(null, 2)));
+            await http.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.False(invocation.IsCompleted);
+
+            // This mirrors closing a panel with a pending HTTP call, without a UI message pump.
+            disposal = context.Run(() => runtime.DisposeAsync().AsTask());
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => invocation.WaitAsync(TimeSpan.FromSeconds(5)));
+            await disposal.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(0, context.PostCount);
+        }
+        finally
+        {
+            // Only release queued callbacks after the assertions so a regression cannot strand
+            // engine resources or the test runner when the bounded wait above fails.
+            context.Release();
+            await (disposal ?? runtime.DisposeAsync().AsTask()).WaitAsync(TimeSpan.FromSeconds(5));
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Catalog_CancellationAndCleanupDoNotRequireCallerContext(bool disposeCatalog)
+    {
+        var http = new SignalingBlockingHttpBridge();
+        var catalog = new PluginRuntimeCatalog(CreateHost(http: http));
+        await catalog.LoadAsync(Path.GetDirectoryName(FixturePluginRoot)!);
+        using var cancellation = new CancellationTokenSource();
+        var context = new NonPumpingSynchronizationContext();
+        Task? cleanup = null;
+        try
+        {
+            var request = new PluginRequestEnvelope<JsonElement>(
+                Guid.NewGuid().ToString("N"),
+                PluginProtocolVersion.Current,
+                "mock.feed",
+                PluginMethods.FeedGetUpdates,
+                JsonSerializer.SerializeToElement(FeedPayload(null, 2), PluginJson.SerializerOptions));
+            var requestJson = JsonSerializer.Serialize(request, PluginJson.SerializerOptions);
+            var invocation = context.Run(() => catalog.InvokeAsync("mock.feed", requestJson, cancellation.Token));
+            await http.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.False(invocation.IsCompleted);
+
+            // Catalog cleanup must wait for the leased invocation, then dispose its runtime.
+            cleanup = context.Run(() => disposeCatalog
+                ? catalog.DisposeAsync().AsTask()
+                : catalog.DisableAsync("mock.feed"));
+            Assert.False(cleanup.IsCompleted);
+            cancellation.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => invocation.WaitAsync(TimeSpan.FromSeconds(5)));
+            await cleanup.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.DoesNotContain("mock.feed", catalog.LoadedPluginIds);
+            Assert.Equal(0, context.PostCount);
+        }
+        finally
+        {
+            context.Release();
+            cancellation.Cancel();
+            if (cleanup is not null)
+                await cleanup.WaitAsync(TimeSpan.FromSeconds(5));
+            await catalog.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+        }
+    }
+
+    [Fact]
     public async Task HostTaskThatIgnoresCancellation_QuarantinesRuntimeWithoutHanging()
     {
         var package = await new PluginManifestLoader().LoadAsync(FixturePluginRoot);
@@ -627,7 +704,7 @@ public sealed class PluginRuntimeTests
             method,
             JsonSerializer.SerializeToElement(payload, PluginJson.SerializerOptions));
         var requestJson = JsonSerializer.Serialize(request, PluginJson.SerializerOptions);
-        var responseJson = await transport.InvokeAsync(requestJson, cancellationToken);
+        var responseJson = await transport.InvokeAsync(requestJson, cancellationToken).ConfigureAwait(false);
         return JsonSerializer.Deserialize<PluginResponseEnvelope<JsonElement>>(responseJson, PluginJson.SerializerOptions)!;
     }
 
@@ -713,6 +790,70 @@ public sealed class PluginRuntimeTests
                 new Dictionary<string, string>(),
                 body,
                 "utf8"));
+        }
+    }
+
+    private sealed class SignalingBlockingHttpBridge : IPluginHttpBridge
+    {
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task<HostHttpResponse> SendAsync(
+            PluginManifest manifest,
+            PluginHostContext context,
+            HostHttpRequest request,
+            CancellationToken cancellationToken)
+        {
+            Started.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+            throw new UnreachableException();
+        }
+    }
+
+    private sealed class NonPumpingSynchronizationContext : SynchronizationContext
+    {
+        private readonly object _sync = new();
+        private readonly Queue<(SendOrPostCallback Callback, object? State)> _pending = new();
+        private bool _released;
+        private int _postCount;
+
+        public int PostCount => Volatile.Read(ref _postCount);
+
+        public T Run<T>(Func<T> action)
+        {
+            var previous = Current;
+            SetSynchronizationContext(this);
+            try
+            {
+                return action();
+            }
+            finally
+            {
+                SetSynchronizationContext(previous);
+            }
+        }
+
+        public override void Post(SendOrPostCallback callback, object? state)
+        {
+            Interlocked.Increment(ref _postCount);
+            lock (_sync)
+            {
+                if (!_released)
+                {
+                    _pending.Enqueue((callback, state));
+                    return;
+                }
+            }
+            ThreadPool.QueueUserWorkItem(_ => callback(state));
+        }
+
+        public void Release()
+        {
+            lock (_sync)
+            {
+                _released = true;
+                while (_pending.TryDequeue(out var work))
+                    ThreadPool.QueueUserWorkItem(_ => work.Callback(work.State));
+            }
         }
     }
 

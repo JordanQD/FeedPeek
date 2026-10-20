@@ -54,16 +54,16 @@ public sealed class PluginRuntimeCatalog : IAsyncDisposable
         CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposeState) != 0, this);
-        await _lifecycleGate.WaitAsync(cancellationToken);
+        await _lifecycleGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposeState) != 0, this);
-            await ClearCoreAsync();
+            await ClearCoreAsync().ConfigureAwait(false);
             var discovered = await _discovery.DiscoverAsync(
                 pluginRoots,
                 disabledPluginIds,
                 expectedPackageHashes,
-                cancellationToken);
+                cancellationToken).ConfigureAwait(false);
             var results = new List<PluginDiscoveryResult>(discovered.Count);
             foreach (var result in discovered)
             {
@@ -75,7 +75,7 @@ public sealed class PluginRuntimeCatalog : IAsyncDisposable
 
                 try
                 {
-                    var transport = await _transportFactory.CreateAsync(result.Package!, _host, _options, cancellationToken);
+                    var transport = await _transportFactory.CreateAsync(result.Package!, _host, _options, cancellationToken).ConfigureAwait(false);
                     lock (_sync)
                         _transports.Add(result.Package!.Manifest.PluginId, new TransportEntry(transport));
                     results.Add(result);
@@ -111,7 +111,7 @@ public sealed class PluginRuntimeCatalog : IAsyncDisposable
         }
         try
         {
-            return await entry.Transport.InvokeAsync(requestJson, cancellationToken);
+            return await entry.Transport.InvokeAsync(requestJson, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -122,7 +122,7 @@ public sealed class PluginRuntimeCatalog : IAsyncDisposable
     public async Task DisableAsync(string pluginId)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposeState) != 0, this);
-        await _lifecycleGate.WaitAsync();
+        await _lifecycleGate.WaitAsync().ConfigureAwait(false);
         try
         {
             ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposeState) != 0, this);
@@ -131,8 +131,8 @@ public sealed class PluginRuntimeCatalog : IAsyncDisposable
                 _transports.Remove(pluginId, out entry);
             if (entry is not null)
             {
-                await entry.StopAsync();
-                await entry.Transport.DisposeAsync();
+                await entry.StopAsync().ConfigureAwait(false);
+                await entry.Transport.DisposeAsync().ConfigureAwait(false);
             }
         }
         finally
@@ -145,10 +145,10 @@ public sealed class PluginRuntimeCatalog : IAsyncDisposable
     {
         if (Interlocked.Exchange(ref _disposeState, 1) != 0)
             return;
-        await _lifecycleGate.WaitAsync();
+        await _lifecycleGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            await ClearCoreAsync();
+            await ClearCoreAsync().ConfigureAwait(false);
         }
         finally
         {
@@ -166,8 +166,8 @@ public sealed class PluginRuntimeCatalog : IAsyncDisposable
         }
         foreach (var entry in transports)
         {
-            await entry.StopAsync();
-            await entry.Transport.DisposeAsync();
+            await entry.StopAsync().ConfigureAwait(false);
+            await entry.Transport.DisposeAsync().ConfigureAwait(false);
         }
     }
 
