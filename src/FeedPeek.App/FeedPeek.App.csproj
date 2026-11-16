@@ -153,7 +153,7 @@
     <!-- Microsoft Store reserves the fourth version component and requires it to stay zero. -->
     <AppxAutoIncrementPackageRevision>False</AppxAutoIncrementPackageRevision>
     <GenerateTestArtifacts>False</GenerateTestArtifacts>
-    <AppxBundle>Auto</AppxBundle>
+    <AppxBundle>Always</AppxBundle>
     <HoursBetweenUpdateChecks>0</HoursBetweenUpdateChecks>
     <AppxBundlePlatforms>x64</AppxBundlePlatforms>
     <PackageAndDeploySatelliteResourceLanguages>zh-CN;zh-HK</PackageAndDeploySatelliteResourceLanguages>

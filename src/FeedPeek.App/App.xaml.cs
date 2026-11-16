@@ -8,6 +8,7 @@ using System;
 using System.IO;
 using System.Threading.Tasks;
 using Windows.ApplicationModel;
+using Windows.Storage;
 using AppActivationArguments = Microsoft.Windows.AppLifecycle.AppActivationArguments;
 using AppInstance = Microsoft.Windows.AppLifecycle.AppInstance;
 using ExtendedActivationKind = Microsoft.Windows.AppLifecycle.ExtendedActivationKind;
@@ -27,6 +28,7 @@ public partial class App : Application
 
     public App()
     {
+        InitializeDiagnostics();
         _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
         AppDataMigrationService.Run();
         LocalizationHelper.SetLanguage(AppSettings.AppLanguage);
@@ -36,11 +38,13 @@ public partial class App : Application
 
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
+        AppDiagnostics.Write("App.Launched");
         DispatcherShutdownMode = DispatcherShutdownMode.OnExplicitShutdown;
 
         var activatedArgs = AppInstance.GetCurrent().GetActivatedEventArgs();
         if (await RedirectToMainInstanceIfNeededAsync(activatedArgs))
         {
+            AppDiagnostics.Write("Exit.SecondaryInstanceRedirected");
             Exit();
             return;
         }
@@ -48,8 +52,34 @@ public partial class App : Application
         AppInstance.GetCurrent().Activated += AppInstance_Activated;
 
         InitializeTrayAndData();
+        AppDiagnostics.Write("App.TrayReady");
         HandleActivation(activatedArgs, isRedirectedActivation: false);
 
+    }
+
+    private void InitializeDiagnostics()
+    {
+        string dataDirectory;
+        try
+        {
+            dataDirectory = ApplicationData.Current.LocalFolder.Path;
+        }
+        catch
+        {
+            dataDirectory = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        }
+
+        AppDiagnostics.Initialize(Path.Combine(dataDirectory, "FeedPeek", "Diagnostics"));
+        UnhandledException += (_, args) =>
+            AppDiagnostics.Exception("Exception.WinUI.Unhandled", args.Exception);
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+            AppDiagnostics.Write("Exception.AppDomain.Unhandled",
+                $"terminating={args.IsTerminating}; {args.ExceptionObject}");
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+            AppDiagnostics.Exception("Exception.Task.Unobserved.NonFatalByDefault", args.Exception);
+        AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+            AppDiagnostics.Write("Process.ExitCallback");
+        // Observe only: do not set Handled/SetObserved or change termination behavior.
     }
 
     private static async Task<bool> RedirectToMainInstanceIfNeededAsync(AppActivationArguments activatedArgs)
@@ -118,6 +148,7 @@ public partial class App : Application
 
     private void ExitApplication()
     {
+        AppDiagnostics.Write("Exit.UserRequested");
         _trayFlyoutService?.Dispose();
         _trayFlyoutService = null;
         _backgroundNotificationMonitor?.Dispose();
@@ -126,6 +157,7 @@ public partial class App : Application
         _notificationManager = null;
         _settingsWindow?.Close();
         _settingsWindow = null;
+        AppDiagnostics.Write("Exit.CleanupCompleted");
         Exit();
     }
 

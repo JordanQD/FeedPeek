@@ -104,6 +104,7 @@ internal sealed class TrayFlyoutService : IDisposable
         _trayIcon.RightClicked += OnTrayIconRightClicked;
         _trayIcon.Show();
 
+        AppDiagnostics.Write("Tray.Initialized", $"animations={_uiSettings.AnimationsEnabled}; backdrop=DesktopAcrylic");
         TraceFlyout($"DesktopFlyouts initialized. AnimationsEnabled={_uiSettings.AnimationsEnabled}");
     }
 
@@ -250,6 +251,7 @@ internal sealed class TrayFlyoutService : IDisposable
                 break;
 
             case DesktopFlyoutTransitionState.Open:
+                AppDiagnostics.Write("Flyout.Opened");
                 TraceFlyout("DesktopFlyout opened");
                 if (_mainFlyoutIsland.Content is MainPanelControl panel)
                 {
@@ -260,6 +262,7 @@ internal sealed class TrayFlyoutService : IDisposable
             case DesktopFlyoutTransitionState.Closed:
                 EndBackgroundOpenWatch();
                 _lastMainFlyoutClosedAt = DateTime.UtcNow;
+                AppDiagnostics.Write("Flyout.Closed");
                 TraceFlyout("DesktopFlyout closed");
                 ReleaseFlyoutContent();
                 QueuePendingContextMenuShow();
@@ -509,6 +512,7 @@ internal sealed class TrayFlyoutService : IDisposable
         }
         catch (Exception exception)
         {
+            AppDiagnostics.Exception("Flyout.ShowFailed", exception);
             TraceFlyout($"DesktopFlyout Show failed: {exception.GetType().Name}: {exception.Message}");
         }
     }
@@ -537,8 +541,10 @@ internal sealed class TrayFlyoutService : IDisposable
             return;
         }
 
+        AppDiagnostics.Write("Panel.ReleaseStarted");
         panel.OnFlyoutClosed();
         _mainFlyoutIsland.Content = null;
+        AppDiagnostics.Write("Panel.ContentDetached");
         // Disposal may await in-flight requests. Keep it off the UI thread so
         // closing and any subsequent opening can finish without blocking.
         _ = DisposePanelAsync(panel);
@@ -549,9 +555,11 @@ internal sealed class TrayFlyoutService : IDisposable
         try
         {
             await panel.DisposeAsync().ConfigureAwait(false);
+            AppDiagnostics.Write("Panel.DisposeCompleted");
         }
         catch (Exception exception)
         {
+            AppDiagnostics.Exception("Panel.DisposeFailed", exception);
             TraceFlyout($"Main panel disposal failed: {exception}");
         }
     }
@@ -568,6 +576,7 @@ internal sealed class TrayFlyoutService : IDisposable
         panel.SetHostHeight(panelHeight);
         panel.KeepFlyoutOpen = KeepMainFlyoutOpen;
         _mainFlyoutIsland.Content = panel;
+        AppDiagnostics.Write("Panel.Created");
     }
 
     private void ConfigureMainFlyout(double panelHeight)
