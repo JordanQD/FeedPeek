@@ -31,6 +31,7 @@ DesktopFlyouts 2.2.0 removes the old `Placement` and `PopupDirection` properties
 - NuGet vulnerability audit of application direct and transitive packages reported no known vulnerabilities.
 - Generated Release manifest retains minimum OS 10.0.17763.0 and x64 architecture. This is configuration verification, not a Windows 10 installation test.
 - Windows Sandbox smoke check passed: packaged activation, tray icon, opening the main panel, and switching between Following, History, and View Later with the expected empty-state content. All three screenshots were visually checked. Results and screenshots are in the ignored `src/FeedPeek.App/artifacts/dependency-upgrade` directory. The test app remains running in the guest.
+- Deployed and activated the Release x64 development package on the user's local machine. Verified the executable comes from the `Release/net10.0-windows10.0.26100.0` layout; its diagnostic log reports runtime 10.0.15, tray initialization, and the main panel opening without a startup exception. The local app remains running. This machine and the Sandbox both run Windows 11; neither check is Windows 10 validation.
 - Builds and tests were run in the existing working tree, which also contains earlier uncommitted diagnostics work. That work is excluded from the dependency-upgrade commit.
 
 ## Before merging
