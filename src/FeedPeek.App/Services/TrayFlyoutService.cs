@@ -24,7 +24,6 @@ internal sealed class TrayFlyoutService : IDisposable
     private const double MainPanelWidth = 420d;
     private const double MinimumPanelHeight = 320d;
     private const double FlyoutWorkAreaInset = 24d;
-    private const int MaxMainFlyoutShowAttempts = 10;
     private const int VirtualKeyLeftButton = 0x01;
     private const int VirtualKeyRightButton = 0x02;
     private const int VirtualKeyMiddleButton = 0x04;
@@ -36,35 +35,29 @@ internal sealed class TrayFlyoutService : IDisposable
     private static bool _traceFileResolved;
 #endif
     private static readonly TimeSpan TrayLightDismissReopenGuard = TimeSpan.FromMilliseconds(300);
-    private static readonly TimeSpan MainFlyoutShowRetryInterval = TimeSpan.FromMilliseconds(160);
     private static readonly TimeSpan BackgroundOpenWatchInterval = TimeSpan.FromMilliseconds(100);
     private static readonly TimeSpan BackgroundOpenTargetWindow = TimeSpan.FromSeconds(3);
-    private static readonly TimeSpan DismissRetryInterval = TimeSpan.FromMilliseconds(400);
 
     private readonly DispatcherQueue _dispatcherQueue;
     private readonly DesktopFlyout _mainFlyout;
     private readonly DesktopFlyoutIsland _mainFlyoutIsland;
     private readonly DesktopMenuFlyout _contextMenu;
-    private readonly DispatcherQueueTimer _mainFlyoutShowRetryTimer;
+    private readonly DispatcherQueueTimer _mainFlyoutOpenDelayTimer;
     private readonly DispatcherQueueTimer _keepFlyoutOpenTimer;
-    private readonly long _mainFlyoutIsOpenCallbackToken;
     private readonly SystemTrayIcon _trayIcon;
     private UISettings? _uiSettings;
     private DateTime _lastMainFlyoutClosedAt = DateTime.MinValue;
     private Point? _pendingContextMenuPoint;
     private Point? _pendingMainFlyoutPoint;
-    private int _mainFlyoutShowAttempts;
-    private bool _isMainFlyoutShowPending;
+    private Point _mainFlyoutAnchorPoint;
     private bool _isDisposed;
     private nint _flyoutWindow;
     private nint _backgroundOpenTargetWindow;
     private DateTime _backgroundOpenStartedAt;
     private bool _isWatchingBackgroundOpen;
-    private bool _isDismissingBackgroundOpen;
     private bool _mouseButtonWasDown;
     private bool _backgroundOpenLostForeground;
     private bool _backgroundOpenPanelUsed;
-    private DateTime _dismissRequestedAt = DateTime.MinValue;
 
     public TrayFlyoutService(
         DispatcherQueue dispatcherQueue,
@@ -94,14 +87,12 @@ internal sealed class TrayFlyoutService : IDisposable
             IsSwipeToDismissEnabled = false,
         };
         _mainFlyout.Islands.Add(_mainFlyoutIsland);
-        _mainFlyoutIsOpenCallbackToken = _mainFlyout.RegisterPropertyChangedCallback(
-            DesktopFlyout.IsOpenProperty,
-            OnMainFlyoutIsOpenChanged);
+        _mainFlyout.TransitionStateChanged += OnMainFlyoutTransitionStateChanged;
 
         _contextMenu = CreateContextMenu(settingsAction, exitAction);
-        _mainFlyoutShowRetryTimer = _dispatcherQueue.CreateTimer();
-        _mainFlyoutShowRetryTimer.IsRepeating = false;
-        _mainFlyoutShowRetryTimer.Tick += MainFlyoutShowRetryTimer_Tick;
+        _mainFlyoutOpenDelayTimer = _dispatcherQueue.CreateTimer();
+        _mainFlyoutOpenDelayTimer.IsRepeating = false;
+        _mainFlyoutOpenDelayTimer.Tick += MainFlyoutOpenDelayTimer_Tick;
 
         _keepFlyoutOpenTimer = _dispatcherQueue.CreateTimer();
         _keepFlyoutOpenTimer.IsRepeating = true;
@@ -132,8 +123,8 @@ internal sealed class TrayFlyoutService : IDisposable
 
         _isDisposed = true;
         _pendingContextMenuPoint = null;
-        CancelPendingMainFlyoutShow(disposeUnopenedContent: false);
-        _mainFlyoutShowRetryTimer.Tick -= MainFlyoutShowRetryTimer_Tick;
+        CancelDelayedMainFlyoutShow();
+        _mainFlyoutOpenDelayTimer.Tick -= MainFlyoutOpenDelayTimer_Tick;
         _keepFlyoutOpenTimer.Stop();
         _keepFlyoutOpenTimer.Tick -= KeepFlyoutOpenTimer_Tick;
         _isWatchingBackgroundOpen = false;
@@ -149,9 +140,7 @@ internal sealed class TrayFlyoutService : IDisposable
         _trayIcon.RightClicked -= OnTrayIconRightClicked;
         _trayIcon.Dispose();
 
-        _mainFlyout.UnregisterPropertyChangedCallback(
-            DesktopFlyout.IsOpenProperty,
-            _mainFlyoutIsOpenCallbackToken);
+        _mainFlyout.TransitionStateChanged -= OnMainFlyoutTransitionStateChanged;
 
         ReleaseFlyoutContent();
         _mainFlyout.Dispose();
@@ -186,7 +175,7 @@ internal sealed class TrayFlyoutService : IDisposable
             return;
         }
 
-        TraceFlyout($"Tray icon left clicked. IsOpen={_mainFlyout.IsOpen}, pending={_isMainFlyoutShowPending}");
+        TraceFlyout($"Tray icon left clicked. State={_mainFlyout.TransitionState}");
 
         // A left click is the latest user intent. Cancel a context menu that was
         // waiting for the main flyout transition to finish.
@@ -197,8 +186,18 @@ internal sealed class TrayFlyoutService : IDisposable
             _contextMenu.Hide();
         }
 
-        if (_mainFlyout.IsOpen)
+        if (_pendingMainFlyoutPoint.HasValue)
         {
+            CancelDelayedMainFlyoutShow();
+            return;
+        }
+
+        if (_mainFlyout.TransitionState is DesktopFlyoutTransitionState.Opening
+            or DesktopFlyoutTransitionState.Open
+            or DesktopFlyoutTransitionState.Closing)
+        {
+            // Clicking the tray can light-dismiss the panel before this callback.
+            // Treat Closing as a close intent too, rather than queueing a reopen.
             _mainFlyout.Hide();
             return;
         }
@@ -219,28 +218,14 @@ internal sealed class TrayFlyoutService : IDisposable
         }
 
         var menuPoint = GetContextMenuPoint(args.Point);
-        if (_isMainFlyoutShowPending && !_mainFlyout.IsOpen)
-        {
-            // A right click supersedes an open request that DesktopFlyouts has
-            // not accepted yet. Do not wait for an IsOpen callback that may
-            // never arrive after an ignored Show call.
-            CancelPendingMainFlyoutShow(disposeUnopenedContent: true);
-        }
+        CancelDelayedMainFlyoutShow();
 
-        if (_mainFlyout.IsOpen)
+        if (_mainFlyout.TransitionState is not DesktopFlyoutTransitionState.Closed)
         {
-            // DesktopFlyouts ignores Hide while an open/close transition is in
-            // progress. Defer the menu until the main flyout is fully closed so
-            // the two independent host windows cannot overlap.
+            // The library handles Hide during transitions. Only the menu needs
+            // to wait for Closed because it owns a separate host window.
             _pendingContextMenuPoint = menuPoint;
-            TraceFlyout(
-                $"Context menu deferred. IsOpen={_mainFlyout.IsOpen}, pending={_isMainFlyoutShowPending}");
-
-            if (_mainFlyout.IsOpen)
-            {
-                _mainFlyout.Hide();
-            }
-
+            _mainFlyout.Hide();
             return;
         }
 
@@ -248,40 +233,38 @@ internal sealed class TrayFlyoutService : IDisposable
         _contextMenu.Show(menuPoint);
     }
 
-    private void OnMainFlyoutIsOpenChanged(DependencyObject sender, DependencyProperty dependencyProperty)
+    private void OnMainFlyoutTransitionStateChanged(object? sender, EventArgs args)
     {
         if (_isDisposed)
         {
             return;
         }
 
-        if (_mainFlyout.IsOpen)
+        switch (_mainFlyout.TransitionState)
         {
-            CompletePendingMainFlyoutShow();
-            TraceFlyout("DesktopFlyout opened");
+            case DesktopFlyoutTransitionState.Opening:
+                // Also runs when the library replays a Show queued during closing.
+                var panelHeight = GetMainPanelHeight(_mainFlyoutAnchorPoint);
+                EnsureFlyoutContent(panelHeight);
+                ConfigureMainFlyout(panelHeight);
+                break;
 
-            if (_pendingContextMenuPoint.HasValue)
-            {
-                QueueMainFlyoutCloseForContextMenu();
-                return;
-            }
+            case DesktopFlyoutTransitionState.Open:
+                TraceFlyout("DesktopFlyout opened");
+                if (_mainFlyoutIsland.Content is MainPanelControl panel)
+                {
+                    panel.OnFlyoutOpened();
+                }
+                break;
 
-            if (_mainFlyoutIsland.Content is MainPanelControl panel)
-            {
-                panel.OnFlyoutOpened();
-            }
-
-            return;
+            case DesktopFlyoutTransitionState.Closed:
+                EndBackgroundOpenWatch();
+                _lastMainFlyoutClosedAt = DateTime.UtcNow;
+                TraceFlyout("DesktopFlyout closed");
+                ReleaseFlyoutContent();
+                QueuePendingContextMenuShow();
+                break;
         }
-
-        CompletePendingMainFlyoutShow();
-        EndBackgroundOpenWatch();
-        _lastMainFlyoutClosedAt = DateTime.UtcNow;
-        TraceFlyout("DesktopFlyout closed");
-
-        ReleaseFlyoutContent();
-
-        QueuePendingContextMenuShow();
     }
 
     /// <summary>
@@ -310,7 +293,6 @@ internal sealed class TrayFlyoutService : IDisposable
         _backgroundOpenStartedAt = DateTime.UtcNow;
         _backgroundOpenLostForeground = false;
         _backgroundOpenPanelUsed = false;
-        _isDismissingBackgroundOpen = false;
         _isWatchingBackgroundOpen = true;
         _mouseButtonWasDown = IsAnyMouseButtonPressedOrDown();
         _mainFlyout.HideOnLostFocus = false;
@@ -324,19 +306,6 @@ internal sealed class TrayFlyoutService : IDisposable
         if (_isDisposed || !_isWatchingBackgroundOpen || !_mainFlyout.IsOpen)
         {
             EndBackgroundOpenWatch();
-            return;
-        }
-
-        if (_isDismissingBackgroundOpen)
-        {
-            // Hide is ignored while an open or close transition is running, so keep asking - but
-            // slowly, so a transition that is already under way is not poked on every tick.
-            if (DateTime.UtcNow - _dismissRequestedAt >= DismissRetryInterval)
-            {
-                _dismissRequestedAt = DateTime.UtcNow;
-                _mainFlyout.Hide();
-            }
-
             return;
         }
 
@@ -415,20 +384,14 @@ internal sealed class TrayFlyoutService : IDisposable
     private void DismissFlyoutForBackgroundOpen(string reason)
     {
         TraceFlyout($"Background open: dismissing the panel - {reason}");
-        _isDismissingBackgroundOpen = true;
-        _dismissRequestedAt = DateTime.UtcNow;
-        if (_mainFlyout.IsOpen)
-        {
-            _mainFlyout.Hide();
-        }
+        _keepFlyoutOpenTimer.Stop();
+        _mainFlyout.Hide();
     }
 
     private void EndBackgroundOpenWatch()
     {
         _keepFlyoutOpenTimer.Stop();
         _isWatchingBackgroundOpen = false;
-        _isDismissingBackgroundOpen = false;
-        _dismissRequestedAt = DateTime.MinValue;
         _backgroundOpenLostForeground = false;
         _backgroundOpenPanelUsed = false;
         _backgroundOpenTargetWindow = nint.Zero;
@@ -496,25 +459,13 @@ internal sealed class TrayFlyoutService : IDisposable
         return !inside;
     }
 
-    private void QueueMainFlyoutCloseForContextMenu()
-    {
-        _dispatcherQueue.TryEnqueue(() =>
-        {
-            if (!_isDisposed && _pendingContextMenuPoint.HasValue && _mainFlyout.IsOpen)
-            {
-                TraceFlyout("Closing DesktopFlyout before showing context menu");
-                _mainFlyout.Hide();
-            }
-        });
-    }
-
     private void QueuePendingContextMenuShow()
     {
         _dispatcherQueue.TryEnqueue(() =>
         {
             if (_isDisposed
-                || _mainFlyout.IsOpen
-                || _isMainFlyoutShowPending
+                || _mainFlyout.TransitionState is not DesktopFlyoutTransitionState.Closed
+                || _pendingMainFlyoutPoint.HasValue
                 || _pendingContextMenuPoint is not Point menuPoint)
             {
                 return;
@@ -528,59 +479,29 @@ internal sealed class TrayFlyoutService : IDisposable
 
     private void RequestMainFlyoutShow(Point anchorPoint)
     {
-        _pendingMainFlyoutPoint = anchorPoint;
-        if (!_isMainFlyoutShowPending)
+        var elapsedSinceClose = DateTime.UtcNow - _lastMainFlyoutClosedAt;
+        if (_mainFlyout.TransitionState is DesktopFlyoutTransitionState.Closed
+            && elapsedSinceClose < TrayLightDismissReopenGuard)
         {
-            _isMainFlyoutShowPending = true;
-            _mainFlyoutShowAttempts = 0;
+            // Preserve the existing light-dismiss guard, with one delayed Show
+            // rather than repeatedly resending requests during transitions.
+            _pendingMainFlyoutPoint = anchorPoint;
+            _mainFlyoutOpenDelayTimer.Interval =
+                TrayLightDismissReopenGuard - elapsedSinceClose + TimeSpan.FromMilliseconds(20);
+            _mainFlyoutOpenDelayTimer.Start();
+            return;
         }
 
-        ProcessPendingMainFlyoutShow();
+        ShowMainFlyout(anchorPoint);
     }
 
-    private void ProcessPendingMainFlyoutShow()
+    private void ShowMainFlyout(Point anchorPoint)
     {
-        if (_isDisposed || !_isMainFlyoutShowPending || _pendingMainFlyoutPoint is not Point anchorPoint)
-        {
-            return;
-        }
-
-        if (_mainFlyout.IsOpen)
-        {
-            CompletePendingMainFlyoutShow();
-            return;
-        }
-
-        if (_contextMenu.IsOpen)
-        {
-            _contextMenu.Hide();
-            ScheduleMainFlyoutShowRetry(MainFlyoutShowRetryInterval);
-            return;
-        }
-
-        var elapsedSinceClose = DateTime.UtcNow - _lastMainFlyoutClosedAt;
-        if (elapsedSinceClose < TrayLightDismissReopenGuard)
-        {
-            ScheduleMainFlyoutShowRetry(
-                TrayLightDismissReopenGuard - elapsedSinceClose + TimeSpan.FromMilliseconds(20));
-            return;
-        }
-
-        if (_mainFlyoutShowAttempts >= MaxMainFlyoutShowAttempts)
-        {
-            TraceFlyout("DesktopFlyout open request timed out; pending state reset");
-            CancelPendingMainFlyoutShow(disposeUnopenedContent: true);
-            return;
-        }
-
         try
         {
-            var panelHeight = GetMainPanelHeight(anchorPoint);
-            EnsureFlyoutContent(panelHeight);
-            ConfigureMainFlyout(panelHeight);
+            _mainFlyoutAnchorPoint = anchorPoint;
             _mainFlyout.IsTransitionAnimationEnabled = _uiSettings?.AnimationsEnabled == true;
-            _mainFlyoutShowAttempts++;
-            TraceFlyout($"Requesting DesktopFlyout open. attempt={_mainFlyoutShowAttempts}");
+            TraceFlyout($"Requesting DesktopFlyout open. State={_mainFlyout.TransitionState}");
             var anchorBounds = _trayIcon.TryGetBounds(out var bounds)
                 ? bounds
                 : new Rectangle(anchorPoint, new Size(1, 1));
@@ -590,48 +511,23 @@ internal sealed class TrayFlyoutService : IDisposable
         {
             TraceFlyout($"DesktopFlyout Show failed: {exception.GetType().Name}: {exception.Message}");
         }
-
-        // Show is intentionally fire-and-forget and can be ignored by the
-        // library during a transition. Retry until IsOpen changes or the
-        // bounded attempt count resets the request.
-        ScheduleMainFlyoutShowRetry(MainFlyoutShowRetryInterval);
     }
 
-    private void ScheduleMainFlyoutShowRetry(TimeSpan delay)
-    {
-        if (_isDisposed || !_isMainFlyoutShowPending)
-        {
-            return;
-        }
-
-        _mainFlyoutShowRetryTimer.Stop();
-        _mainFlyoutShowRetryTimer.Interval = delay > TimeSpan.Zero
-            ? delay
-            : TimeSpan.FromMilliseconds(1);
-        _mainFlyoutShowRetryTimer.Start();
-    }
-
-    private void MainFlyoutShowRetryTimer_Tick(DispatcherQueueTimer sender, object args)
+    private void MainFlyoutOpenDelayTimer_Tick(DispatcherQueueTimer sender, object args)
     {
         sender.Stop();
-        ProcessPendingMainFlyoutShow();
-    }
-
-    private void CompletePendingMainFlyoutShow()
-    {
-        _mainFlyoutShowRetryTimer.Stop();
+        var point = _pendingMainFlyoutPoint;
         _pendingMainFlyoutPoint = null;
-        _mainFlyoutShowAttempts = 0;
-        _isMainFlyoutShowPending = false;
+        if (!_isDisposed && point is Point anchorPoint)
+        {
+            ShowMainFlyout(anchorPoint);
+        }
     }
 
-    private void CancelPendingMainFlyoutShow(bool disposeUnopenedContent)
+    private void CancelDelayedMainFlyoutShow()
     {
-        CompletePendingMainFlyoutShow();
-        if (disposeUnopenedContent && !_mainFlyout.IsOpen)
-        {
-            ReleaseFlyoutContent();
-        }
+        _mainFlyoutOpenDelayTimer.Stop();
+        _pendingMainFlyoutPoint = null;
     }
 
     private void ReleaseFlyoutContent()
@@ -643,8 +539,8 @@ internal sealed class TrayFlyoutService : IDisposable
 
         panel.OnFlyoutClosed();
         _mainFlyoutIsland.Content = null;
-        // DesktopFlyouts hides the native host only after the IsOpen callback
-        // returns. Awaiting synchronously here would leave its transparent HWND visible.
+        // Disposal may await in-flight requests. Keep it off the UI thread so
+        // closing and any subsequent opening can finish without blocking.
         _ = DisposePanelAsync(panel);
     }
 

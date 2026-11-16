@@ -39,3 +39,13 @@ DesktopFlyouts 2.2.0 removes the old `Placement` and `PopupDirection` properties
 Actual Windows 10 installation and the full UI/lifecycle matrix remain to be verified: tray left/right clicks, repeated open/close, three-page navigation, settings, WebView2 login, notification activation, startup, single-instance redirection, Explorer restart, and display/DPI changes.
 
 The new tooling reports WUI2011 binding-mode and CsWinRT1032 collection-expression warnings. The Release build also reports missing `mspdbcmf.exe` for symbol-package generation. These do not prevent the tested builds; no binding, trimming, AOT, or symbol-generation behavior was changed to suppress them.
+
+## Tray controller simplification
+
+The follow-up change uses `TransitionStateChanged` instead of `IsOpen` callbacks: content is created at `Opening`, activated at `Open`, and released at `Closed`. This also covers opening requests that are dismissed before ever reaching `Open`.
+
+Removed repeated Show attempts, the attempt limit, the delayed-close retry loop, and the extra dispatcher callback that retried closing before showing the context menu. The library handles transition requests; the app retains only the pending context-menu position needed to coordinate the two windows. The existing 300 ms light-dismiss guard remains as a single delayed opening, and background-link monitoring remains in place.
+
+Local verification exposed a close/reopen regression when a tray click first light-dismissed the panel into `Closing`. Treating that state as a close intent, as in the previous controller, fixed the regression. Debug and Release x64 builds passed; the final Release was deployed locally. Three consecutive tray open/close cycles passed, with logs confirming content detach/disposal each time. Reopening and switching History/View Later also passed; the captured layout was visually checked and the app remained responsive.
+
+Right-click mouse automation was blocked by the local tool's foreground-window restriction, so the context-menu interaction is not marked as tested. Background-link behavior, rapid mixed clicks, and the broader lifecycle matrix still require hands-on verification before merging.
