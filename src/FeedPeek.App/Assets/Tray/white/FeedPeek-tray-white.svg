@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <title>FeedPeek monochrome tray icon</title>
+  <g fill="#FFFFFF">
+    <path id="outer-signal" d="M3 2H3.8L14 12.2V13H13.2L3 2.8Z"/>
+    <path id="middle-signal" d="M3 6H3.8L10 12.2V13H9.2L3 6.8Z"/>
+    <path id="inner-signal" d="M3 10H4L6 12V13H3Z"/>
+  </g>
+</svg>

@@ -7,7 +7,7 @@
     <AssemblyName>FeedPeek</AssemblyName>
     <DefaultLanguage>zh-CN</DefaultLanguage>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Platforms>x64</Platforms>
+    <Platforms>x64;ARM64;AnyCPU</Platforms>
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
     <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and '$(Platform)' == 'x64'">win-x64</RuntimeIdentifier>
     <EnableMsixTooling>true</EnableMsixTooling>
@@ -41,7 +41,7 @@
     <UseProductionPackageIdentity Condition="'$(UseProductionPackageIdentity)' == ''">false</UseProductionPackageIdentity>
     <DevelopmentPackageIdentityName Condition="'$(DevelopmentPackageIdentityName)' == ''">JordanQD.FeedPeek.Preview</DevelopmentPackageIdentityName>
     <!-- Store submission must override this with the exact identity reserved in Partner Center. -->
-    <ProductionPackageIdentityName Condition="'$(ProductionPackageIdentityName)' == ''">JordanQD.FeedPeek</ProductionPackageIdentityName>
+    <ProductionPackageIdentityName Condition="'$(ProductionPackageIdentityName)' == ''">JordanQD.BiliRadar</ProductionPackageIdentityName>
     <OutputPath Condition="'$(UseProductionPackageIdentity)' != 'true'">bin\dev\$(Platform)\$(Configuration)\</OutputPath>
     <IntermediateOutputPath Condition="'$(UseProductionPackageIdentity)' != 'true'">obj\dev\$(Platform)\$(Configuration)\</IntermediateOutputPath>
   </PropertyGroup>
@@ -172,6 +172,6 @@
     <ItemGroup Condition="Exists('$(_GeneratedAppxManifest)')">
       <_GeneratedAppxManifestLine Include="$(_GeneratedAppxManifest)" />
     </ItemGroup>
-    <WriteLinesToFile Condition="Exists('$(_GeneratedAppxManifest)')" File="$(_GeneratedAppxManifest)" Lines="$([System.IO.File]::ReadAllText('$(_GeneratedAppxManifest)').Replace('Name=&quot;JordanQD.FeedPeek.Preview&quot;', 'Name=&quot;$(_GeneratedPackageIdentityName)&quot;').Replace('Name=&quot;JordanQD.BiliRadar.Dev&quot;', 'Name=&quot;$(_GeneratedPackageIdentityName)&quot;').Replace('Name=&quot;JordanQD.BiliRadar&quot;', 'Name=&quot;$(_GeneratedPackageIdentityName)&quot;').Replace('$targetnametoken$.exe', 'FeedPeek.exe').Replace('EntryPoint=&quot;$targetentrypoint$&quot;', 'EntryPoint=&quot;Windows.FullTrustApplication&quot;'))" Overwrite="true" />
+    <WriteLinesToFile Condition="Exists('$(_GeneratedAppxManifest)')" File="$(_GeneratedAppxManifest)" Lines="$([System.IO.File]::ReadAllText('$(_GeneratedAppxManifest)').Replace('Name=&quot;JordanQD.FeedPeek.Preview&quot;', 'Name=&quot;$(_GeneratedPackageIdentityName)&quot;').Replace('Name=&quot;JordanQD.BiliRadar.Dev&quot;', 'Name=&quot;$(_GeneratedPackageIdentityName)&quot;').Replace('$targetnametoken$.exe', 'FeedPeek.exe').Replace('EntryPoint=&quot;$targetentrypoint$&quot;', 'EntryPoint=&quot;Windows.FullTrustApplication&quot;'))" Overwrite="true" />
   </Target>
 </Project>

@@ -10,11 +10,11 @@
   IgnorableNamespaces="uap desktop com rescap">
 
   <Identity
-    Name="JordanQD.FeedPeek.Preview"
+    Name="JordanQD.BiliRadar"
     Publisher="CN=55B82F9D-39B5-4EC7-8696-862731CE35AA"
     Version="2.0.1.0" />
 
-  <mp:PhoneIdentity PhoneProductId="23003471-ae17-4749-9f8d-70d18b9c50c5" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
+  <mp:PhoneIdentity PhoneProductId="d3bc2fc5-55c8-4f8d-9b41-b334f399490b" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
   <Properties>
     <DisplayName>FeedPeek</DisplayName>
