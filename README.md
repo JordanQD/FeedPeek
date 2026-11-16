@@ -52,9 +52,9 @@ RSS 可在“设置 → 来源”中直接添加。网站能力需要先从本�
 ## 开发环境
 
 - Windows 10 1809 或更高版本。
-- Visual Studio 2022，建议安装“.NET 桌面开发”和 Windows 应用 SDK / WinUI 相关工作负载。
-- .NET SDK 9 或更高版本。
-- Windows App SDK 2.4.0。
+- 支持 .NET 10 的 Visual Studio，建议安装“.NET 桌面开发”和 Windows 应用 SDK / WinUI 相关工作负载。
+- .NET SDK 10（由 global.json 选择最新已安装的 10.0 功能带）。
+- Windows App SDK 2.6.5。
 - WebView2 Runtime。
 
 项目使用：

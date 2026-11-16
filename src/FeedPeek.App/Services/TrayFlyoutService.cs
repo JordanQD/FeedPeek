@@ -85,8 +85,6 @@ internal sealed class TrayFlyoutService : IDisposable
         {
             FlyoutWidth = new GridLength(MainPanelWidth),
             FlyoutHeight = new GridLength(AppSettings.MainPanelHeight),
-            PopupDirection = DesktopFlyoutPopupDirection.Vertical,
-            Placement = DesktopFlyoutPlacementMode.BottomRight,
             ActivationMode = DesktopFlyoutActivationMode.Activate,
             HideOnLostFocus = true,
             IsBackdropEnabled = true,
@@ -583,7 +581,10 @@ internal sealed class TrayFlyoutService : IDisposable
             _mainFlyout.IsTransitionAnimationEnabled = _uiSettings?.AnimationsEnabled == true;
             _mainFlyoutShowAttempts++;
             TraceFlyout($"Requesting DesktopFlyout open. attempt={_mainFlyoutShowAttempts}");
-            _mainFlyout.Show(anchorPoint);
+            var anchorBounds = _trayIcon.TryGetBounds(out var bounds)
+                ? bounds
+                : new Rectangle(anchorPoint, new Size(1, 1));
+            _mainFlyout.Show(DesktopFlyoutPosition.ForTaskbarAnchor(anchorBounds));
         }
         catch (Exception exception)
         {

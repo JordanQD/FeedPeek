@@ -16,7 +16,7 @@ FeedPeek.Core            FeedPeek.PluginContracts
         \                /
          FeedPeek.PluginHost
                   |
-        FeedPeek.PluginRuntime   <- Jint 4.16.1（版本锁定在 csproj 的 [4.16.1]）
+        FeedPeek.PluginRuntime   <- Jint 4.18.0（版本锁定在 csproj 的 [4.18.0]）
 ```
 
 | 项目 | 职责 | 不做什么 |

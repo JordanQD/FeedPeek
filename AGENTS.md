@@ -4,7 +4,7 @@
 
 FeedPeek 是一个 Windows 桌面通用更新查看器（WinUI 3 + Windows App SDK），通过 RSS 与网站插件提供更新、历史记录、稍后再看、作者和直播内容。应用驻留系统托盘，点击弹出 Flyout 面板。
 
-**技术栈**：C# / WinUI 3 / DesktopFlyouts.WinUI 1.4.0 / CommunityToolkit 8.2 / .NET 9
+**技术栈**：C# / WinUI 3 / DesktopFlyouts.WinUI 2.2.0 / CommunityToolkit 8.2 / .NET 10
 
 ## 架构总览
 
@@ -141,7 +141,7 @@ dotnet build src/FeedPeek.App/FeedPeek.App.csproj -p:Platform=x64 --no-restore
 | Phase 4（站点插件迁移） | 🧪 4.0–4.9 自动验证通过；4.3–4.4 已人工验收，4.5–4.9 待人工验收 |
 | Phase 5（品牌、独立包身份与数据迁移） | 🚧 5.0–5.3 已完成；5.4 待完成 |
 
-Phase 3 生产项目为 `src/FeedPeek.PluginContracts` 与 `src/FeedPeek.PluginRuntime`。Runtime 锁定 Jint 4.16.1；同一插件 realm 串行调用，通过 JSON `IPluginTransport` 保持 transport-neutral。插件只能使用显式 Host Bridge，不开放 CLR、文件系统、进程、注册表、COM 或 WinUI。mock JS fixture 和必要验证复用 `tests/FeedPeek.Core.Tests`，不再新增测试项目。
+Phase 3 生产项目为 `src/FeedPeek.PluginContracts` 与 `src/FeedPeek.PluginRuntime`。Runtime 锁定 Jint 4.18.0；同一插件 realm 串行调用，通过 JSON `IPluginTransport` 保持 transport-neutral。插件只能使用显式 Host Bridge，不开放 CLR、文件系统、进程、注册表、COM 或 WinUI。mock JS fixture 和必要验证复用 `tests/FeedPeek.Core.Tests`，不再新增测试项目。
 
 Phase 5 采用独立应用发布路径，不把 FeedPeek 作为旧 BiliRadar identity 的原位升级。开发包使用 `JordanQD.FeedPeek.Preview`，正式包通过 `UseProductionPackageIdentity=true` 选择独立 production identity；Microsoft Store 发布时必须使用 Partner Center 分配的精确 identity。用户可见品牌已统一为 FeedPeek，LocalSettings 已增加版本化幂等迁移。启动项目现为 `src/FeedPeek.App/FeedPeek.App.csproj`，程序集、可执行文件和默认命名空间均已改为 FeedPeek；正式 identity 和人工新装验收仍待完成，详见 `docs/design/rss-plugin-phase5-plan.md`。
 
