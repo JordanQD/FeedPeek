@@ -22,8 +22,13 @@
     <WinUISDKReferences Condition="'$(Configuration)' != 'Debug'">false</WinUISDKReferences>
     <WindowsAppSDKSelfContained Condition="'$(Configuration)' != 'Debug'">true</WindowsAppSDKSelfContained>
     <SelfContained Condition="'$(Configuration)' != 'Debug'">true</SelfContained>
+    <!-- ReleaseLite: keep .NET local; resolve Windows App Runtime as a shared MSIX framework. -->
+    <WindowsAppSDKSelfContained Condition="'$(Configuration)' == 'ReleaseLite'">false</WindowsAppSDKSelfContained>
+    <Optimize Condition="'$(Configuration)' == 'ReleaseLite'">true</Optimize>
+    <AppxPackageDir Condition="'$(Configuration)' == 'ReleaseLite'">$(MSBuildProjectDirectory)\AppPackages\ReleaseLite\</AppxPackageDir>
     <PublishProfile Condition="'$(Configuration)' == 'Release'">win-$(Platform).pubxml</PublishProfile>
     <PublishProfile Condition="'$(Configuration)' == 'ReleaseFull'">win-$(Platform)-full.pubxml</PublishProfile>
+    <PublishProfile Condition="'$(Configuration)' == 'ReleaseLite'">win-$(Platform)-lite.pubxml</PublishProfile>
     <DefaultItemExcludes>$(DefaultItemExcludes);artifacts\**;bin\**;obj\**</DefaultItemExcludes>
     <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
     <Version>2.0.1</Version>
@@ -32,7 +37,7 @@
     <InformationalVersion>2.0.1</InformationalVersion>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Configurations>Debug;Release;ReleaseFull</Configurations>
+    <Configurations>Debug;Release;ReleaseFull;ReleaseLite</Configurations>
     <UseProductionPackageIdentity Condition="'$(UseProductionPackageIdentity)' == ''">false</UseProductionPackageIdentity>
     <DevelopmentPackageIdentityName Condition="'$(DevelopmentPackageIdentityName)' == ''">JordanQD.FeedPeek.Preview</DevelopmentPackageIdentityName>
     <!-- Store submission must override this with the exact identity reserved in Partner Center. -->
@@ -115,6 +120,9 @@
     <ProjectReference Include="..\FeedPeek.PluginRuntime\FeedPeek.PluginRuntime.csproj" />
     <ProjectReference Include="..\FeedPeek.Rss\FeedPeek.Rss.csproj" />
   </ItemGroup>
+  <ItemGroup Condition="'$(Configuration)' == 'ReleaseLite'">
+    <ProjectReference Update="@(ProjectReference)" SetConfiguration="Configuration=Release" />
+  </ItemGroup>
 
   <!--
     Defining the "HasPackageAndPublishMenuAddedByProject" property here allows the Solution
@@ -127,6 +135,8 @@
 
   <!-- Publish Properties -->
   <PropertyGroup>
+    <PublishReadyToRun Condition="'$(Configuration)' == 'ReleaseLite'">True</PublishReadyToRun>
+    <PublishTrimmed Condition="'$(Configuration)' == 'ReleaseLite'">false</PublishTrimmed>
     <!-- Release: Store-ready self-contained package. -->
     <PublishReadyToRun Condition="'$(Configuration)' == 'Release'">True</PublishReadyToRun>
     <PublishTrimmed Condition="'$(Configuration)' == 'Release'">false</PublishTrimmed>

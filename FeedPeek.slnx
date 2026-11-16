@@ -3,15 +3,26 @@
     <BuildType Name="Debug" />
     <BuildType Name="Release" />
     <BuildType Name="ReleaseFull" />
+    <BuildType Name="ReleaseLite" />
     <Platform Name="x64" />
   </Configurations>
   <Project Path="src/FeedPeek.App/FeedPeek.App.csproj">
     <Platform Solution="*|x64" Project="x64" />
     <Deploy />
   </Project>
-  <Project Path="src/FeedPeek.Core/FeedPeek.Core.csproj" />
-  <Project Path="src/FeedPeek.PluginContracts/FeedPeek.PluginContracts.csproj" />
-  <Project Path="src/FeedPeek.PluginHost/FeedPeek.PluginHost.csproj" />
-  <Project Path="src/FeedPeek.PluginRuntime/FeedPeek.PluginRuntime.csproj" />
-  <Project Path="src/FeedPeek.Rss/FeedPeek.Rss.csproj" />
+  <Project Path="src/FeedPeek.Core/FeedPeek.Core.csproj">
+    <BuildType Solution="ReleaseLite|*" Project="Release" />
+  </Project>
+  <Project Path="src/FeedPeek.PluginContracts/FeedPeek.PluginContracts.csproj">
+    <BuildType Solution="ReleaseLite|*" Project="Release" />
+  </Project>
+  <Project Path="src/FeedPeek.PluginHost/FeedPeek.PluginHost.csproj">
+    <BuildType Solution="ReleaseLite|*" Project="Release" />
+  </Project>
+  <Project Path="src/FeedPeek.PluginRuntime/FeedPeek.PluginRuntime.csproj">
+    <BuildType Solution="ReleaseLite|*" Project="Release" />
+  </Project>
+  <Project Path="src/FeedPeek.Rss/FeedPeek.Rss.csproj">
+    <BuildType Solution="ReleaseLite|*" Project="Release" />
+  </Project>
 </Solution>
