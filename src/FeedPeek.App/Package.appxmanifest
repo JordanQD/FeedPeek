@@ -12,7 +12,7 @@
   <Identity
     Name="JordanQD.FeedPeek.Preview"
     Publisher="CN=55B82F9D-39B5-4EC7-8696-862731CE35AA"
-    Version="2.0.0.0" />
+    Version="2.0.1.0" />
 
   <mp:PhoneIdentity PhoneProductId="23003471-ae17-4749-9f8d-70d18b9c50c5" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
