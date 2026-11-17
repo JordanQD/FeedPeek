@@ -216,6 +216,17 @@
                 Style="{StaticResource SettingsSectionHeaderTextBlockStyle}"
                 Text="配置" />
             <controls:SettingsCard
+                x:Uid="GeneralOnboardingCard"
+                Header="首次使用引导"
+                Description="重新查看 FeedPeek 的快速入门。"
+                IsClickEnabled="True"
+                Click="OnboardingCard_Click"
+                AutomationProperties.AutomationId="GeneralOnboardingCard">
+                <controls:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE897;" />
+                </controls:SettingsCard.HeaderIcon>
+            </controls:SettingsCard>
+            <controls:SettingsCard
                 x:Uid="GeneralExportConfigCard"
                 Description="备份通用设置、来源订阅和通知规则；不包含插件文件和登录凭据。"
                 Header="导出配置">

@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="FeedPeek.OobeWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:dev="using:DevWinUI"
+    xmlns:controls="using:CommunityToolkit.WinUI.Controls">
+    <Window.SystemBackdrop>
+        <MicaBackdrop />
+    </Window.SystemBackdrop>
+    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+        <Grid.Resources>
+            <ResourceDictionary>
+                <ResourceDictionary.MergedDictionaries>
+                    <ResourceDictionary Source="ms-appx:///DevWinUI/Themes/Generic.xaml" />
+                </ResourceDictionary.MergedDictionaries>
+            </ResourceDictionary>
+        </Grid.Resources>
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+            <Grid Margin="24" MaxWidth="640" HorizontalAlignment="Stretch" VerticalAlignment="Top">
+                <dev:MorphingWizard x:Name="Wizard" x:Uid="OobeWizard"
+                    VerticalAlignment="Top" Loaded="Wizard_Loaded"
+                    AutomationProperties.AutomationId="OobeWizard"
+                    BackText="上一步" ContinueText="继续" FinishText="开始使用"
+                    ResetOnCompleted="False" Completed="Wizard_Completed" StepChanged="Wizard_StepChanged">
+                    <dev:MorphingWizardStep x:Uid="OobeWelcomeStep" Id="welcome" Label="欢迎">
+                        <StackPanel Spacing="16">
+                            <Image Source="ms-appx:///Assets/Square44x44Logo.scale-200.png" Width="64" Height="64" HorizontalAlignment="Left" />
+                            <TextBlock x:Uid="OobeWelcomeTitle" Text="欢迎使用 FeedPeek" Style="{StaticResource SubtitleTextBlockStyle}" TextWrapping="Wrap" />
+                            <TextBlock x:Uid="OobeWelcomeBody" Text="从托盘查看你关注的更新。" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </dev:MorphingWizardStep>
+                    <dev:MorphingWizardStep x:Uid="OobeSourcesStep" Id="sources" Label="添加来源">
+                        <StackPanel Spacing="16">
+                            <TextBlock x:Uid="OobeSourcesTitle" Text="添加来源" Style="{StaticResource SubtitleTextBlockStyle}" />
+                            <ContentControl x:Name="SourcesHost" MaxHeight="360" HorizontalContentAlignment="Stretch"
+                                AutomationProperties.AutomationId="OobeSourcesHost" />
+                        </StackPanel>
+                    </dev:MorphingWizardStep>
+                    <dev:MorphingWizardStep x:Uid="OobePreferencesStep" Id="preferences" Label="使用偏好">
+                        <StackPanel Spacing="16">
+                            <TextBlock x:Uid="OobePreferencesTitle" Text="使用偏好" Style="{StaticResource SubtitleTextBlockStyle}" />
+                            <StackPanel Spacing="4">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <controls:SettingsCard x:Uid="OobeAutoStartCard" Header="开机后自动运行">
+                                        <controls:SettingsCard.HeaderIcon>
+                                            <FontIcon Glyph="&#xE7E8;" />
+                                        </controls:SettingsCard.HeaderIcon>
+                                        <ToggleSwitch x:Name="AutoStartSwitch" IsEnabled="False"
+                                            Toggled="AutoStartSwitch_Toggled" AutomationProperties.Name="开机后自动运行"
+                                            AutomationProperties.AutomationId="OobeAutoStartSwitch" />
+                                    </controls:SettingsCard>
+                                    <InfoBar x:Name="StartupInfoBar" Grid.Row="1" Margin="0,4,0,0"
+                                        IsOpen="False" Visibility="Collapsed" IsClosable="False" />
+                                </Grid>
+                                <controls:SettingsCard x:Uid="OobeHeightCard" Header="主弹窗高度" Description="下次打开主弹窗时生效。">
+                                    <controls:SettingsCard.HeaderIcon>
+                                        <FontIcon Glyph="&#xE9D9;" />
+                                    </controls:SettingsCard.HeaderIcon>
+                                    <ComboBox x:Name="MainPanelHeightBox" MinWidth="100"
+                                        SelectionChanged="MainPanelHeightBox_SelectionChanged" AutomationProperties.Name="主弹窗高度"
+                                        AutomationProperties.AutomationId="OobeMainPanelHeightBox">
+                                        <ComboBoxItem Content="600" Tag="600" />
+                                        <ComboBoxItem Content="800" Tag="800" />
+                                        <ComboBoxItem Content="1000" Tag="1000" />
+                                    </ComboBox>
+                                </controls:SettingsCard>
+                            </StackPanel>
+                        </StackPanel>
+                    </dev:MorphingWizardStep>
+                    <dev:MorphingWizardStep x:Uid="OobeReadyStep" Id="ready" Label="准备就绪">
+                        <StackPanel Spacing="16">
+                            <FontIcon Glyph="&#xE73E;" FontSize="48" HorizontalAlignment="Left" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                            <TextBlock x:Uid="OobeReadyTitle" Text="准备就绪" Style="{StaticResource SubtitleTextBlockStyle}" TextWrapping="Wrap" />
+                            <TextBlock x:Uid="OobeReadyBody" Text="左键托盘图标查看更新，右键打开设置。" TextWrapping="Wrap" />
+                            <TextBlock x:Uid="OobeReadyHint" Text="可在「通用 → 配置」中重新打开引导。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                    </dev:MorphingWizardStep>
+                </dev:MorphingWizard>
+            </Grid>
+        </ScrollViewer>
+    </Grid>
+</Window>

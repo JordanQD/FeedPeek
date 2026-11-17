@@ -19,6 +19,7 @@ public partial class App : Application
 {
     private const string MainInstanceKey = "FeedPeek.Preview.Main";
     private SettingsWindow? _settingsWindow;
+    private OobeWindow? _oobeWindow;
     private TrayFlyoutService? _trayFlyoutService;
     private BackgroundNotificationMonitor? _backgroundNotificationMonitor;
     private AppNotificationManager? _notificationManager;
@@ -131,6 +132,18 @@ public partial class App : Application
         _settingsWindow.ShowWindow();
     }
 
+    public OobeWindow ShowOobeWindow()
+    {
+        if (_oobeWindow is null)
+        {
+            _oobeWindow = new OobeWindow();
+            _oobeWindow.Closed += (_, _) => _oobeWindow = null;
+        }
+
+        _oobeWindow.Activate();
+        return _oobeWindow;
+    }
+
     private async void HandleRunningLaunchAction()
     {
         if (AppSettings.RunningLaunchAction == RunningLaunchAction.OpenCustomWebPage)
@@ -157,6 +170,8 @@ public partial class App : Application
         _notificationManager = null;
         _settingsWindow?.Close();
         _settingsWindow = null;
+        _oobeWindow?.Close();
+        _oobeWindow = null;
         AppDiagnostics.Write("Exit.CleanupCompleted");
         Exit();
     }
@@ -194,6 +209,7 @@ public partial class App : Application
 
     private void HandleActivation(AppActivationArguments activatedArgs, bool isRedirectedActivation)
     {
+        AppDiagnostics.Write("App.Activation", $"kind={activatedArgs.Kind}; redirected={isRedirectedActivation}");
         try
         {
             if (activatedArgs.Kind == ExtendedActivationKind.AppNotification
@@ -203,13 +219,23 @@ public partial class App : Application
                 return;
             }
 
+            if (activatedArgs.Kind == ExtendedActivationKind.Launch
+                && (!AppSettings.HasCompletedOobe || _oobeWindow is not null
+                    || activatedArgs.Data is Windows.ApplicationModel.Activation.ILaunchActivatedEventArgs launch
+                        && string.Equals(launch.Arguments.Trim(), "--oobe", StringComparison.OrdinalIgnoreCase)))
+            {
+                ShowOobeWindow();
+                return;
+            }
+
             if (isRedirectedActivation)
             {
                 HandleRunningLaunchAction();
             }
         }
-        catch
+        catch (Exception exception)
         {
+            AppDiagnostics.Exception("App.Activation.Failed", exception);
         }
     }
 

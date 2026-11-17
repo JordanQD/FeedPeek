@@ -47,6 +47,12 @@ public static class AppSettings
 
     private static ApplicationDataContainer LocalSettings => ApplicationData.Current.LocalSettings;
 
+    public static bool HasCompletedOobe
+    {
+        get => ReadBool("HasCompletedOobe", false);
+        set => LocalSettings.Values["HasCompletedOobe"] = value;
+    }
+
     public static event EventHandler? NotificationSettingsChanged;
 
     internal static void NotifyNotificationSettingsChanged()

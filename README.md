@@ -90,7 +90,7 @@ dotnet build FeedPeek.slnx -c Release -p:Platform=x64 --no-restore
 .\scripts\Build-StorePackage.ps1
 ```
 
-项目当前仅支持 x64。脚本会读取 `Package.appxmanifest` 中的版本，生成未签名的 x64 `.msixbundle`；Microsoft Store 要求四段版本号的最后一段保持为 `0`，例如 `1.0.1.0`。
+项目支持 x64 和 ARM64；在 Visual Studio 中可勾选两种架构生成一个 `.msixupload`，详见 [打包说明](docs/PACKAGING.md)。上述脚本仍生成单独的 x64 `.msixbundle`。Microsoft Store 要求四段版本号的最后一段保持为 `0`，例如 `2.0.1.0`。
 
 ## 贡献
 

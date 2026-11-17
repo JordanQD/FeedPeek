@@ -113,6 +113,9 @@
                             <HyperlinkButton
                                 Content="0x5bfa/DesktopFlyouts"
                                 NavigateUri="https://github.com/0x5bfa/DesktopFlyouts" />
+                            <HyperlinkButton
+                                Content="ghost1372/DevWinUI"
+                                NavigateUri="https://github.com/ghost1372/DevWinUI" />
                         </StackPanel>
                     </controls:SettingsCard>
                 </controls:SettingsExpander.Items>

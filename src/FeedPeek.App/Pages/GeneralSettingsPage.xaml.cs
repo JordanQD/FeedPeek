@@ -3,24 +3,35 @@ using FeedPeek.Core.Configuration;
 using FeedPeek.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.Win32;
 using Microsoft.Windows.Storage.Pickers;
 using System;
-using System.Diagnostics;
 using System.IO;
-using Windows.ApplicationModel;
 
 namespace FeedPeek.Pages;
 
 public sealed partial class GeneralSettingsPage : Page
 {
-    private const string StartupTaskId = "FeedPeekPreviewStartupTask";
-    private const string StartupRegistryName = "FeedPeek";
+    private Window? _onboardingWindow;
+
+    private void OnboardingCard_Click(object sender, RoutedEventArgs e)
+    {
+        if (_onboardingWindow is not null) _onboardingWindow.Closed -= OnboardingWindow_Closed;
+        _onboardingWindow = ((App)Application.Current).ShowOobeWindow();
+        _onboardingWindow.Closed += OnboardingWindow_Closed;
+    }
+
+    private async void OnboardingWindow_Closed(object sender, WindowEventArgs args)
+    {
+        _onboardingWindow!.Closed -= OnboardingWindow_Closed;
+        _onboardingWindow = null;
+        PopulateSettingsControls();
+        await LoadStartupStateAsync();
+    }
+
+    private readonly StartupSettingsService _startupSettings = new();
 
     private bool _isLoadingSettings;
     private bool _isInitializingKeepSourceFilter;
-    private bool _useRegistryStartup;
-    private StartupTask? _startupTask;
     private bool _configurationBusy;
     private bool _startupReady;
 
@@ -66,37 +77,22 @@ public sealed partial class GeneralSettingsPage : Page
 
     private void GeneralSettingsPage_Unloaded(object sender, RoutedEventArgs e)
     {
+        if (_onboardingWindow is not null) _onboardingWindow.Closed -= OnboardingWindow_Closed;
+        _onboardingWindow = null;
         Loaded -= GeneralSettingsPage_Loaded;
         Unloaded -= GeneralSettingsPage_Unloaded;
     }
 
     private async System.Threading.Tasks.Task LoadStartupStateAsync()
     {
-        try
-        {
-            _startupTask = await StartupTask.GetAsync(StartupTaskId);
-            _useRegistryStartup = false;
-            AutoStartSwitch.IsOn = _startupTask.State is StartupTaskState.Enabled;
-            AutoStartSwitch.IsEnabled = _startupTask.State is StartupTaskState.Disabled or StartupTaskState.Enabled;
-            SetStartupInfoBar(
-                _startupTask.State is StartupTaskState.DisabledByUser or StartupTaskState.DisabledByPolicy,
-                _startupTask.State switch
-                {
-                    StartupTaskState.DisabledByUser => LocalizationHelper.GetString("StartupDisabledByUser"),
-                    StartupTaskState.DisabledByPolicy => LocalizationHelper.GetString("StartupDisabledByPolicy"),
-                    _ => string.Empty,
-                });
-            return;
-        }
-        catch
-        {
-        }
+        ApplyStartupStatus(await _startupSettings.LoadAsync());
+    }
 
-        _startupTask = null;
-        _useRegistryStartup = true;
-        AutoStartSwitch.IsEnabled = true;
-        AutoStartSwitch.IsOn = IsRegistryStartupEnabled();
-        SetStartupInfoBar(true, LocalizationHelper.GetString("StartupTaskFallback"));
+    private void ApplyStartupStatus(StartupSettingsStatus status)
+    {
+        SetAutoStartSwitchState(status.IsEnabled);
+        AutoStartSwitch.IsEnabled = !_configurationBusy && status.CanChange;
+        SetStartupInfoBar(!string.IsNullOrEmpty(status.Message), status.Message);
     }
 
     /// <summary>
@@ -125,61 +121,9 @@ public sealed partial class GeneralSettingsPage : Page
 
     private async System.Threading.Tasks.Task<bool> SetAutoStartEnabledAsync(bool isEnabled)
     {
-        if (_useRegistryStartup)
-        {
-            try
-            {
-                SetRegistryStartupEnabled(isEnabled);
-                var actual = IsRegistryStartupEnabled();
-                SetAutoStartSwitchState(actual);
-                return actual == isEnabled;
-            }
-            catch
-            {
-                _isLoadingSettings = true;
-                try { AutoStartSwitch.IsOn = IsRegistryStartupEnabled(); }
-                catch { AutoStartSwitch.IsOn = false; }
-                _isLoadingSettings = false;
-                return false;
-            }
-        }
-
-        if (_startupTask is null)
-        {
-            _isLoadingSettings = true;
-            AutoStartSwitch.IsOn = false;
-            _isLoadingSettings = false;
-            return !isEnabled;
-        }
-
-        try
-        {
-            if (isEnabled)
-            {
-                var state = await _startupTask.RequestEnableAsync();
-                if (state is not StartupTaskState.Enabled)
-                {
-                    _isLoadingSettings = true;
-                    AutoStartSwitch.IsOn = false;
-                    _isLoadingSettings = false;
-                    return false;
-                }
-            }
-            else if (_startupTask.State is StartupTaskState.Enabled)
-            {
-                _startupTask.Disable();
-            }
-            var actual = _startupTask.State == StartupTaskState.Enabled;
-            SetAutoStartSwitchState(actual);
-            return actual == isEnabled;
-        }
-        catch
-        {
-            _isLoadingSettings = true;
-            AutoStartSwitch.IsOn = _startupTask.State is StartupTaskState.Enabled;
-            _isLoadingSettings = false;
-            return false;
-        }
+        var result = await _startupSettings.SetEnabledAsync(isEnabled);
+        ApplyStartupStatus(result.Status);
+        return result.Succeeded;
     }
 
     private void SetAutoStartSwitchState(bool enabled)
@@ -372,8 +316,7 @@ public sealed partial class GeneralSettingsPage : Page
             SaveMainPanelPositionSwitch, MainPanelHeightBox, LiveSectionDisplayModeBox,
             KeepSourceFilterSwitch, LanguageSelectorBox,
         }) control.IsEnabled = !busy;
-        AutoStartSwitch.IsEnabled = !busy && (_useRegistryStartup
-            || _startupTask?.State is StartupTaskState.Disabled or StartupTaskState.Enabled);
+        AutoStartSwitch.IsEnabled = !busy && _startupSettings.CurrentStatus.CanChange;
         if (!busy) UpdateCustomLaunchWebPageUrlBoxState();
         ExportConfigButton.IsEnabled = !busy && _startupReady;
         ImportConfigButton.IsEnabled = !busy && _startupReady;
@@ -400,37 +343,6 @@ public sealed partial class GeneralSettingsPage : Page
             _isInitializingKeepSourceFilter = false;
             _isLoadingSettings = false;
         }
-    }
-
-    private static bool IsRegistryStartupEnabled()
-    {
-        using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", writable: false);
-        return key?.GetValue(StartupRegistryName) is string value
-            && string.Equals(value, GetRegistryStartupCommand(), StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static void SetRegistryStartupEnabled(bool isEnabled)
-    {
-        using var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");
-        if (isEnabled)
-        {
-            key?.SetValue(StartupRegistryName, GetRegistryStartupCommand());
-        }
-        else
-        {
-            key?.DeleteValue(StartupRegistryName, throwOnMissingValue: false);
-        }
-    }
-
-    private static string GetRegistryStartupCommand()
-    {
-        var path = Environment.ProcessPath;
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            path = Process.GetCurrentProcess().MainModule?.FileName ?? string.Empty;
-        }
-
-        return $"\"{path}\"";
     }
 
     private void InitLanguageSelector()

@@ -120,7 +120,7 @@ dotnet build src/FeedPeek.App/FeedPeek.App.csproj -p:Platform=x64 --no-restore
 不要只根据“能编译”决定是否升级。候选版本必须是 Stable 通道，并按以下顺序评测：
 
 1. **依赖审计** — 用 `dotnet list src/FeedPeek.App/FeedPeek.App.csproj package --outdated` 确认候选版本；检查直接和传递依赖是否出现降级、冲突、弃用或安全警告，并确认 DesktopFlyouts 版本支持该 Windows App SDK。
-2. **构建与打包矩阵** — 验证 Debug x64 框架依赖构建和 Release x64 自包含 MSIX。项目当前为 x64-only，不再构建或发布 ARM64。还原成功后构建统一使用 `--no-restore`。
+2. **构建与打包矩阵** — 项目支持 x64 和 ARM64，分别验证构建与对应架构包，支持合并为同一个商店上传包。ReleaseLite 保留 .NET、共享 Windows App Runtime。ARM64 的 DesktopFlyouts 2.2.0 来自同版官方源码重编译，见 `third_party/DesktopFlyouts.WinUI/2.2.0/arm64/PROVENANCE.md`。还原成功后构建统一使用 `--no-restore`；ARM64 构建通过不等于真机运行验收。
 3. **启动与生命周期** — 安装/注册并真实启动 MSIX，验证二次启动的单实例重定向、开机启动、通知激活、设置窗口和 WebView2 登录链路，不能只检查进程存在。
 4. **托盘关键路径** — 验证托盘左键 Flyout、右键仅“设置/退出”、Explorer 重启后的图标恢复、切换显示器/DPI 后图标清晰，以及连续开关 Flyout 不出现重入或卡死。
 5. **WinUI 关键路径** — 验证三页切换、`ListView`/`ItemsRepeater` 虚拟化与滚动加载、稍后再看移除、关注/取消关注、直播卡片操作；刷新或加载中关闭 Flyout 时，取消请求不能产生错误 InfoBar。
@@ -143,7 +143,7 @@ dotnet build src/FeedPeek.App/FeedPeek.App.csproj -p:Platform=x64 --no-restore
 
 Phase 3 生产项目为 `src/FeedPeek.PluginContracts` 与 `src/FeedPeek.PluginRuntime`。Runtime 锁定 Jint 4.18.0；同一插件 realm 串行调用，通过 JSON `IPluginTransport` 保持 transport-neutral。插件只能使用显式 Host Bridge，不开放 CLR、文件系统、进程、注册表、COM 或 WinUI。mock JS fixture 和必要验证复用 `tests/FeedPeek.Core.Tests`，不再新增测试项目。
 
-Phase 5 采用独立应用发布路径，不把 FeedPeek 作为旧 BiliRadar identity 的原位升级。开发包使用 `JordanQD.FeedPeek.Preview`，正式包通过 `UseProductionPackageIdentity=true` 选择独立 production identity；Microsoft Store 发布时必须使用 Partner Center 分配的精确 identity。用户可见品牌已统一为 FeedPeek，LocalSettings 已增加版本化幂等迁移。启动项目现为 `src/FeedPeek.App/FeedPeek.App.csproj`，程序集、可执行文件和默认命名空间均已改为 FeedPeek；正式 identity 和人工新装验收仍待完成，详见 `docs/design/rss-plugin-phase5-plan.md`。
+Phase 5 最初采用独立应用发布路径；用户于 2026-11-16 改为沿用旧 BiliRadar 商店条目发布 FeedPeek 更新。当前商店身份为 `JordanQD.BiliRadar`，发布者为 Partner Center 分配的 `CN=55B82F9D-39B5-4EC7-8696-862731CE35AA`，应用显示名为 FeedPeek。不得将已关联的旧身份替换成 Preview 或新的 FeedPeek 身份。商店上传构建保持商店发布者、不使用侧载自签名证书；旁加载仍允许自签名。LocalSettings 的已有迁移不等于已验收旧商店版全部数据升级，原位升级和 ARM64 实机流程仍需单独验证。历史计划见 `docs/design/rss-plugin-phase5-plan.md`，当前打包方式见 `docs/PACKAGING.md`。
 
 Phase 4 详细检查点见 `docs/design/rss-plugin-phase4-plan.md`。4.1–4.8 已完成通用 Host、网站 JS 插件、三页数据、登录、作者/直播、通知和用户插件管理。4.9 已删除 legacy provider、旧模型、旧 adapter、旧快照和孤立卡片；视频网站插件不再随应用发布，停用插件不会继续刷新旧订阅，通知动作按 manifest capability 显示，插件升级/卸载使用可回滚目录切换。仅保留旧 Cookie 与通知规则的一次性兼容迁移。哔哩哔哩插件源码和插件兼容设计现位于独立项目 `C:\Users\Q\Data\Projects\FeedPeek-Plugin`。
 

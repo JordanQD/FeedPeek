@@ -7,9 +7,10 @@
     <AssemblyName>FeedPeek</AssemblyName>
     <DefaultLanguage>zh-CN</DefaultLanguage>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Platforms>x64;ARM64;AnyCPU</Platforms>
-    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <Platforms>x64;ARM64</Platforms>
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
     <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and '$(Platform)' == 'x64'">win-x64</RuntimeIdentifier>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and '$(Platform)' == 'ARM64'">win-arm64</RuntimeIdentifier>
     <EnableMsixTooling>true</EnableMsixTooling>
     <UseWinUI>true</UseWinUI>
 
@@ -106,11 +107,25 @@
     <PackageReference Include="CommunityToolkit.WinUI.Helpers" Version="8.2.251219" />
     <PackageReference Include="CommunityToolkit.WinUI.Media" Version="8.2.251219" />
     <PackageReference Include="CommunityToolkit.WinUI.Triggers" Version="8.2.251219" />
-    <PackageReference Include="DesktopFlyouts.WinUI" Version="2.2.0" />
+    <PackageReference Include="DesktopFlyouts.WinUI" Version="2.2.0" GeneratePathProperty="true" ExcludeAssets="compile;runtime" />
+    <PackageReference Include="DevWinUI" Version="10.9.1" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2957" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools.WinUIAnalyzer" Version="0.8.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Windows.CsWinRT" Version="2.3.1" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.6.5" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />
+  </ItemGroup>
+
+  <!-- The official 2.2.0 NuGet assembly is AMD64; ARM64 uses the same upstream source rebuilt for ARM64. -->
+  <ItemGroup>
+    <Reference Include="DesktopFlyouts.WinUI">
+      <HintPath Condition="'$(Platform)' != 'ARM64'">$(PkgDesktopFlyouts_WinUI)\lib\net10.0-windows10.0.26100\DesktopFlyouts.WinUI.dll</HintPath>
+      <HintPath Condition="'$(Platform)' == 'ARM64'">..\..\third_party\DesktopFlyouts.WinUI\2.2.0\arm64\DesktopFlyouts.WinUI.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Content Include="$(PkgDesktopFlyouts_WinUI)\lib\net10.0-windows10.0.26100\DesktopFlyouts.WinUI.pri" Condition="'$(Platform)' != 'ARM64'" Link="DesktopFlyouts.WinUI.pri" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\third_party\DesktopFlyouts.WinUI\2.2.0\arm64\DesktopFlyouts.WinUI.pri" Condition="'$(Platform)' == 'ARM64'" Link="DesktopFlyouts.WinUI.pri" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\third_party\DesktopFlyouts.WinUI\2.2.0\arm64\LICENSE" Link="Licenses\DesktopFlyouts.WinUI.LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
@@ -155,11 +170,22 @@
     <GenerateTestArtifacts>False</GenerateTestArtifacts>
     <AppxBundle>Always</AppxBundle>
     <HoursBetweenUpdateChecks>0</HoursBetweenUpdateChecks>
-    <AppxBundlePlatforms>x64</AppxBundlePlatforms>
+    <AppxBundlePlatforms>x64|arm64</AppxBundlePlatforms>
     <PackageAndDeploySatelliteResourceLanguages>zh-CN;zh-HK</PackageAndDeploySatelliteResourceLanguages>
     <AppxSymbolPackageEnabled>False</AppxSymbolPackageEnabled>
     <GenerateTemporaryStoreCertificate>True</GenerateTemporaryStoreCertificate>
   </PropertyGroup>
+
+  <!-- Store uploads retain the Partner Center publisher; sideload builds keep their test certificate. -->
+  <Target Name="ConfigureStoreUploadSigning" BeforeTargets="_ValidateSigningCertificate;_GenerateCurrentProjectAppxManifest" DependsOnTargets="_ComputeBuildAppxUploadPackageForUapFlag">
+    <PropertyGroup Condition="'$(BuildAppxUploadPackageForUap)' == 'true'">
+      <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
+      <GenerateTemporaryStoreCertificate>false</GenerateTemporaryStoreCertificate>
+      <PackageCertificateThumbprint></PackageCertificateThumbprint>
+      <PackageCertificateKeyFile></PackageCertificateKeyFile>
+      <PackageCertificatePassword></PackageCertificatePassword>
+    </PropertyGroup>
+  </Target>
 
   <Target Name="FixGeneratedDesktopExtensionManifest" AfterTargets="_GenerateAppxPackageRecipeFile">
     <PropertyGroup>

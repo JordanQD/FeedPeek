@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="FeedPeek.Controls.OobeSourcesControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:CommunityToolkit.WinUI.Controls">
+    <ScrollView VerticalScrollBarVisibility="Auto" VerticalScrollMode="Auto">
+        <StackPanel Spacing="4" Margin="0" HorizontalAlignment="Stretch">
+            <controls:SettingsCard x:Name="AddressCard" ContentAlignment="Vertical" HorizontalContentAlignment="Stretch">
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="AddressBox" PlaceholderText="https://example.com/feed.xml"
+                        KeyDown="AddressBox_KeyDown" AutomationProperties.AutomationId="OobeSourcesAddress" />
+                    <Button x:Name="AddAddressButton" Grid.Column="1" Width="32" Height="32" Padding="0"
+                        Click="AddAddressButton_Click" AutomationProperties.AutomationId="OobeAddAddress">
+                        <FontIcon Glyph="&#xE710;" />
+                    </Button>
+                </Grid>
+            </controls:SettingsCard>
+            <controls:SettingsCard x:Name="InstallCard">
+                <Button x:Name="InstallButton" Click="InstallButton_Click"
+                    AutomationProperties.AutomationId="OobeInstallPlugin" />
+            </controls:SettingsCard>
+            <controls:SettingsCard x:Name="SourceCountCard">
+                <TextBlock x:Name="SourceCountText" Text="0" AutomationProperties.AutomationId="OobeSourcesCount" />
+            </controls:SettingsCard>
+            <StackPanel x:Name="SourceCards" Spacing="4" />
+            <ContentControl x:Name="PluginArea" HorizontalContentAlignment="Stretch">
+                <StackPanel x:Name="PluginCards" Spacing="4" />
+            </ContentControl>
+            <InfoBar x:Name="StatusInfoBar" IsOpen="False" Visibility="Collapsed" IsClosable="True" />
+        </StackPanel>
+    </ScrollView>
+</UserControl>

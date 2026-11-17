@@ -330,4 +330,38 @@
   <data name="ConfigStartupRestoreFailed" xml:space="preserve"><value>开机启动设置未能生效，请在 Windows 的启动应用中检查。</value></data>
   <data name="ConfigLegacyImported" xml:space="preserve"><value>旧格式文件仅恢复其中已有的字段，不包含来源订阅。</value></data>
   <data name="ConfigLanguageRestart" xml:space="preserve"><value>界面语言将在重启应用后完整生效。</value></data>
+<data name="AboutOnboardingCard.Description" xml:space="preserve"><value>重新查看 FeedPeek 的快速入门。</value></data>
+  <data name="GeneralOnboardingCard.Header" xml:space="preserve"><value>首次使用引导</value></data>
+  <data name="GeneralOnboardingCard.Description" xml:space="preserve"><value>重新查看 FeedPeek 的快速入门。</value></data>
+  <data name="OobeWizard.ContinueText" xml:space="preserve"><value>继续</value></data>
+  <data name="OobeWelcomeStep.Label" xml:space="preserve"><value>欢迎</value></data>
+  <data name="OobeWelcomeBody.Text" xml:space="preserve"><value>从托盘查看你关注的更新。</value></data>
+  <data name="OobeSourcesStep.Label" xml:space="preserve"><value>添加来源</value></data>
+  <data name="OobeReadyTitle.Text" xml:space="preserve"><value>准备就绪</value></data>
+  <data name="OobeWindowTitle" xml:space="preserve"><value>欢迎使用 FeedPeek</value></data>
+  <data name="OobePreferencesStep.Label" xml:space="preserve"><value>使用偏好</value></data>
+  <data name="OobeReadyHint.Text" xml:space="preserve"><value>可在「通用 → 配置」中重新打开引导。</value></data>
+  <data name="OobeWizard.BackText" xml:space="preserve"><value>上一步</value></data>
+  <data name="OobeWizard.FinishText" xml:space="preserve"><value>开始使用</value></data>
+  <data name="OobeWelcomeTitle.Text" xml:space="preserve"><value>欢迎使用 FeedPeek</value></data>
+  <data name="OobeSourcesTitle.Text" xml:space="preserve"><value>添加来源</value></data>
+  <data name="OobePreferencesTitle.Text" xml:space="preserve"><value>使用偏好</value></data>
+  <data name="OobeAutoStartCard.Header" xml:space="preserve"><value>开机后自动运行</value></data>
+  <data name="OobeHeightCard.Header" xml:space="preserve"><value>主弹窗高度</value></data>
+  <data name="OobeHeightCard.Description" xml:space="preserve"><value>下次打开主弹窗时生效。</value></data>
+  <data name="OobeReadyStep.Label" xml:space="preserve"><value>准备就绪</value></data>
+  <data name="OobeReadyBody.Text" xml:space="preserve"><value>左键托盘图标查看更新，右键打开设置。</value></data>
+  <data name="OobeLaterLink.Content" xml:space="preserve"><value>稍后再说</value></data>
+  <data name="OobeWizard.CounterFormat" xml:space="preserve"><value>第 {0} 步，共 {1} 步</value></data>
+  <data name="OobeSourcesAddressHeader" xml:space="preserve"><value>订阅地址</value></data>
+  <data name="OobeSourcesAdd" xml:space="preserve"><value>添加</value></data>
+  <data name="OobeSourcesPluginHeader" xml:space="preserve"><value>网站插件</value></data>
+  <data name="OobeSourcesInstall" xml:space="preserve"><value>选择文件夹</value></data>
+  <data name="OobeSourcesCountHeader" xml:space="preserve"><value>我的来源</value></data>
+  <data name="OobeSourcesLoggedIn" xml:space="preserve"><value>已登录</value></data>
+  <data name="OobeSourcesNotLoggedIn" xml:space="preserve"><value>未登录</value></data>
+  <data name="OobeSourcesLogin" xml:space="preserve"><value>登录</value></data>
+  <data name="OobeSourcesAdded" xml:space="preserve"><value>已添加来源。</value></data>
+  <data name="OobeSourcesInstalled" xml:space="preserve"><value>已安装插件。</value></data>
+  <data name="OobeSourcesPluginCount" xml:space="preserve"><value>{0} 个来源</value></data>
 </root>
