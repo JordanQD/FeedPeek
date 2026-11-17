@@ -93,23 +93,27 @@ public sealed class CreatorNotificationPolicyTests
         Assert.Equal([new NotificationWatchKey(feed)], NotificationWatchSelector.Select(feed, selection));
     }
 
-    [Fact]
-    public void CustomSelection_SelectedPolicyRequiresPolicyTypeAndCreatorSwitch()
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void CustomSelection_SelectedPolicyUsesPersonalSwitchesRegardlessOfSourceSwitches(bool sourceUpdates, bool sourceLive)
     {
         var updates = Feed("updates");
         var live = Feed("live", NotificationKind.Live);
         var selection = Selection(
             [new CreatorNotificationPolicy("provider", "source",
                 CreatorNotificationScope.SelectedCreators, CreatorNotificationScope.SelectedCreators,
-                UpdatesEnabled: true, LiveEnabled: false)],
+                UpdatesEnabled: sourceUpdates, LiveEnabled: sourceLive)],
             [
                 new CreatorNotificationRule("provider", "source", "enabled", true, true),
-                new CreatorNotificationRule("provider", "source", "updates-off", false, true),
+                new CreatorNotificationRule("provider", "source", "updates-off", false, false),
                 new CreatorNotificationRule("provider", "source", "other-source", true, true) with { SourceId = "other" },
             ]);
 
         Assert.Equal([new NotificationWatchKey(updates, "enabled")], NotificationWatchSelector.Select(updates, selection));
-        Assert.Empty(NotificationWatchSelector.Select(live, selection));
+        Assert.Equal([new NotificationWatchKey(live, "enabled")], NotificationWatchSelector.Select(live, selection));
     }
 
     [Fact]

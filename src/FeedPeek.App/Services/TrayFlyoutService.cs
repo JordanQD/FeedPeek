@@ -115,6 +115,17 @@ internal sealed class TrayFlyoutService : IDisposable
             : Task.CompletedTask;
     }
 
+    public void ShowMainPanel(Point fallbackAnchor)
+    {
+        if (_isDisposed) return;
+        _pendingContextMenuPoint = null;
+        if (_contextMenu.IsOpen) _contextMenu.Hide();
+        var anchor = _trayIcon.TryGetBounds(out var bounds)
+            ? new Point(bounds.Left + bounds.Width / 2, bounds.Top + bounds.Height / 2)
+            : fallbackAnchor;
+        RequestMainFlyoutShow(anchor);
+    }
+
     public void Dispose()
     {
         if (_isDisposed)

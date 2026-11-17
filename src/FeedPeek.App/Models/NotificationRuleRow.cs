@@ -124,7 +124,8 @@ public sealed class NotificationRuleRow
         var scopeText = scope == CreatorNotificationScope.AllFollowing
             ? L("NotificationAllFollowingCreators", "全部已关注作者")
             : L("NotificationSelectedCreators", "自选作者") + $" · {SelectedCreatorCount} 人";
-        return L(key, fallback) + " " + scopeText + " " + L(enabled ? "On" : "Off", enabled ? "开" : "关");
+        return L(key, fallback) + " " + scopeText + (scope == CreatorNotificationScope.AllFollowing
+            ? " " + L(enabled ? "On" : "Off", enabled ? "开" : "关") : string.Empty);
     }
 
     private static string L(string key, string fallback) => LocalizationHelper.GetString(key, fallback);

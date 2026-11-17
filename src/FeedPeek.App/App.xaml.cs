@@ -144,6 +144,12 @@ public partial class App : Application
         return _oobeWindow;
     }
 
+    public void ShowMainPanel(Windows.Graphics.PointInt32 fallbackAnchor)
+    {
+        _dispatcherQueue.TryEnqueue(() => _trayFlyoutService?.ShowMainPanel(
+            new System.Drawing.Point(fallbackAnchor.X, fallbackAnchor.Y)));
+    }
+
     private async void HandleRunningLaunchAction()
     {
         if (AppSettings.RunningLaunchAction == RunningLaunchAction.OpenCustomWebPage)

@@ -32,13 +32,11 @@ public static class NotificationWatchSelector
         {
             var isUpdates = feed.Kind == NotificationKind.Updates;
             var enabled = isUpdates ? policy.UpdatesEnabled : policy.LiveEnabled;
-            if (!enabled)
-                return [];
-
             var scope = isUpdates ? policy.UpdatesScope : policy.LiveScope;
             if (scope == CreatorNotificationScope.AllFollowing)
-                return [new(feed)];
+                return enabled ? [new(feed)] : [];
 
+            // Selected authors use their own switches; source switches only control AllFollowing.
             return selection.Creators
                 .Where(rule => rule.ProviderId == feed.ProviderId && rule.SourceId == feed.SourceId
                     && !string.IsNullOrWhiteSpace(rule.CreatorKey)

@@ -64,9 +64,21 @@
                                     <ComboBox x:Name="MainPanelHeightBox" MinWidth="100"
                                         SelectionChanged="MainPanelHeightBox_SelectionChanged" AutomationProperties.Name="主弹窗高度"
                                         AutomationProperties.AutomationId="OobeMainPanelHeightBox">
-                                        <ComboBoxItem Content="600" Tag="600" />
-                                        <ComboBoxItem Content="800" Tag="800" />
-                                        <ComboBoxItem Content="1000" Tag="1000" />
+                                        <ComboBoxItem x:Uid="GeneralMainPanelHeight600Item" Content="低" Tag="600" />
+                                        <ComboBoxItem x:Uid="GeneralMainPanelHeight800Item" Content="中" Tag="800" />
+                                        <ComboBoxItem x:Uid="GeneralMainPanelHeight1000Item" Content="高" Tag="1000" />
+                                    </ComboBox>
+                                </controls:SettingsCard>
+                                <controls:SettingsCard x:Uid="OobeLiveSectionCard" Header="正在直播">
+                                    <controls:SettingsCard.HeaderIcon>
+                                        <FontIcon Glyph="&#xE8B2;" />
+                                    </controls:SettingsCard.HeaderIcon>
+                                    <ComboBox x:Name="LiveSectionDisplayModeBox" MinWidth="120"
+                                        SelectionChanged="LiveSectionDisplayModeBox_SelectionChanged"
+                                        AutomationProperties.Name="正在直播" AutomationProperties.AutomationId="OobeLiveSectionDisplayModeBox">
+                                        <ComboBoxItem x:Uid="GeneralLiveExpandedItem" Content="展开显示" />
+                                        <ComboBoxItem x:Uid="GeneralLiveCollapsedItem" Content="折叠显示" />
+                                        <ComboBoxItem x:Uid="GeneralLiveHiddenItem" Content="不显示" />
                                     </ComboBox>
                                 </controls:SettingsCard>
                             </StackPanel>

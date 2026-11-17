@@ -35,26 +35,23 @@
                 <InfoBar x:Name="StatusInfoBar" Grid.Row="1" Visibility="Collapsed" IsClosable="True" />
             </Grid>
             <Grid>
-            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
             <Grid x:Name="CreatorPolicyPanel" Visibility="Collapsed" Grid.Row="0">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
-                <controls:SettingsCard x:Name="CreatorScopeCard" x:Uid="NotificationCreatorScopeCard" Grid.Row="0" Header="作者范围" Description="仅在自定义来源通知模式下生效。">
-                    <ComboBox x:Name="CreatorScopeComboBox" x:Uid="NotificationCreatorScopeBox" MinWidth="160" MaxWidth="300" HorizontalAlignment="Stretch" AutomationProperties.AutomationId="CreatorNotificationScope" AutomationProperties.Name="作者范围" SelectionChanged="CreatorScopeComboBox_SelectionChanged">
+                <controls:SettingsCard x:Name="CreatorScopeCard" x:Uid="NotificationCreatorScopeCard" Grid.Row="0" Header="通知范围">
+                    <ComboBox x:Name="CreatorScopeComboBox" x:Uid="NotificationCreatorScopeBox" MinWidth="160" MaxWidth="300" HorizontalAlignment="Stretch" AutomationProperties.AutomationId="CreatorNotificationScope" AutomationProperties.Name="通知范围" SelectionChanged="CreatorScopeComboBox_SelectionChanged">
                         <ComboBoxItem x:Name="MixedCreatorScopeItem" x:Uid="NotificationMixedCreatorScopeItem" Tag="mixed" Content="按通知类型分别设置（保留旧配置）" />
                         <ComboBoxItem x:Name="AllFollowingCreatorScopeItem" x:Uid="NotificationAllFollowingCreatorScopeItem" Tag="all" Content="全部已关注作者" />
                         <ComboBoxItem x:Name="SelectedCreatorScopeItem" x:Uid="NotificationSelectedCreatorScopeItem" Tag="selected" Content="自选作者" />
                     </ComboBox>
                 </controls:SettingsCard>
-                <TextBlock x:Name="CreatorGlobalModeText" Grid.Row="1" Margin="1,4,0,0" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                <controls:SettingsCard x:Name="AddCreatorCard" x:Uid="NotificationAddSelectedCreatorCard" Grid.Row="2" Margin="0,4,0,0" Header="搜索已关注作者" Description="搜索并选择要通知的作者。" AutomationProperties.AutomationId="AddSelectedNotificationCreator" IsClickEnabled="True" Click="AddCreatorCard_Click" Visibility="Collapsed" />
+                <controls:SettingsCard x:Name="AddCreatorCard" x:Uid="NotificationAddSelectedCreatorCard" Grid.Row="1" Margin="0,4,0,0" Header="搜索已关注作者" Description="搜索并选择要通知的作者。" AutomationProperties.AutomationId="AddSelectedNotificationCreator" IsClickEnabled="True" Click="AddCreatorCard_Click" Visibility="Collapsed" />
             </Grid>
             <TextBlock x:Name="NotificationTypesHeader" Grid.Row="1" x:Uid="NotificationDetailSectionHeader" Text="通知类型" Margin="0,0,0,4" Style="{StaticResource SettingsSectionHeaderTextBlockStyle}" />
-            </Grid>
-            <StackPanel>
+            <StackPanel Grid.Row="2">
                 <controls:SettingsCard x:Name="UpdatesCard" x:Uid="NotificationDetailUpdatesCard" Header="更新通知" Description="此来源出现新内容时提醒。" Visibility="Collapsed">
                     <controls:SettingsCard.HeaderIcon><FontIcon Glyph="&#xE714;" /></controls:SettingsCard.HeaderIcon>
                     <ToggleSwitch x:Name="UpdatesSwitch" x:Uid="NotificationDetailUpdatesSwitch" AutomationProperties.Name="更新通知" AutomationProperties.AutomationId="SourceUpdatesNotificationSwitch" Toggled="NotificationSwitch_Toggled" />
@@ -66,6 +63,7 @@
                 <TextBlock x:Name="UnavailableText" Visibility="Collapsed" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 <TextBlock x:Name="CreatorPersonalInfoText" Visibility="Collapsed" Margin="0,4,0,0" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
             </StackPanel>
+            </Grid>
             <TextBlock x:Uid="NotificationDetailSettingsHeader" Text="来源设置" Style="{StaticResource SettingsSectionHeaderTextBlockStyle}" />
             <StackPanel>
                 <controls:SettingsCard x:Name="OpenSourceCard" x:Uid="NotificationOpenSourceCard" Header="打开来源设置" IsClickEnabled="True" IsEnabled="False" Click="OpenSource_Click" />

@@ -170,9 +170,9 @@
                     AutomationProperties.AutomationId="MainPanelHeightBox"
                     AutomationProperties.Name="主弹窗高度"
                     SelectionChanged="MainPanelHeightBox_SelectionChanged">
-                    <ComboBoxItem x:Uid="GeneralMainPanelHeight600Item" Content="600" Tag="600" />
-                    <ComboBoxItem x:Uid="GeneralMainPanelHeight800Item" Content="800" Tag="800" />
-                    <ComboBoxItem x:Uid="GeneralMainPanelHeight1000Item" Content="1000" Tag="1000" />
+                    <ComboBoxItem x:Uid="GeneralMainPanelHeight600Item" Content="低" Tag="600" />
+                    <ComboBoxItem x:Uid="GeneralMainPanelHeight800Item" Content="中" Tag="800" />
+                    <ComboBoxItem x:Uid="GeneralMainPanelHeight1000Item" Content="高" Tag="1000" />
                 </ComboBox>
             </controls:SettingsCard>
             <controls:SettingsCard
@@ -191,8 +191,8 @@
                     AutomationProperties.AutomationId="LiveSectionDisplayModeBox"
                     AutomationProperties.Name="正在直播"
                     SelectionChanged="LiveSectionDisplayModeBox_SelectionChanged">
-                    <ComboBoxItem x:Uid="GeneralLiveExpandedItem" Content="默认展开显示" />
-                    <ComboBoxItem x:Uid="GeneralLiveCollapsedItem" Content="默认折叠显示" />
+                    <ComboBoxItem x:Uid="GeneralLiveExpandedItem" Content="展开显示" />
+                    <ComboBoxItem x:Uid="GeneralLiveCollapsedItem" Content="折叠显示" />
                     <ComboBoxItem x:Uid="GeneralLiveHiddenItem" Content="不显示" />
                 </ComboBox>
             </controls:SettingsCard>

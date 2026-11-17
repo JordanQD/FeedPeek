@@ -66,7 +66,7 @@ internal sealed class NotificationAddDialog
             HorizontalAlignment = HorizontalAlignment.Stretch, Visibility = Visibility.Collapsed };
         AutomationProperties.SetName(sourcePicker, N("CreatorQuerySource", "作者所属来源"));
         var list = new ListView { ItemsSource = visible, SelectionMode = ListViewSelectionMode.Single,
-            MaxHeight = 260, HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
             ItemTemplate = _template };
         list.ItemContainerStyle = new Style(typeof(ListViewItem));
         list.ItemContainerStyle.Setters.Add(new Setter(Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Stretch));
@@ -84,25 +84,30 @@ internal sealed class NotificationAddDialog
         var updatesCard = new SettingsCard { Header = N("NotificationUpdates", "更新通知"), Content = updates };
         var liveCard = new SettingsCard { Header = N("NotificationLive", "开播通知"), Content = live };
         types.Children.Add(updatesCard); types.Children.Add(liveCard);
-        var selectionNote = new TextBlock { TextWrapping = TextWrapping.Wrap,
-            Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"] };
-        types.Children.Add(selectionNote);
-        var body = new StackPanel { Spacing = 12, MaxWidth = 520, MinWidth = 0 };
+        // Reserve the same space for empty, loading and selected states. The display area
+        // fits roughly 1.5 result cards plus two notification cards (68 DIPs each).
+        // Keep the original card layout above SettingsCard's 476-DIP wrapping threshold.
+        var body = new Grid { Width = 490, Height = 300, RowSpacing = 12 };
+        body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        body.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         var queryFields = new Grid();
         queryFields.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         queryFields.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        queryFields.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        Grid.SetRow(sourcePicker, 1); Grid.SetRow(list, 2);
-        list.Margin = new Thickness(0, 12, 0, 0);
-        queryFields.Children.Add(search); queryFields.Children.Add(sourcePicker); queryFields.Children.Add(list);
+        queryFields.RowDefinitions.Add(new RowDefinition { Height = new GridLength(4) });
+        var progress = new ProgressBar { Visibility = Visibility.Collapsed };
+        AutomationProperties.SetName(progress, N("FetchingCreatorInfo", "正在获取作者资料……"));
+        Grid.SetRow(sourcePicker, 1); Grid.SetRow(progress, 2);
+        queryFields.Children.Add(search); queryFields.Children.Add(sourcePicker); queryFields.Children.Add(progress);
         body.Children.Add(queryFields);
         // Conditional status elements share one child so closed InfoBars do not add blank rows.
         var messages = new Grid(); messages.Children.Add(status); messages.Children.Add(info);
         var selectionContent = new Grid();
+        selectionContent.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         selectionContent.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         selectionContent.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        Grid.SetRow(types, 1); types.Margin = new Thickness(0, 12, 0, 0);
-        selectionContent.Children.Add(messages); selectionContent.Children.Add(types);
+        Grid.SetRow(messages, 1); Grid.SetRow(types, 2); types.Margin = new Thickness(0, 12, 0, 0);
+        selectionContent.Children.Add(list); selectionContent.Children.Add(messages); selectionContent.Children.Add(types);
+        Grid.SetRow(selectionContent, 1);
         body.Children.Add(selectionContent);
         var scroll = new ScrollViewer { Content = body, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
@@ -111,6 +116,8 @@ internal sealed class NotificationAddDialog
                 ? N("NotificationAuthorSearchTitle", "添加作者通知") : N("NotificationAddTitle", "添加通知"),
             Content = scroll, PrimaryButtonText = N("SaveButton", "保存"), CloseButtonText = N("CancelButton", "取消"),
             DefaultButton = ContentDialogButton.None, IsPrimaryButtonEnabled = false };
+        dialog.Resources["ContentDialogMinWidth"] = 538d;
+        dialog.Resources["ContentDialogMaxWidth"] = 538d;
         NotificationCandidateRow? selected = null;
         IReadOnlyList<NotificationCreatorTarget> targets = [];
         var closed = false;
@@ -119,10 +126,24 @@ internal sealed class NotificationAddDialog
         var updatingCandidates = false;
         var version = 0;
         var membershipVersion = 0;
+        var loadingTargets = false;
+        var loadingAuthors = false;
+        var resolving = false;
         CancellationTokenSource? queryCancellation = null;
         Action? navigation = null;
         NotificationCreatorTarget? SelectedTarget() => (sourcePicker.SelectedItem as ComboBoxItem)?.Tag as NotificationCreatorTarget;
         bool Current(int expected) => !closed && !token.IsCancellationRequested && IsLoaded && version == expected;
+        void UpdateProgress()
+        {
+            var busy = loadingTargets || loadingAuthors || resolving || saving;
+            progress.IsIndeterminate = busy;
+            progress.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
+        }
+        void SetStatus(string text)
+        {
+            status.Text = text;
+            status.Visibility = string.IsNullOrEmpty(text) ? Visibility.Collapsed : Visibility.Visible;
+        }
         void ShowError(Exception exception)
         {
             var code = (exception as PluginInvocationException)?.Code;
@@ -133,16 +154,14 @@ internal sealed class NotificationAddDialog
         }
         void InvalidateQuery()
         {
-            version++; queryCancellation?.Cancel();
+            version++; queryCancellation?.Cancel(); resolving = false; UpdateProgress();
         }
         void Filter()
         {
             var input = search.Text.Trim();
-            var candidates = (request?.AuthorsOnly == true
-                ? string.IsNullOrEmpty(input) ? Enumerable.Empty<NotificationCandidateRow>() : authors
-                : local.AsEnumerable())
+            var candidates = (request?.AuthorsOnly == true ? authors : local.AsEnumerable())
                 .Where(row => string.IsNullOrEmpty(input) || row.DisplayName.Contains(input, StringComparison.CurrentCultureIgnoreCase)
-                    || row.Detail.Contains(input, StringComparison.CurrentCultureIgnoreCase)
+                    || (row.Creator is null && row.Detail.Contains(input, StringComparison.CurrentCultureIgnoreCase))
                     || row.Creator?.CreatorKey == input || row.Creator?.ProfileUrl == input);
             var filtered = candidates.ToArray();
             updatingCandidates = true;
@@ -185,12 +204,6 @@ internal sealed class NotificationAddDialog
             updates.IsOn = supportsUpdates; live.IsOn = supportsLive;
             updatesCard.Visibility = supportsUpdates ? Visibility.Visible : Visibility.Collapsed;
             liveCard.Visibility = supportsLive ? Visibility.Visible : Visibility.Collapsed;
-            var sourcePolicy = choice.Creator is not null
-                ? data.Rules.FirstOrDefault(row => row.Creator is null && row.IsPersisted && row.ProviderId == choice.Creator.ProviderId
-                    && row.SourceId == choice.Creator.SourceId)?.Policy : null;
-            selectionNote.Text = sourcePolicy is not null
-                ? N("NotificationSavedAuthorPreference", "保存自选作者偏好会保留当前来源范围。全部范围下，这些个人开关暂不参与筛选；可在来源通知详情中修改范围。")
-                : string.Empty;
             types.Visibility = Visibility.Visible;
         }
         void LeaveForSettings(NotificationCandidateRow? choice)
@@ -211,9 +224,10 @@ internal sealed class NotificationAddDialog
             // Typing cancels direct ID queries, not the initial following-list load.
             bool CurrentMembership() => !closed && !saving && IsLoaded && !token.IsCancellationRequested
                 && membershipVersion == currentVersion;
-            status.Text = target.SupportsFollowing ? N("NotificationLoadingAuthors", "正在加载已关注作者，请输入名称搜索。")
-                : N("NotificationEnterAuthorId", "此插件支持按作者 ID 或链接查询。请输入后按 Enter 或点击搜索。");
+            SetStatus(target.SupportsFollowing ? string.Empty
+                : N("NotificationEnterAuthorId", "此插件支持按作者 ID 或链接查询。请输入后按 Enter 或点击搜索。"));
             if (!target.SupportsFollowing) return;
+            loadingAuthors = true; UpdateProgress();
             try
             {
                 var page = await NotificationSession.GetFollowingNotificationCreatorsAsync(target, token);
@@ -223,11 +237,12 @@ internal sealed class NotificationAddDialog
                     IsExisting = data.Rules.Any(row => row.Creator?.ProviderId == creator.ProviderId
                         && row.Creator.SourceId == creator.SourceId && row.Creator.CreatorKey == creator.CreatorKey) }));
                 Filter();
-                status.Text = page.IsComplete ? N("NotificationSearchHint", "输入已关注作者名称搜索，或输入作者 ID、链接后查询。")
-                    : N("NotificationPartialAuthors", "作者列表不完整，可输入作者 ID 或链接直接查询。缺项不代表未关注。");
+                SetStatus(page.IsComplete ? string.Empty
+                    : N("NotificationPartialAuthors", "作者列表不完整，可输入作者 ID 或链接直接查询。缺项不代表未关注。"));
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested) { }
-            catch (Exception exception) { if (CurrentMembership()) { status.Text = N("NotificationAuthorLoadFailed", "已关注作者加载失败，可输入作者 ID 或链接重试查询。"); ShowError(exception); } }
+            catch (Exception exception) { if (CurrentMembership()) { SetStatus(N("NotificationAuthorLoadFailed", "已关注作者加载失败，可输入作者 ID 或链接重试查询。")); ShowError(exception); } }
+            finally { if (membershipVersion == currentVersion) { loadingAuthors = false; UpdateProgress(); } }
         }
         async Task QueryAsync()
         {
@@ -253,13 +268,14 @@ internal sealed class NotificationAddDialog
             }
             if (SelectedTarget() is not { } target)
             {
-                status.Text = N("CreatorAmbiguousSource", "请选择作者所属来源，再查询作者 ID 或链接。");
+                SetStatus(N("CreatorAmbiguousSource", "请选择作者所属来源，再查询作者 ID 或链接。"));
                 return;
             }
             InvalidateQuery(); var currentVersion = version;
             queryCancellation?.Dispose(); queryCancellation = CancellationTokenSource.CreateLinkedTokenSource(token);
             var queryToken = queryCancellation.Token;
-            status.Text = N("FetchingCreatorInfo", "正在获取作者资料……");
+            SetStatus(string.Empty);
+            resolving = true; UpdateProgress();
             try
             {
                 var result = await NotificationSession.ResolveNotificationCreatorAsync(target, input, queryToken);
@@ -267,8 +283,8 @@ internal sealed class NotificationAddDialog
                 if (result.FollowState != CreatorFollowState.Followed || result.Creator is null)
                 {
                     Choose(null);
-                    status.Text = N(result.FollowState == CreatorFollowState.NotFollowed ? "CreatorNotFollowedDetail" : "CreatorFollowUnknownDetail",
-                        "无法确认已关注关系，请检查账号或稍后重试。");
+                    SetStatus(N(result.FollowState == CreatorFollowState.NotFollowed ? "CreatorNotFollowedDetail" : "CreatorFollowUnknownDetail",
+                        "无法确认已关注关系，请检查账号或稍后重试。"));
                     return;
                 }
                 var creator = result.Creator;
@@ -279,10 +295,11 @@ internal sealed class NotificationAddDialog
                     && row.Creator.CreatorKey == creator.CreatorKey);
                 authors.Insert(0, candidate);
                 visible.Clear(); visible.Add(candidate); list.Visibility = Visibility.Visible; list.SelectedItem = candidate;
-                status.Text = N("NotificationSearchHint", "输入已关注作者名称搜索，或输入作者 ID、链接后查询。");
+                SetStatus(string.Empty);
             }
             catch (OperationCanceledException) when (queryToken.IsCancellationRequested) { }
             catch (Exception exception) { if (Current(currentVersion)) ShowError(exception); }
+            finally { if (version == currentVersion) { resolving = false; UpdateProgress(); } }
         }
         list.SelectionChanged += (_, _) => { if (!updatingCandidates) Choose(list.SelectedItem as NotificationCandidateRow); };
         search.TextChanged += (_, args) => { if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput) { InvalidateQuery(); Filter(); Choose(null); } };
@@ -293,6 +310,7 @@ internal sealed class NotificationAddDialog
         {
             search.Focus(FocusState.Programmatic);
             if (request?.AuthorsOnly != true) return;
+            loadingTargets = true; UpdateProgress();
             try
             {
                 targets = (await NotificationSession.GetCreatorNotificationTargetsAsync(token))
@@ -307,10 +325,11 @@ internal sealed class NotificationAddDialog
                         && target.Subscription.ProviderId == request.ProviderId && target.Subscription.SourceId == request.SourceId);
                 else if (targets.Count == 1) sourcePicker.SelectedIndex = 0;
                 if (request is not null && SelectedTarget() is null)
-                    status.Text = N("CreatorSourceUnavailable", "来源暂不可用，请打开插件设置恢复登录或启用插件。");
+                    SetStatus(N("CreatorSourceUnavailable", "来源暂不可用，请打开插件设置恢复登录或启用插件。"));
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested) { }
             catch (Exception exception) { if (!closed && IsLoaded) ShowError(exception); }
+            finally { loadingTargets = false; UpdateProgress(); }
         };
         dialog.PrimaryButtonClick += async (_, args) =>
         {
@@ -318,6 +337,7 @@ internal sealed class NotificationAddDialog
             if (saving || closed || selected is not { } choice) return;
             InvalidateQuery(); // A pending author-list refresh must not change the captured choice or toggles during save.
             saving = true; dialog.IsPrimaryButtonEnabled = false;
+            UpdateProgress();
             search.IsEnabled = false; list.IsEnabled = false; sourcePicker.IsEnabled = false;
             updates.IsEnabled = false; live.IsEnabled = false;
             try
@@ -387,14 +407,13 @@ internal sealed class NotificationAddDialog
             finally
             {
                 saving = false;
+                UpdateProgress();
                 if (!closed && IsLoaded) { search.IsEnabled = true; list.IsEnabled = true; sourcePicker.IsEnabled = true;
                     updates.IsEnabled = true; live.IsEnabled = true;
                     dialog.IsPrimaryButtonEnabled = selected is not null; }
             }
         };
-        Filter(); status.Text = request?.AuthorsOnly == true
-            ? N("NotificationSearchHint", "输入已关注作者名称搜索，或输入作者 ID、链接后查询。")
-            : N("NotificationSourceSearchHint", "选择已添加的来源；插件的作者通知在其详情中配置。");
+        Filter(); SetStatus(string.Empty);
         try { await dialog.ShowAsync(); }
         finally { closed = true; cancellation.Cancel(); queryCancellation?.Cancel(); queryCancellation?.Dispose(); queryCancellation = null; }
         if (!IsLoaded || pageToken.IsCancellationRequested) return;

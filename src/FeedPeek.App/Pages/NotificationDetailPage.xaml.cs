@@ -100,40 +100,36 @@ public sealed partial class NotificationDetailPage : Page, IDisposable
     {
         if (_current is not null)
             ShowHeader(_current);
-        UpdatesCard.Visibility = _current?.SupportsUpdates == true ? Visibility.Visible : Visibility.Collapsed;
-        LiveCard.Visibility = _current?.SupportsLive == true ? Visibility.Visible : Visibility.Collapsed;
-        LiveCard.Margin = new Thickness(0, _current?.SupportsUpdates == true ? 4 : 0, 0, 0);
+        var policy = _current?.Creator is null ? _current?.Policy : null;
+        var showUpdates = _current?.SupportsUpdates == true
+            && (policy is null || policy.UpdatesScope == CreatorNotificationScope.AllFollowing);
+        var showLive = _current?.SupportsLive == true
+            && (policy is null || policy.LiveScope == CreatorNotificationScope.AllFollowing);
+        UpdatesCard.Visibility = showUpdates ? Visibility.Visible : Visibility.Collapsed;
+        LiveCard.Visibility = showLive ? Visibility.Visible : Visibility.Collapsed;
+        LiveCard.Margin = new Thickness(0, showUpdates ? 4 : 0, 0, 0);
+        NotificationTypesHeader.Visibility = showUpdates || showLive ? Visibility.Visible : Visibility.Collapsed;
         UpdatesSwitch.IsOn = _current?.UpdatesEnabled == true;
         LiveSwitch.IsOn = _current?.LiveEnabled == true;
         UnavailableText.Visibility = _current?.IsAvailable == true ? Visibility.Collapsed : Visibility.Visible;
         UnavailableText.Text = L(_current is null ? "NotificationRuleMissing" : "NotificationRuleUnavailable",
             _current is null ? "此通知项已移除，请返回通知页面。" : "此来源暂不可用或不支持通知。启用插件或订阅后可恢复，已保存的开关保持不变。");
-        var policy = _current?.Creator is null ? _current?.Policy : null;
         CreatorPolicyPanel.Visibility = policy is null ? Visibility.Collapsed : Visibility.Visible;
         NotificationTypesHeader.Margin = new Thickness(0, policy is null ? 0 : 32, 0, 4);
-        CreatorPersonalInfoText.Visibility = _current?.Creator is null ? Visibility.Collapsed : Visibility.Visible;
         CreatorPersonalInfoText.Text = _current?.Creator is null
             ? string.Empty
             : GetCreatorPersonalInfo(_creatorPolicy);
+        CreatorPersonalInfoText.Visibility = string.IsNullOrEmpty(CreatorPersonalInfoText.Text)
+            ? Visibility.Collapsed : Visibility.Visible;
         if (policy is not null)
         {
             SelectScopeItem(policy);
             AllFollowingCreatorScopeItem.IsEnabled = HasCreatorFollowingCapability(_current);
-            CreatorGlobalModeText.Text = AppSettings.NotificationTargetMode switch
-            {
-                NotificationTargetMode.None => L("NotificationCreatorGlobalNone",
-                    "当前全局模式为“不通知”，作者策略暂不生效，但会保留。"),
-                NotificationTargetMode.AllFollowing => L("NotificationCreatorGlobalAllSources",
-                    "当前全局模式为“所有来源更新”，作者范围暂不参与筛选；这些设置只在自定义来源通知模式下生效。"),
-                _ => L("NotificationCreatorGlobalCustom",
-                    "当前全局模式为“自定义来源通知”，作者范围和通知类型开关当前生效。"),
-            };
             AddCreatorCard.Visibility = policy.ShouldShowSelectedCreators(policy.Key, _current?.Capabilities)
                 ? Visibility.Visible : Visibility.Collapsed;
         }
         else
         {
-            CreatorGlobalModeText.Text = string.Empty;
             AddCreatorCard.Visibility = Visibility.Collapsed;
             AllFollowingCreatorScopeItem.IsEnabled = true;
         }
@@ -159,8 +155,7 @@ public sealed partial class NotificationDetailPage : Page, IDisposable
                 "当前全局模式为“不通知”，此作者设置暂不生效。"),
             NotificationTargetMode.AllFollowing => L("NotificationCreatorPersonalAllSources",
                 "当前全局模式为“所有来源更新”，个人作者设置暂不参与筛选。"),
-            _ => L("NotificationCreatorPersonalCustom",
-                "当前全局模式为“自定义来源通知”，个人作者开关只在自选作者范围内生效。"),
+            _ => string.Empty,
         };
         if (policy is null || AppSettings.NotificationTargetMode != NotificationTargetMode.CustomCreators)
             return global;
@@ -169,11 +164,10 @@ public sealed partial class NotificationDetailPage : Page, IDisposable
             ? policy.UpdatesScope == CreatorNotificationScope.AllFollowing
                 ? L("NotificationCreatorPersonalAllScope",
                     "该来源使用全部已关注作者范围，个人作者开关会被来源范围覆盖。")
-                : L("NotificationCreatorPersonalSelectedScope",
-                    "该来源使用自选作者范围，当前作者开关按来源类型设置生效。")
+                : string.Empty
             : L("NotificationCreatorPersonalMixedScope",
                 "该来源按更新和开播分别设置作者范围，个人开关仅在对应类型为自选时生效。");
-        return global + " " + scope;
+        return string.Join(" ", new[] { global, scope }.Where(text => !string.IsNullOrEmpty(text)));
     }
 
     private void SelectScopeItem(CreatorNotificationPolicy policy)

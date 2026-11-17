@@ -55,14 +55,14 @@
   <data name="GeneralMainPanelHeightCard.Header" xml:space="preserve"><value>主弹窗高度</value></data>
   <data name="GeneralMainPanelHeightCard.Description" xml:space="preserve"><value>设置托盘主弹窗的高度。关闭并重新打开弹窗后生效，实际高度受屏幕可用空间限制。</value></data>
   <data name="GeneralMainPanelHeightBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>主弹窗高度</value></data>
-  <data name="GeneralMainPanelHeight600Item.Content" xml:space="preserve"><value>600</value></data>
-  <data name="GeneralMainPanelHeight800Item.Content" xml:space="preserve"><value>800</value></data>
-  <data name="GeneralMainPanelHeight1000Item.Content" xml:space="preserve"><value>1000</value></data>
+  <data name="GeneralMainPanelHeight600Item.Content" xml:space="preserve"><value>低</value></data>
+  <data name="GeneralMainPanelHeight800Item.Content" xml:space="preserve"><value>中</value></data>
+  <data name="GeneralMainPanelHeight1000Item.Content" xml:space="preserve"><value>高</value></data>
   <data name="GeneralLiveSectionDisplayModeCard.Header" xml:space="preserve"><value>正在直播</value></data>
   <data name="GeneralLiveSectionDisplayModeCard.Description" xml:space="preserve"><value>设置关注页直播区域的默认显示方式。关闭并重新打开托盘弹窗后生效。</value></data>
   <data name="GeneralLiveSectionDisplayModeBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>正在直播</value></data>
-  <data name="GeneralLiveExpandedItem.Content" xml:space="preserve"><value>默认展开显示</value></data>
-  <data name="GeneralLiveCollapsedItem.Content" xml:space="preserve"><value>默认折叠显示</value></data>
+  <data name="GeneralLiveExpandedItem.Content" xml:space="preserve"><value>展开显示</value></data>
+  <data name="GeneralLiveCollapsedItem.Content" xml:space="preserve"><value>折叠显示</value></data>
   <data name="GeneralLiveHiddenItem.Content" xml:space="preserve"><value>不显示</value></data>
   <data name="GeneralKeepSourceFilterCard.Header" xml:space="preserve"><value>保留源筛选</value></data>
   <data name="GeneralKeepSourceFilterCard.Description" xml:space="preserve"><value>开启后记住上次选择的来源，下次打开继续筛选；关闭后，下次打开显示所有来源。</value></data>
@@ -294,17 +294,11 @@
   <data name="NotificationConfigurationSaved" xml:space="preserve"><value>已保存通知设置。</value></data>
   <data name="NotificationCreatorPersonalNone" xml:space="preserve"><value>当前全局模式为“不通知”，此作者设置暂不生效。</value></data>
   <data name="NotificationCreatorPersonalAllSources" xml:space="preserve"><value>当前全局模式为“所有来源更新”，使用全局类型开关通知全部已关注作者，个人开关暂不参与筛选。</value></data>
-  <data name="NotificationCreatorPersonalCustom" xml:space="preserve"><value>当前全局模式为“自定义来源通知”，个人开关仅在来源对应类型为自选且总开关开启时生效。</value></data>
   <data name="NotificationCreatorPersonalAllScope" xml:space="preserve"><value>该来源使用全部已关注作者范围，个人作者开关暂不参与筛选。</value></data>
-  <data name="NotificationCreatorPersonalSelectedScope" xml:space="preserve"><value>该来源使用自选作者范围，须同时开启来源和该作者的对应类型开关。</value></data>
   <data name="NotificationCreatorPersonalMixedScope" xml:space="preserve"><value>该来源按更新和开播分别设置范围，个人开关仅在对应类型为自选时生效。</value></data>
-  <data name="NotificationCreatorGlobalNone" xml:space="preserve"><value>当前全局模式为“不通知”，已保存的作者范围和开关暂不生效。</value></data>
-  <data name="NotificationCreatorGlobalAllSources" xml:space="preserve"><value>当前全局模式为“所有来源更新”，使用全局类型开关通知全部已关注作者。下方范围和开关仅用于自定义来源通知。</value></data>
-  <data name="NotificationCreatorGlobalCustom" xml:space="preserve"><value>当前全局模式为“自定义来源通知”，下方范围和类型开关生效。</value></data>
   <data name="NotificationCreatorAllFollowingUnavailable" xml:space="preserve"><value>当前插件不支持完整关注列表，无法选择全部已关注作者。</value></data>
-  <data name="NotificationCreatorScopeCard.Header" xml:space="preserve"><value>作者范围</value></data>
-  <data name="NotificationCreatorScopeCard.Description" xml:space="preserve"><value>仅在自定义来源通知模式下生效。</value></data>
-  <data name="NotificationCreatorScopeBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>作者范围</value></data>
+  <data name="NotificationCreatorScopeCard.Header" xml:space="preserve"><value>通知范围</value></data>
+  <data name="NotificationCreatorScopeBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>通知范围</value></data>
   <data name="NotificationMixedCreatorScopeItem.Content" xml:space="preserve"><value>按通知类型分别设置（保留旧配置）</value></data>
   <data name="NotificationAllFollowingCreatorScopeItem.Content" xml:space="preserve"><value>全部已关注作者</value></data>
   <data name="NotificationSelectedCreatorScopeItem.Content" xml:space="preserve"><value>自选作者</value></data>
@@ -364,4 +358,5 @@
   <data name="OobeSourcesAdded" xml:space="preserve"><value>已添加来源。</value></data>
   <data name="OobeSourcesInstalled" xml:space="preserve"><value>已安装插件。</value></data>
   <data name="OobeSourcesPluginCount" xml:space="preserve"><value>{0} 个来源</value></data>
+  <data name="OobeLiveSectionCard.Header" xml:space="preserve"><value>正在直播</value></data>
 </root>

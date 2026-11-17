@@ -53,7 +53,9 @@ public sealed partial class OobeWindow : Window
     private void Wizard_Completed(object? sender, EventArgs e)
     {
         AppSettings.HasCompletedOobe = true;
+        var area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
         Close();
+        ((App)Application.Current).ShowMainPanel(new PointInt32(area.X + area.Width - 1, area.Y + area.Height - 1));
     }
 
     private async void Wizard_StepChanged(object? sender, int index)
@@ -73,6 +75,7 @@ public sealed partial class OobeWindow : Window
         try
         {
             MainPanelHeightBox.SelectedIndex = AppSettings.MainPanelHeight switch { 600 => 0, 1000 => 2, _ => 1 };
+            LiveSectionDisplayModeBox.SelectedIndex = (int)AppSettings.LiveSectionDisplayMode;
             AutoStartSwitch.IsEnabled = false;
             ApplyStartupStatus(await _startup.LoadAsync());
         }
@@ -135,6 +138,17 @@ public sealed partial class OobeWindow : Window
     }
 
     private void LaterLink_Click(object sender, RoutedEventArgs e) => Close();
+
+    private void LiveSectionDisplayModeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_updatingPreferences) return;
+        AppSettings.LiveSectionDisplayMode = LiveSectionDisplayModeBox.SelectedIndex switch
+        {
+            1 => LiveSectionDisplayMode.Collapsed,
+            2 => LiveSectionDisplayMode.Hidden,
+            _ => LiveSectionDisplayMode.Expanded,
+        };
+    }
 
     [DllImport("user32.dll")]
     private static extern uint GetDpiForWindow(IntPtr hwnd);
